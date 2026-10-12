@@ -1387,3 +1387,42 @@ EmployeeDocumentFormSet = inlineformset_factory(
     extra=1,
     can_delete=True,
 )
+
+
+class OrganizationBrandingForm(forms.ModelForm):
+    remove_logo = forms.BooleanField(required=False)
+    brand_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$',
+        error_messages={'invalid': 'Enter a valid hex color like #3B5BFF.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#3B5BFF', 'maxlength': 7}),
+    )
+
+    class Meta:
+        model = Organization
+        fields = ['name', 'logo', 'brand_color']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'logo': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
+        }
+
+    def clean_logo(self):
+        from PIL import Image
+        f = self.cleaned_data.get('logo')
+        if not f:
+            return f
+        if f.size > 2 * 1024 * 1024:
+            raise forms.ValidationError('Logo must be 2MB or smaller.')
+        ext = (f.name.rsplit('.', 1)[-1] if '.' in f.name else '').lower()
+        if ext not in {'png', 'jpg', 'jpeg', 'webp'}:
+            raise forms.ValidationError('Logo must be PNG, JPG or WebP (SVG not allowed).')
+        try:
+            img = Image.open(f)
+            img.verify()
+        except Exception:
+            raise forms.ValidationError('Uploaded file is not a valid image.')
+        f.seek(0)
+        return f
+
+    def clean_brand_color(self):
+        from .branding import normalize_hex
+        return normalize_hex(self.cleaned_data.get('brand_color', ''))

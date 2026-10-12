@@ -27,6 +27,26 @@ def employee_document_path(instance, filename):
     return f"employees/{employee.organization_id}/documents/{employee.employee_id}/{filename}"
 
 
+from django.core.validators import RegexValidator
+
+
+BRAND_COLOR_VALIDATOR = RegexValidator(
+    regex=r'^#[0-9A-Fa-f]{6}$',
+    message='Enter a valid hex color like #3B5BFF.',
+)
+
+
+def organization_logo_path(instance, filename):
+    import uuid
+
+    ext = (filename.rsplit('.', 1)[-1] if '.' in filename else 'png').lower()
+    if ext not in {'png', 'jpg', 'jpeg', 'webp'}:
+        ext = 'png'
+    if ext == 'jpg':
+        ext = 'jpeg'
+    return f"organizations/{instance.pk or 'pending'}/logo_{uuid.uuid4().hex[:12]}.{ext}"
+
+
 class Organization(models.Model):
     """A company or institution using the HR platform."""
 
@@ -35,6 +55,10 @@ class Organization(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
     address = models.TextField(blank=True)
+    logo = models.ImageField(upload_to=organization_logo_path, blank=True, null=True)
+    brand_color = models.CharField(
+        max_length=7, default='#3B5BFF', validators=[BRAND_COLOR_VALIDATOR]
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

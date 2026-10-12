@@ -4651,3 +4651,70 @@ def get_upcoming_internship_endings(days=None, organization=None):
 
     upcoming.sort(key=lambda x: x['days_until'])
     return upcoming
+
+
+# ==================== COMPANY BRANDING ====================
+
+@login_required
+def organization_branding(request):
+    from .branding import accent_vars, dominant_color
+    from .forms import OrganizationBrandingForm
+    organization = get_active_organization(request)
+    membership = OrganizationMembership.objects.filter(
+        user=request.user, organization=organization, is_active=True
+    ).first()
+    role = membership.role if membership else ''
+    if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
+        raise PermissionDenied
+    suggested = None
+    if request.method == 'POST':
+        form = OrganizationBrandingForm(request.POST, request.FILES, instance=organization)
+        if form.is_valid():
+            org = form.save(commit=False)
+            if form.cleaned_data.get('remove_logo') and org.logo:
+                org.logo.delete(save=False)
+                org.logo = None
+            org.save()
+            write_audit_log(request, organization=organization, area='organization',
+                            action='branding.update', summary=f'Updated branding for {org.name}', target=org)
+            messages.success(request, 'Company branding updated.')
+            return redirect('organization_branding')
+    else:
+        form = OrganizationBrandingForm(instance=organization)
+    # Dominant-color suggestion from current logo
+    try:
+        if organization.logo:
+            with organization.logo.open('rb') as fh:
+                suggested = dominant_color(fh)
+    except Exception:
+        suggested = None
+    context = {
+        'organization': organization,
+        'form': form,
+        'suggested_color': suggested,
+        'preview_vars': accent_vars(form.initial.get('brand_color') or organization.brand_color),
+        'page_title': 'Company Branding',
+    }
+    return render(request, 'attendance/organization_branding.html', context)
+
+
+def welcome_view(request):
+    return render(request, 'attendance/welcome.html')
+
+
+def contact_request_view(request):
+    if request.method == 'POST':
+        name = (request.POST.get('name') or '').strip()[:120]
+        email = (request.POST.get('email') or '').strip()[:120]
+        message = (request.POST.get('message') or '').strip()[:2000]
+        if name and email and message:
+            send_mail(
+                subject=f'DIGI HR access request from {name}',
+                message=f'From: {name} <{email}>\n\n{message}',
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local'),
+                recipient_list=[getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')],
+            )
+            messages.success(request, 'Thanks — we will be in touch shortly.')
+            return redirect('welcome')
+        messages.error(request, 'Please complete name, email and message.')
+    return redirect('welcome')

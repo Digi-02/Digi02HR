@@ -8,7 +8,57 @@ from django.views.static import serve as static_serve
 from attendance import views
 from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
 
+from django.contrib.auth import views as auth_views
+from django.views.decorators.cache import never_cache
+from django.core.cache import cache
+from django.http import HttpResponseRedirect
+import time
+
+_ratelimit_store = {}
+
+
+def _reset_ratelimited(request):
+    if request.method != 'POST':
+        return False
+    ip = request.META.get('REMOTE_ADDR', 'anon')
+    now = time.time()
+    hits = [t for t in _ratelimit_store.get(ip, []) if now - t < 600]
+    _ratelimit_store[ip] = hits
+    if len(hits) >= 5:
+        return True
+    hits.append(now)
+    _ratelimit_store[ip] = hits
+    return False
+
+
+class RateLimitedPasswordResetView(auth_views.PasswordResetView):
+    def dispatch(self, request, *args, **kwargs):
+        if _reset_ratelimited(request):
+            from django.contrib import messages as dj_messages
+            dj_messages.error(request, 'Too many reset attempts. Try again later.')
+            return HttpResponseRedirect(request.path)
+        return super().dispatch(request, *args, **kwargs)
+
 urlpatterns = [
+    path('welcome/', views.welcome_view, name='welcome'),
+    path('welcome/contact/', views.contact_request_view, name='welcome_contact'),
+    path('password-reset/', RateLimitedPasswordResetView.as_view(
+        template_name='registration/password_reset_form.html',
+        email_template_name='registration/password_reset_email.html',
+        subject_template_name='registration/password_reset_subject.txt',
+        success_url='/password-reset/done/'), name='password_reset'),
+    path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(
+        template_name='registration/password_reset_done.html'), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='registration/password_reset_confirm.html',
+        success_url='/reset/complete/'), name='password_reset_confirm'),
+    path('reset/complete/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
+    path('password-change/', auth_views.PasswordChangeView.as_view(
+        template_name='registration/password_change_form.html',
+        success_url='/password-change/done/'), name='password_change'),
+    path('password-change/done/', auth_views.PasswordChangeDoneView.as_view(
+        template_name='registration/password_change_done.html'), name='password_change_done'),
     path('api/v1/technical-command/people/', technical_command_people_api, name='technical_command_people_api'),
     path('api/v1/technical-command/attendance/today/', technical_command_attendance_today_api, name='technical_command_attendance_today_api'),
     # Admin (only for superusers)
@@ -32,6 +82,7 @@ urlpatterns = [
     path('organizations/<int:pk>/edit/', views.organization_edit, name='organization_edit'),
     path('organizations/<int:pk>/switch/', views.organization_switch, name='organization_switch'),
     path('settings/', views.organization_settings, name='organization_settings'),
+    path('settings/branding/', views.organization_branding, name='organization_branding'),
     path('settings/departments/', views.organization_departments, name='organization_departments'),
     path('settings/categories/', views.organization_categories, name='organization_categories'),
     path('settings/attendance/', views.organization_attendance_settings, name='organization_attendance_settings'),

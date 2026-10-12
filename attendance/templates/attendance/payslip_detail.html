@@ -10,6 +10,7 @@
         <div class="card-header bg-white border-0 pt-4 px-4">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
+                    {% if organization and organization.logo %}<img src="{{ organization.logo.url }}" alt="{{ organization.name }} logo" height="40" class="mb-2">{% endif %}
                     <h5 class="mb-1">{{ employee.display_name }}</h5>
                     <small class="text-muted">{{ payslip.payroll_run.title }} - {{ payslip.payroll_run.payroll_month|date:"F Y" }}</small>
                 </div>

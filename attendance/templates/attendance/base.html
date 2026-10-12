@@ -744,6 +744,21 @@
     </style>
     
     {% block extra_css %}{% endblock %}
+    {% if brand_accent %}
+    <style>
+        :root {
+            --accent: {{ brand_accent.accent }};
+            --accent-hover: {{ brand_accent.accent_hover }};
+            --accent-tint: {{ brand_accent.accent_tint }};
+            --accent-contrast: {{ brand_accent.accent_contrast }};
+            --accent-text: {{ brand_accent.accent_text }};
+        }
+        a { color: var(--accent-text); }
+        .btn-primary { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-contrast) !important; }
+        .btn-primary:hover { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
+        .btn-outline-primary { border-color: var(--accent) !important; color: var(--accent-text) !important; }
+    </style>
+    {% endif %}
 </head>
 <body>
     <!-- Mobile Header -->
@@ -763,7 +778,16 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <h3><i class="bi bi-building me-2"></i> HR Portal</h3>
+            <div class="d-flex align-items-center gap-2 min-w-0">
+                {% if active_organization and active_organization.logo %}
+                <img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo" width="32" height="32" style="border-radius:8px;object-fit:cover;">
+                {% elif active_organization %}
+                <span style="width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:{% if brand_accent %}{{ brand_accent.accent_contrast }}{% else %}#fff{% endif %};background:{% if brand_accent %}{{ brand_accent.accent }}{% else %}#3B5BFF{% endif %};">{{ active_organization.name|slice:":2"|upper }}</span>
+                {% else %}
+                <h3><i class="bi bi-building me-2"></i> HR Portal</h3>
+                {% endif %}
+                {% if active_organization %}<strong class="text-truncate" style="font-size:1rem;">{{ active_organization.name }}</strong>{% endif %}
+            </div>
             <button class="sidebar-close" id="sidebarClose">
                 <i class="bi bi-x-lg"></i>
             </button>
@@ -840,6 +864,10 @@
                     <i class="bi bi-box-arrow-right"></i> <span>Logout</span>
                 </button>
             </form>
+            <a href="{% url 'password_change' %}" class="nav-link">
+                <i class="bi bi-key"></i> <span>Change Password</span>
+            </a>
+            <div class="text-center mt-3"><small class="text-muted">Powered by DIGI</small></div>
         </div>
     </div>
     

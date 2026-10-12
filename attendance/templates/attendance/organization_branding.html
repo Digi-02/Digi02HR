@@ -1,0 +1,56 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Company Branding | HR Management{% endblock %}
+{% block page_title %}Company Branding{% endblock %}
+{% block content %}
+<div class="container-fluid p-0">
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card"><div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3"><label class="form-label">Company name</label>{{ form.name }}</div>
+          <div class="mb-3"><label class="form-label">Logo (PNG/JPG/WebP, max 2MB)</label>{{ form.logo }}
+            {% if organization.logo %}<div class="mt-2"><img src="{{ organization.logo.url }}" alt="Company logo" height="64"></div>
+            <div class="form-check mt-2">{{ form.remove_logo }} <label class="form-check-label">Remove logo</label></div>{% endif %}
+            {% if suggested_color %}<small class="text-muted">Suggested from logo: <code>{{ suggested_color }}</code></small>{% endif %}
+          </div>
+          <div class="mb-3"><label class="form-label">Brand color</label>
+            <div class="d-flex gap-2 align-items-center">
+              <input type="color" id="brandPicker" value="{{ organization.brand_color }}" class="form-control form-control-color">
+              {{ form.brand_color }}
+              <button type="button" id="eyeBtn" class="btn btn-outline-secondary btn-sm">Eyedropper</button>
+            </div>
+          </div>
+          {% if form.errors %}<div class="alert alert-danger">{{ form.errors }}</div>{% endif %}
+          <button class="btn btn-primary" type="submit">Save branding</button>
+        </form>
+      </div></div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card"><div class="card-body p-4" id="preview">
+        <h6>Live preview</h6>
+        <button class="btn btn-primary mb-2" id="pvBtn">Primary button</button><br>
+        <a href="#" id="pvLink">Sample link</a><br><br>
+        <span class="badge" id="pvBadge">Active</span>
+        <div class="mt-2 p-2" id="pvMenu" style="border-left:3px solid;">Active menu item</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var picker=document.getElementById('brandPicker');
+  var hex=document.getElementById('id_brand_color');
+  var pvBtn=document.getElementById('pvBtn'),pvLink=document.getElementById('pvLink'),
+      pvBadge=document.getElementById('pvBadge'),pvMenu=document.getElementById('pvMenu');
+  function paint(c){ pvBtn.style.background=c;pvBtn.style.borderColor=c;pvLink.style.color=c;
+    pvBadge.style.background=c;pvBadge.style.color='#fff';pvMenu.style.borderColor=c;pvMenu.style.background='#f7f7f8'; }
+  picker.addEventListener('input',function(){hex.value=picker.value;paint(picker.value);});
+  hex.addEventListener('input',function(){ if(/^#[0-9a-fA-F]{6}$/.test(hex.value)){picker.value=hex.value;paint(hex.value);} });
+  paint(picker.value);
+  var eye=document.getElementById('eyeBtn');
+  if(!window.EyeDropper){eye.style.display='none';}
+  else{eye.addEventListener('click',async function(){ try{ var r=await new EyeDropper().open(); picker.value=r.sRGBHex; hex.value=r.sRGBHex; paint(r.sRGBHex);}catch(e){} });}
+})();
+</script>
+{% endblock %}
