@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="148" height="32" viewBox="0 0 148 32" role="img" aria-label="DIGI HR logo">
+  <!-- SWAP ME: replace this file with the final DIGI HR logo (SVG preferred). Keep the same path. -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#0A0A0B"/>
+  <path d="M9 22V10h6.5a6 6 0 0 1 0 12H9zm3.4-2.6h2.9a3.4 3.4 0 0 0 0-6.8h-2.9v6.8z" fill="#fff"/>
+  <circle cx="25.5" cy="22" r="2.4" fill="#3B5BFF"/>
+  <text x="38" y="22" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800" letter-spacing="0.5" fill="#0A0A0B">DIGI HR</text>
+</svg>

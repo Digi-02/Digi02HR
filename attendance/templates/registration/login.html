@@ -1,85 +1,80 @@
-<!-- attendance/templates/registration/login.html -->
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - HR System</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <style>
-        body {
-            background: radial-gradient(circle at top, #1e293b, #020617);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .login-card {
-            background: rgba(255,255,255,0.96);
-            backdrop-filter: blur(10px);
-            border-radius: 22px;
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-            box-shadow: 0 30px 80px rgba(0,0,0,0.35);
-            border: 1px solid rgba(148,163,184,0.35);
-        }
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .login-header i {
-            font-size: 48px;
-            color: #020617;
-        }
-        .btn-login {
-            background: linear-gradient(135deg, #020617, #1e293b);
-            border: 1px solid #020617;
-            padding: 12px;
-            font-weight: 500;
-        }
-        .btn-login:hover {
-            background: linear-gradient(135deg, #0b1220, #26364f);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log in — DIGI HR</title>
+<meta name="description" content="Log in to DIGI HR to manage employees, attendance, onboarding and payroll preparation.">
+<style>
+:root{--white:#FFFFFF;--off:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);color:var(--body);font-size:18px;line-height:1.6;min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
+.side{background:var(--black);color:var(--white);padding:64px;display:flex;flex-direction:column;gap:28px;justify-content:center}
+.side img{height:38px;width:auto;filter:invert(1);align-self:flex-start}
+.side h1{color:var(--white);font-size:clamp(30px,3.4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.2;margin:0;max-width:440px}
+.side p{color:var(--white);opacity:.78;margin:0;max-width:420px}
+.main{background:var(--white);display:flex;align-items:center;justify-content:center;padding:64px 32px}
+.card{width:100%;max-width:420px}
+.card .logo{display:inline-block;margin-bottom:8px}
+.card .logo img{display:block;height:36px;width:auto}
+.card h2{color:var(--black);font-size:34px;font-weight:800;letter-spacing:-.02em;margin:16px 0 4px}
+.card .sub{color:var(--muted);margin:0 0 32px}
+.field{margin-bottom:20px}
+label{display:block;font-weight:650;font-size:15px;color:var(--black);margin-bottom:8px}
+input[type=text],input[type=password]{width:100%;padding:13px 16px;min-height:52px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:17px;color:var(--black);background:var(--white)}
+input:hover{border-color:var(--muted)}
+.pw{position:relative}
+.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--white);border:1px solid var(--border);border-radius:8px;color:var(--black);font:inherit;font-size:14px;font-weight:700;min-width:48px;min-height:44px;cursor:pointer}
+.pw button:hover{background:var(--off)}
+a{color:var(--black)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--black);outline-offset:2px;border-radius:4px}
+.err{border:1px solid var(--black);background:var(--off);color:var(--black);border-radius:8px;padding:14px 16px;font-size:16px;margin-bottom:24px}
+.btn{width:100%;min-height:52px;border:0;border-radius:8px;background:var(--black);color:var(--white);font:inherit;font-weight:700;font-size:17px;cursor:pointer;transition:background .15s ease}
+.btn:hover:not(:disabled){background:#404040}
+.btn:disabled{opacity:.55;cursor:wait}
+.meta{display:flex;justify-content:flex-end;margin:4px 0 24px;font-size:15px}
+.reg{margin-top:24px;font-size:16px;text-align:center}
+.foot{margin-top:40px;text-align:center;color:var(--muted);font-size:14px}
+@media(max-width:860px){body{grid-template-columns:1fr}.side{display:none}.main{padding:48px 24px}}
+</style>
 </head>
 <body>
-    <div class="login-card">
-        <div class="login-header">
-            <i class="bi bi-shield-lock"></i>
-            <h4 class="mt-3">HR Management System</h4>
-            <p class="text-muted">Please sign in to continue</p>
+<div class="side">
+  <img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80">
+  <h1>Your whole workforce in one calm place.</h1>
+  <p>Attendance that marks itself. Records in one place. Payroll without panic.</p>
+</div>
+<main class="main">
+  <div class="card">
+    <a class="logo" href="/welcome/" aria-label="Back to DIGI HR home"><img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80"></a>
+    <h2>Welcome back</h2>
+    <p class="sub">Log in to your workspace.</p>
+    {% if form.errors or messages %}
+    <div class="err" role="alert">Invalid username or password. Check both and try again.</div>
+    {% endif %}
+    <form method="post" id="loginform">
+      {% csrf_token %}
+      <div class="field">
+        <label for="id_username">Username</label>
+        <input type="text" id="id_username" name="username" required autofocus autocomplete="username" value="{{ request.POST.username|default:'' }}">
+      </div>
+      <div class="field">
+        <label for="id_password">Password</label>
+        <div class="pw">
+          <input type="password" id="id_password" name="password" required autocomplete="current-password">
+          <button type="button" id="pwbtn" aria-pressed="false" aria-label="Show password">Show</button>
         </div>
-        
-        {% if form.errors %}
-        <div class="alert alert-danger">
-            <i class="bi bi-exclamation-triangle"></i> Invalid username or password.
-        </div>
-        {% endif %}
-        
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label class="form-label">Username</label>
-                <input type="text" name="username" class="form-control" required autofocus>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" name="password" class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 btn-login">
-                <i class="bi bi-box-arrow-in-right"></i> Sign In
-            </button>
-        </form>
-        <div class="text-center mt-3"><a href="{% url 'password_reset' %}">Forgot password?</a></div>
-        
-        <div class="text-center mt-4">
-            <a href="{% url 'kiosk' %}" class="text-muted small">
-                <i class="bi bi-qr-code"></i> Go to Kiosk
-            </a>
-        </div>
-    </div>
-</body>
-</html>
+      </div>
+      <div class="meta"><a href="{% url 'password_reset' %}">Forgot password?</a></div>
+      <button class="btn" type="submit" id="submitbtn">Log in</button>
+    </form>
+    <p class="reg">New here? <a href="/welcome/#contact">Request access</a></p>
+    <p class="foot">Powered by DIGI</p>
+  </div>
+</main>
+<script>
+(function(){var p=document.getElementById('id_password'),b=document.getElementById('pwbtn'),f=document.getElementById('loginform'),s=document.getElementById('submitbtn');
+b.addEventListener('click',function(){var show=p.type==='password';p.type=show?'text':'password';b.textContent=show?'Hide':'Show';b.setAttribute('aria-pressed',show?'true':'false');b.setAttribute('aria-label',show?'Hide password':'Show password');p.focus();});
+f.addEventListener('submit',function(){s.disabled=true;s.textContent='Logging in…';});})();
+</script>
+</body></html>
