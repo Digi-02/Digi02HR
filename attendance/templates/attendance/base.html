@@ -83,25 +83,33 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     border-right: 1px solid var(--nav-border);
 }
 .sidebar-brand {
-    padding: 20px 16px;
+    padding: 20px 16px 16px;
     border-bottom: 1px solid var(--nav-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
     flex: 0 0 auto;
     color: var(--nav-fg);
 }
+.brand-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.brand-logo-wrap { flex: 1 1 auto; min-width: 0; }
+.brand-logo-full {
+    display: flex; align-items: center; justify-content: center;
+    background: #FFFFFF; border-radius: 8px; padding: 6px 10px;
+}
+.brand-logo-full.dark-tile { background: #0A0A0A; border: 1px solid var(--nav-border); }
+.brand-logo-full img {
+    display: block; width: 100%; max-height: 44px;
+    object-fit: contain; border-radius: 4px;
+}
+.brand-name-sub {
+    margin-top: 10px;
+    font-size: 12.5px; font-weight: 500;
+    color: var(--nav-fg); opacity: .8;
+}
+.brand-powered {
+    margin-top: 2px;
+    font-size: 11px; font-weight: 400;
+    color: var(--nav-fg); opacity: .55;
+}
 .sidebar-brand img { border-radius: 8px; object-fit: cover; }
-.brand-logo-tile {
-    display: inline-flex; align-items: center; justify-content: center;
-    background: #FFFFFF; border-radius: 8px; padding: 3px; flex: 0 0 auto;
-    max-width: 120px;
-}
-.brand-logo-tile img {
-    display: block; max-height: 36px; max-width: 114px; width: auto; height: auto;
-    object-fit: contain; border-radius: 5px;
-}
 .brand-initials {
     width: 34px; height: 34px; border-radius: 8px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
@@ -318,7 +326,7 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
         }
         a { color: var(--accent-text); }
         a:hover { color: var(--accent-hover); }
-        .brand-initials { background: var(--accent); color: var(--accent-contrast); }
+        .brand-name-sub { color: var(--nav-fg); }
         .btn-primary {
             background: var(--accent); border-color: var(--accent);
             color: var(--accent-contrast);
@@ -364,19 +372,24 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <div class="d-flex align-items-center gap-2 min-w-0">
-                {% if active_organization and active_organization.logo %}
-                <span class="brand-logo-tile"><img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo"></span>
-                {% elif active_organization %}
-                <span style="width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:{% if brand_accent %}{{ brand_accent.accent_contrast }}{% else %}#FFFFFF{% endif %};background:{% if brand_accent %}{{ brand_accent.accent }}{% else %}#0A0A0A{% endif %};">{{ active_organization.name|slice:":2"|upper }}</span>
-                {% else %}
-                <h3><i class="bi bi-building me-2"></i> HR Portal</h3>
-                {% endif %}
-                {% if active_organization %}<strong class="text-truncate" style="font-size:1rem;">{{ active_organization.name }}</strong>{% endif %}
+            <div class="brand-top-row">
+                <div class="brand-logo-wrap">
+                    {% if active_organization and active_organization.logo %}
+                    <span class="brand-logo-full{% if active_organization.logo_is_light %} dark-tile{% endif %}"><img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo"></span>
+                    {% elif active_organization %}
+                    <span class="brand-initials">{{ active_organization.name|slice:":2"|upper }}</span>
+                    {% else %}
+                    <span class="brand-name-sub">DIGI HR</span>
+                    {% endif %}
+                </div>
+                <button class="sidebar-close" id="sidebarClose">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
-            <button class="sidebar-close" id="sidebarClose">
-                <i class="bi bi-x-lg"></i>
-            </button>
+            {% if active_organization %}
+            <div class="brand-name-sub text-truncate">{{ active_organization.name }}</div>
+            <div class="brand-powered">Powered by DIGI HR</div>
+            {% endif %}
         </div>
         <div class="sidebar-nav">
             {% if request.user.employee_profile %}
@@ -461,7 +474,6 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
             <a href="{% url 'password_change' %}" class="nav-link">
                 <i class="bi bi-key"></i> <span>Change Password</span>
             </a>
-            <div class="powered">Powered by DIGI</div>
             </div>
         </div>
     </div>

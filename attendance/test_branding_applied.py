@@ -41,13 +41,15 @@ class BrandingAppliedTests(TestCase):
         up = SimpleUploadedFile('mark.png', make_png(), content_type='image/png')
         resp = c.post('/settings/branding/', {
             'name': 'LogoCo2', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
-            'logo': up})
+            'nav_style': 'black', 'nav_bg_color': '#0A0A0A',
+            'nav_highlight_style': 'pill', 'nav_highlight_source': 'auto',
+            'nav_highlight_color': '#0A0A0A', 'logo': up})
         self.assertEqual(resp.status_code, 302)
         org.refresh_from_db()
         self.assertTrue(bool(org.logo))
         html = c.get('/dashboard/').content.decode('utf-8')
         self.assertIn(org.logo.url, html)
-        self.assertIn('brand-logo-tile', html)
+        self.assertIn('brand-logo-full', html)
 
     def test_replace_and_remove_logo(self):
         org, user = make_org_with_owner('SwapCo', 'swapco', 'swap_owner')
@@ -56,20 +58,26 @@ class BrandingAppliedTests(TestCase):
         first = SimpleUploadedFile('one.png', make_png('red'), content_type='image/png')
         c.post('/settings/branding/', {
             'name': 'SwapCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
-            'logo': first})
+            'nav_style': 'black', 'nav_bg_color': '#0A0A0A',
+            'nav_highlight_style': 'pill', 'nav_highlight_source': 'auto',
+            'nav_highlight_color': '#0A0A0A', 'logo': first})
         org.refresh_from_db()
         first_name = org.logo.name
         second = SimpleUploadedFile('two.png', make_png('blue'), content_type='image/png')
         c.post('/settings/branding/', {
             'name': 'SwapCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
-            'logo': second})
+            'nav_style': 'black', 'nav_bg_color': '#0A0A0A',
+            'nav_highlight_style': 'pill', 'nav_highlight_source': 'auto',
+            'nav_highlight_color': '#0A0A0A', 'logo': second})
         org.refresh_from_db()
         self.assertNotEqual(org.logo.name, first_name)
         self.assertIn(org.logo.url, c.get('/dashboard/').content.decode('utf-8'))
         # Remove
         c.post('/settings/branding/', {
             'name': 'SwapCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
-            'remove_logo': 'on'})
+            'nav_style': 'black', 'nav_bg_color': '#0A0A0A',
+            'nav_highlight_style': 'pill', 'nav_highlight_source': 'auto',
+            'nav_highlight_color': '#0A0A0A', 'remove_logo': 'on'})
         org.refresh_from_db()
         self.assertFalse(bool(org.logo))
         html = c.get('/dashboard/').content.decode('utf-8')
@@ -92,3 +100,49 @@ class BrandingAppliedTests(TestCase):
         self.assertNotIn('--accent: #DC2626;', html_a)
         self.assertIn('--accent: #DC2626;', html_b)
         self.assertNotIn('--accent: #1F9D55;', html_b)
+
+    def test_light_logo_gets_dark_tile(self):
+        from attendance.forms import OrganizationBrandingForm
+        org, user = make_org_with_owner('TileCo', 'tileco', 'tile_owner')
+        c = Client()
+        c.force_login(user)
+        nav = {'nav_style': 'black', 'nav_bg_color': '#0A0A0A',
+               'nav_highlight_style': 'pill', 'nav_highlight_source': 'auto',
+               'nav_highlight_color': '#0A0A0A'}
+        white = SimpleUploadedFile('w.png', make_png('white'), content_type='image/png')
+        resp = c.post('/settings/branding/', {
+            'name': 'TileCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
+            **nav, 'logo': white})
+        self.assertEqual(resp.status_code, 302)
+        org.refresh_from_db()
+        self.assertTrue(org.logo_is_light)
+        html = c.get('/dashboard/').content.decode('utf-8')
+        self.assertIn('brand-logo-full dark-tile', html)
+        # Dark logo keeps the white tile
+        black = SimpleUploadedFile('b.png', make_png('black'), content_type='image/png')
+        c.post('/settings/branding/', {
+            'name': 'TileCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',
+            **nav, 'logo': black})
+        org.refresh_from_db()
+        self.assertFalse(org.logo_is_light)
+        html = c.get('/dashboard/').content.decode('utf-8')
+        self.assertIn('brand-logo-full', html)
+        self.assertNotIn('brand-logo-full dark-tile', html)
+
+    def test_blank_transparent_logo_rejected(self):
+        from attendance.forms import OrganizationBrandingForm
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        org, _ = make_org_with_owner("BlankCo", "blankco", "blank_owner")
+        buf = BytesIO()
+        Image.new("RGBA", (200, 80), (0, 0, 0, 0)).save(buf, format="PNG")
+        blank = SimpleUploadedFile("blank.png", buf.getvalue(), content_type="image/png")
+        form = OrganizationBrandingForm(
+            {"name": "BlankCo", "brand_color": "#0A0A0A", "timezone": "Africa/Lagos",
+             "nav_style": "black", "nav_bg_color": "#0A0A0A",
+             "nav_highlight_style": "pill", "nav_highlight_source": "auto",
+             "nav_highlight_color": "#0A0A0A"},
+            {"logo": blank}, instance=org)
+        self.assertFalse(form.is_valid())
+        self.assertIn("logo", form.errors)

@@ -4712,6 +4712,7 @@ def organization_branding(request):
             if form.cleaned_data.get('remove_logo') and org.logo:
                 org.logo.delete(save=False)
                 org.logo = None
+                org.logo_is_light = False
             org.save()
             write_audit_log(request, organization=organization, area='organization',
                             action='branding.update', summary=f'Updated branding for {org.name}', target=org)

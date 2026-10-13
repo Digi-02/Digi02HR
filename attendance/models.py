@@ -98,6 +98,10 @@ class Organization(models.Model):
     phone = models.CharField(max_length=30, blank=True)
     address = models.TextField(blank=True)
     logo = models.ImageField(upload_to=organization_logo_path, blank=True, null=True)
+    logo_is_light = models.BooleanField(
+        default=False,
+        help_text='Whether the logo artwork is light (needs a dark tile). Set automatically on upload.',
+    )
     brand_color = models.CharField(
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )

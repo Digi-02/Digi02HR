@@ -1455,6 +1455,22 @@ class OrganizationBrandingForm(forms.ModelForm):
         except Exception:
             raise forms.ValidationError('Uploaded file is not a valid image.')
         f.seek(0)
+        try:
+            probe = Image.open(f)
+            rgba = probe.convert('RGBA') if 'A' in probe.getbands() else probe.convert('RGB')
+            rgba.thumbnail((48, 48))
+            px = list(rgba.getdata())
+            if px and isinstance(px[0], tuple):
+                visible = [p for p in px if len(p) < 4 or p[3] > 16]
+                if not visible:
+                    raise forms.ValidationError(
+                        'This image appears blank (fully transparent). '
+                        'Please upload a logo with visible artwork.')
+        except forms.ValidationError:
+            raise
+        except Exception:
+            pass
+        f.seek(0)
         return f
 
     def clean_brand_color(self):
@@ -1487,6 +1503,19 @@ class OrganizationBrandingForm(forms.ModelForm):
                 logo.seek(0)
                 img = Image.open(logo)
                 img.load()
+                # Detect light artwork (e.g. a white logo with no background)
+                # so the sidebar can use a dark tile automatically.
+                try:
+                    sample = img.convert('RGBA') if 'A' in img.getbands() else img.convert('RGB')
+                    sample.thumbnail((48, 48))
+                    px = list(sample.getdata())
+                    if px and isinstance(px[0], tuple) and len(px[0]) == 4:
+                        visible = [p for p in px if p[3] > 16]
+                        px = [(p[0], p[1], p[2]) for p in visible] or [(255, 255, 255)]
+                    lum = sum((0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) for p in px) / len(px)
+                    instance.logo_is_light = lum > 140
+                except Exception:
+                    pass
                 if img.width > 512 or img.height > 512:
                     img.thumbnail((512, 512))
                     buffer = BytesIO()
