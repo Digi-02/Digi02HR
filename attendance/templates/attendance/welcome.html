@@ -206,8 +206,12 @@ section{padding:64px 0}
   <form class="contact-form" method="post" action="{% url 'welcome_contact' %}">
     {% csrf_token %}
     <div class="field"><label for="cname">{{ form_name }}</label><input id="cname" name="name" type="text" required autocomplete="name"></div>
+    <div class="field"><label for="ccompany">Company name</label><input id="ccompany" name="company" type="text" autocomplete="organization"></div>
     <div class="field"><label for="cemail">{{ form_email }}</label><input id="cemail" name="email" type="email" required autocomplete="email"></div>
+    <div class="field"><label for="cphone">Phone (optional)</label><input id="cphone" name="phone" type="tel" autocomplete="tel"></div>
+    <div class="field"><label for="cteam">Team size (optional)</label><input id="cteam" name="team_size" type="text" placeholder="e.g. 25"></div>
     <div class="field"><label for="cmsg">{{ form_msg }}</label><textarea id="cmsg" name="message" rows="4" required></textarea></div>
+    <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
     <button class="btn btn-black" type="submit">{{ form_send }}</button>
   </form>
 </div></section>

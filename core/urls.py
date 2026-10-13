@@ -39,7 +39,18 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
             return HttpResponseRedirect(request.path)
         return super().dispatch(request, *args, **kwargs)
 
+from attendance import platform as platform_views
+
 urlpatterns = [
+    path('platform/', platform_views.overview, name='platform_overview'),
+    path('platform/companies/', platform_views.company_list, name='platform_companies'),
+    path('platform/companies/create/', platform_views.company_create, name='platform_company_create'),
+    path('platform/companies/<int:pk>/', platform_views.company_detail, name='platform_company_detail'),
+    path('platform/companies/<int:pk>/action/', platform_views.company_action, name='platform_company_action'),
+    path('platform/requests/', platform_views.access_requests, name='platform_access_requests'),
+    path('platform/requests/<int:pk>/action/', platform_views.access_request_action, name='platform_access_request_action'),
+    path('platform/audit/', platform_views.audit_log, name='platform_audit'),
+    path('platform/settings/', platform_views.platform_settings, name='platform_settings'),
     path('welcome/', views.welcome_view, name='welcome'),
     path('welcome/contact/', views.contact_request_view, name='welcome_contact'),
     path('password-reset/', RateLimitedPasswordResetView.as_view(

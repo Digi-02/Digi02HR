@@ -1,0 +1,21 @@
+{% extends 'platform/base.html' %}
+{% block title %}Companies — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head"><div><h2>Companies</h2><p>Metadata and counts only.</p></div>
+<a href="{% url 'platform_company_create' %}" class="btn btn-primary">Create company</a></div>
+<div class="card"><div class="card-body">
+<form method="get" class="d-flex gap-2 flex-wrap">
+<input type="search" name="q" class="form-control" style="max-width:320px" placeholder="Search name or owner email…" value="{{ q }}">
+<button class="btn btn-outline-primary" type="submit">Search</button>
+{% if q %}<a href="{% url 'platform_companies' %}" class="btn btn-outline-secondary">Clear</a>{% endif %}
+</form></div>
+<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr>
+<th>Name</th><th>Owner email</th><th>Employees</th><th>Status</th><th>Created</th><th>Last activity</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td><a href="{% url 'platform_company_detail' row.org.pk %}"><strong>{{ row.org.name }}</strong></a></td>
+<td>{{ row.owner_email }}</td><td>{{ row.employees }}</td>
+<td>{% if row.org.is_suspended %}<span class="badge badge-stop">Suspended</span>{% else %}<span class="badge badge-ok">Active</span>{% endif %}</td>
+<td>{{ row.org.created_at|date:"M j, Y" }}</td><td>{{ row.last_activity|date:"M j, Y H:i" }}</td></tr>
+{% empty %}<tr><td colspan="6">No companies found.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

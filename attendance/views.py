@@ -520,7 +520,21 @@ def payroll_required(view_func):
 
 def login_view(request):
     """Custom login view"""
+    from .organization import get_user_organizations
+
+    def suspended_org_for(user):
+        if user.is_superuser:
+            return None
+        orgs = list(get_user_organizations(user))
+        if orgs and all(getattr(o, 'is_suspended', False) for o in orgs):
+            return orgs[0]
+        return None
+
     if request.user.is_authenticated:
+        suspended = suspended_org_for(request.user)
+        if suspended is not None:
+            logout(request)
+            return render(request, 'attendance/suspended.html', {'organization': suspended}, status=403)
         if is_employee_self_service_user(request.user):
             return redirect('employee_self_service_dashboard')
         if user_has_payroll_access(request.user) and not user_has_hr_access(request.user):
@@ -536,6 +550,10 @@ def login_view(request):
         
         if user is not None:
             login(request, user)
+            suspended = suspended_org_for(user)
+            if suspended is not None:
+                logout(request)
+                return render(request, 'attendance/suspended.html', {'organization': suspended}, status=403)
             if is_employee_self_service_user(user):
                 return redirect('employee_self_service_dashboard')
             if user_has_payroll_access(user) and not user_has_hr_access(user):
@@ -4722,18 +4740,44 @@ def welcome_view(request):
     return render(request, 'attendance/welcome.html')
 
 
+_contact_hits = {}
+
+
 def contact_request_view(request):
+    import time
+    from .models import AccessRequest
     if request.method == 'POST':
-        name = (request.POST.get('name') or '').strip()[:120]
+        # Honeypot: invisible "website" field; bots fill it, humans don't.
+        if (request.POST.get('website') or '').strip():
+            return redirect('welcome')
+        ip = request.META.get('REMOTE_ADDR', 'anon')
+        now = time.time()
+        hits = [t for t in _contact_hits.get(ip, []) if now - t < 600]
+        _contact_hits[ip] = hits
+        if len(hits) >= 5:
+            messages.error(request, 'Too many requests. Please try again later.')
+            return redirect('welcome')
+        hits.append(now)
+        _contact_hits[ip] = hits
+        name = (request.POST.get('name') or '').strip()[:150]
         email = (request.POST.get('email') or '').strip()[:120]
         message = (request.POST.get('message') or '').strip()[:2000]
+        company = (request.POST.get('company') or '').strip()[:150]
+        phone = (request.POST.get('phone') or '').strip()[:30]
+        team_size = (request.POST.get('team_size') or '').strip()[:30]
         if name and email and message:
-            send_mail(
-                subject=f'DIGI HR access request from {name}',
-                message=f'From: {name} <{email}>\n\n{message}',
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local'),
-                recipient_list=[getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')],
-            )
+            AccessRequest.objects.create(
+                company_name=company, contact_name=name, email=email,
+                phone=phone, team_size=team_size, message=message)
+            try:
+                send_mail(
+                    subject=f'DIGI HR access request from {name}',
+                    message=f'From: {name} <{email}>\n\n{message}',
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local'),
+                    recipient_list=[getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')],
+                )
+            except Exception:
+                pass
             messages.success(request, 'Thanks — we will be in touch shortly.')
             return redirect('welcome')
         messages.error(request, 'Please complete name, email and message.')

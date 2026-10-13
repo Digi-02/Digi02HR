@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Platform Admin — DIGI HR{% endblock %}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+:root{--white:#FFFFFF;--canvas:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5}
+body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--canvas);color:var(--body);margin:0}
+h1,h2,h3,h4,h5{color:var(--black)}
+a{color:var(--black)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--black);outline-offset:2px}
+.plat-banner{background:var(--black);color:var(--white);padding:10px 24px;font-weight:800;letter-spacing:.08em;font-size:13px;text-transform:uppercase;display:flex;align-items:center;gap:12px}
+.plat-banner .tag{background:var(--white);color:var(--black);border-radius:6px;padding:2px 10px;font-size:11px}
+.plat-nav{background:var(--white);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:4px;flex-wrap:wrap}
+.plat-nav a{display:inline-flex;align-items:center;min-height:52px;padding:0 16px;text-decoration:none;font-weight:600;font-size:14.5px;color:var(--body);border-bottom:3px solid transparent}
+.plat-nav a:hover{color:var(--black)}
+.plat-nav a.active{color:var(--black);border-bottom-color:var(--black)}
+.plat-main{max-width:1120px;margin:0 auto;padding:32px 24px 64px}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;margin-bottom:20px}
+.card-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 20px}
+.btn{min-height:44px;border-radius:8px;font-weight:600}
+.btn-primary{background:var(--black);border-color:var(--black);color:var(--white)}
+.btn-primary:hover{background:#404040;border-color:#404040;color:var(--white)}
+.btn-outline-primary{border-color:var(--black);color:var(--black);background:var(--white)}
+.btn-outline-primary:hover{background:var(--canvas);border-color:var(--black);color:var(--black)}
+.btn-outline-secondary{border-color:var(--border);color:var(--body);background:var(--white)}
+.btn-outline-secondary:hover{border-color:var(--muted);color:var(--black)}
+.btn-danger{background:#fff;border:1px solid #DC2626;color:#DC2626}
+.btn-danger:hover{background:#DC2626;color:#fff}
+.form-control,.form-select{border-radius:8px;border:1px solid var(--border);padding:10px 14px;color:var(--black)}
+.form-control:focus,.form-select:focus{border-color:var(--black);box-shadow:0 0 0 3px rgba(10,10,10,.12)}
+.table th{background:var(--white);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:12px 16px;border-bottom:1px solid var(--border);text-align:left}
+.table td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--body)}
+.table-hover tbody tr:hover{background:var(--canvas)}
+.badge{font-weight:600;font-size:12px;padding:3px 10px;border-radius:999px}
+.badge-ok{background:rgba(22,163,74,.12);color:#16A34A}
+.badge-stop{background:rgba(220,38,38,.1);color:#DC2626}
+.badge-mid{background:#F5F5F5;border:1px solid var(--border);color:var(--body)}
+.stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.stat-card{padding:16px 18px}
+.stat-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat-value{font-size:30px;font-weight:800;color:var(--black);line-height:1.2}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.page-head h2{margin:0;font-size:26px;font-weight:800}
+.page-head p{margin:4px 0 0;color:var(--muted)}
+.alert{border-radius:12px}
+code{background:var(--canvas);padding:2px 8px;border-radius:6px}
+@media(max-width:900px){.stat-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr 1fr}.plat-main{padding:20px 12px 48px}.table{min-width:560px}}
+</style>
+</head>
+<body>
+<div class="plat-banner"><span class="tag">Platform</span> DIGI Platform Admin — product owner area, not a company workspace</div>
+<nav class="plat-nav" aria-label="Platform">
+  <a href="{% url 'platform_overview' %}" class="{% if request.resolver_match.url_name == 'platform_overview' %}active{% endif %}">Overview</a>
+  <a href="{% url 'platform_companies' %}" class="{% if request.resolver_match.url_name|slice:':17' == 'platform_company_' or request.resolver_match.url_name == 'platform_companies' %}active{% endif %}">Companies</a>
+  <a href="{% url 'platform_access_requests' %}" class="{% if request.resolver_match.url_name|slice:':18' == 'platform_access_re' %}active{% endif %}">Access requests</a>
+  <a href="{% url 'platform_audit' %}" class="{% if request.resolver_match.url_name == 'platform_audit' %}active{% endif %}">Audit log</a>
+  <a href="{% url 'platform_settings' %}" class="{% if request.resolver_match.url_name == 'platform_settings' %}active{% endif %}">Settings</a>
+  <span style="flex:1"></span>
+  <a href="/dashboard/">← Back to app</a>
+</nav>
+<main class="plat-main">
+  {% if messages %}{% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">{{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

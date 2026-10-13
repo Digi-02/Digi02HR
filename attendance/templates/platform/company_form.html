@@ -1,0 +1,18 @@
+{% extends 'platform/base.html' %}
+{% block title %}Create company — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head"><div><h2>Create company</h2>
+<p>{% if source_request %}From access request by {{ source_request.contact_name }} ({{ source_request.email }}).{% else %}Creates the workspace, the owner user, and sends a password invite.{% endif %}</p></div></div>
+<div class="card" style="max-width:560px"><div class="card-body">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="request_id" value="{{ request_id }}">
+<div class="mb-3"><label class="form-label" for="f-name">Company name</label>
+<input id="f-name" name="name" class="form-control" required value="{{ prefill.name|default:'' }}"></div>
+<div class="mb-3"><label class="form-label" for="f-owner">Owner full name</label>
+<input id="f-owner" name="owner_name" class="form-control" required value="{{ prefill.owner_name|default:'' }}"></div>
+<div class="mb-3"><label class="form-label" for="f-email">Owner email</label>
+<input id="f-email" name="owner_email" type="email" class="form-control" required autocomplete="off" value="{{ prefill.owner_email|default:'' }}"></div>
+<button class="btn btn-primary" type="submit">Create and send invite</button>
+<a href="{% url 'platform_companies' %}" class="btn btn-outline-secondary">Cancel</a>
+</form></div></div>
+{% endblock %}

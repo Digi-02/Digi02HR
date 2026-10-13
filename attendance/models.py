@@ -102,6 +102,8 @@ class Organization(models.Model):
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
     timezone = models.CharField(max_length=50, default='Africa/Lagos', validators=[validate_iana_timezone])
+    is_suspended = models.BooleanField(default=False)
+    suspended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -136,6 +138,72 @@ class OrganizationMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.organization.name}"
+
+
+class AccessRequest(models.Model):
+    """A landing-page request-access submission from a prospective company."""
+
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    company_name = models.CharField(max_length=150, blank=True)
+    contact_name = models.CharField(max_length=150)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30, blank=True)
+    team_size = models.CharField(max_length=30, blank=True)
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    created_company = models.ForeignKey(
+        Organization, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='source_access_requests',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.company_name or self.contact_name} - {self.get_status_display()}"
+
+
+class PlatformAuditLog(models.Model):
+    """Who did what in the platform admin area."""
+
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=80)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='platform_audit_logs',
+    )
+    detail = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} - {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class PlatformSettings(models.Model):
+    """Singleton row for platform-wide settings."""
+
+    support_email = models.EmailField(default='support@digihr.example')
+    announcement = models.CharField(max_length=255, blank=True)
+    announcement_active = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Platform Settings'
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class AuditLog(models.Model):

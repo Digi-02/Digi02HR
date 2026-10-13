@@ -55,6 +55,10 @@ def global_context(request):
                 context["brand_accent"] = accent_vars(getattr(org, "brand_color", "#0A0A0A"))
                 context["company_today"] = company_today(org)
                 context["company_greeting"] = company_greeting(org)
+            from .models import PlatformSettings
+            ps = PlatformSettings.objects.filter(pk=1).first()
+            if ps is not None and ps.announcement_active and ps.announcement:
+                context["platform_announcement"] = ps.announcement
         except Exception:
             pass
 

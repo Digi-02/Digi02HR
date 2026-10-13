@@ -1,0 +1,28 @@
+{% extends 'platform/base.html' %}
+{% block title %}Overview — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head"><div><h2>Overview</h2><p>Company-level metadata and counts only. No employee records here.</p></div>
+<a href="{% url 'platform_company_create' %}" class="btn btn-primary">Create company</a></div>
+<div class="stat-grid mb-4">
+  <div class="card stat-card"><div class="stat-label">Companies</div><div class="stat-value">{{ total_companies }}</div></div>
+  <div class="card stat-card"><div class="stat-label">Active / Suspended</div><div class="stat-value">{{ active_companies }} / {{ suspended_companies }}</div></div>
+  <div class="card stat-card"><div class="stat-label">Employees (all)</div><div class="stat-value">{{ total_employees }}</div></div>
+  <div class="card stat-card"><div class="stat-label">New this month</div><div class="stat-value">{{ new_this_month }}</div></div>
+</div>
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card"><div class="card-header"><h5 class="mb-0">Recent companies</h5></div>
+    <div class="table-responsive"><table class="table mb-0"><thead><tr><th>Name</th><th>Status</th><th>Created</th></tr></thead><tbody>
+    {% for org in recent_companies %}<tr><td><a href="{% url 'platform_company_detail' org.pk %}">{{ org.name }}</a></td>
+      <td>{% if org.is_suspended %}<span class="badge badge-stop">Suspended</span>{% else %}<span class="badge badge-ok">Active</span>{% endif %}</td>
+      <td>{{ org.created_at|date:"M j, Y" }}</td></tr>
+    {% empty %}<tr><td colspan="3">No companies yet.</td></tr>{% endfor %}
+    </tbody></table></div></div></div>
+  <div class="col-lg-6"><div class="card"><div class="card-header"><h5 class="mb-0">Recent platform actions</h5></div>
+    <div class="table-responsive"><table class="table mb-0"><thead><tr><th>Action</th><th>By</th><th>When</th></tr></thead><tbody>
+    {% for log in recent_audit %}<tr><td>{{ log.action }}<br><small class="text-muted">{{ log.detail }}</small></td>
+      <td>{{ log.actor|default:"-" }}</td><td>{{ log.created_at|date:"M j H:i" }}</td></tr>
+    {% empty %}<tr><td colspan="3">Nothing logged yet.</td></tr>{% endfor %}
+    </tbody></table></div></div></div>
+</div>
+<div class="card"><div class="card-body"><strong>{{ pending_requests }}</strong> pending access request(s). <a href="{% url 'platform_access_requests' %}">Review them</a>.</div></div>
+{% endblock %}

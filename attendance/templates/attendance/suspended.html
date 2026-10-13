@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account suspended — DIGI HR</title>
+<style>body{font-family:Inter,system-ui,sans-serif;background:#F5F5F5;color:#404040;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#fff;border:1px solid #E5E5E5;border-radius:12px;padding:48px;max-width:440px;text-align:center}
+.box h1{color:#0A0A0A;font-size:26px;margin:0 0 12px}</style>
+</head>
+<body><div class="box">
+<h1>Account suspended</h1>
+<p>{% if organization %}{{ organization.name }} has been suspended.{% else %}This workspace has been suspended.{% endif %}</p>
+<p>Please contact support for help.</p>
+<p><a href="/login/" style="color:#0A0A0A">Try another account</a></p>
+</div></body></html>

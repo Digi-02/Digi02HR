@@ -1,0 +1,15 @@
+{% extends 'platform/base.html' %}
+{% block title %}Settings — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head"><div><h2>Platform settings</h2><p>The announcement banner shows to all companies when active.</p></div></div>
+<div class="card" style="max-width:560px"><div class="card-body">
+<form method="post">{% csrf_token %}
+<div class="mb-3"><label class="form-label" for="s-email">Support email</label>
+<input id="s-email" name="support_email" type="email" class="form-control" value="{{ settings_obj.support_email }}"></div>
+<div class="mb-3"><label class="form-label" for="s-ann">Announcement banner (optional)</label>
+<input id="s-ann" name="announcement" class="form-control" maxlength="255" value="{{ settings_obj.announcement }}"></div>
+<div class="form-check mb-3"><input id="s-on" name="announcement_active" type="checkbox" class="form-check-input" {% if settings_obj.announcement_active %}checked{% endif %}>
+<label class="form-check-label" for="s-on">Show announcement to all companies</label></div>
+<button class="btn btn-primary" type="submit">Save settings</button>
+</form></div></div>
+{% endblock %}

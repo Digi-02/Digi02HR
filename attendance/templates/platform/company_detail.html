@@ -1,0 +1,39 @@
+{% extends 'platform/base.html' %}
+{% block title %}{{ org.name }} — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head"><div><h2>{{ org.name }}</h2>
+<p>Created {{ org.created_at|date:"F j, Y" }} · {% if org.is_suspended %}<span class="badge badge-stop">Suspended</span>{% else %}<span class="badge badge-ok">Active</span>{% endif %}</p></div>
+<a href="{% url 'platform_companies' %}" class="btn btn-outline-secondary">All companies</a></div>
+<div class="row g-4">
+<div class="col-lg-6"><div class="card"><div class="card-header"><h5 class="mb-0">Company info</h5></div><div class="card-body">
+<p><strong>Contact:</strong> {{ org.email|default:"-" }} · {{ org.phone|default:"-" }}</p>
+<p><strong>Timezone:</strong> {{ org.timezone }} · <strong>Brand:</strong> <code>{{ org.brand_color }}</code>
+{% if org.logo %}<br><img src="{{ org.logo.url }}" alt="Company logo" height="48" class="mt-2">{% else %}<span class="text-muted">(no logo)</span>{% endif %}</p>
+<p><strong>Employees:</strong> {{ employees }}</p>
+<p><strong>Users by role:</strong><br>{% for r in roles %}<span class="badge badge-mid me-1">{{ r.role }}: {{ r.total }}</span>{% empty %}<span class="text-muted">No users yet.</span>{% endfor %}</p>
+<p><strong>Owner:</strong> {% if owner %}{{ owner.get_full_name|default:owner.username }} ({{ owner.email }}){% else %}<span class="text-muted">No owner assigned.</span>{% endif %}</p>
+<p class="mb-0"><strong>Last activity:</strong> {{ last_activity|date:"M j, Y H:i" }}</p>
+</div></div></div>
+<div class="col-lg-6"><div class="card"><div class="card-header"><h5 class="mb-0">Actions</h5></div><div class="card-body">
+{% if org.is_suspended %}
+<form method="post" action="{% url 'platform_company_action' org.pk %}">{% csrf_token %}
+<input type="hidden" name="action" value="activate">
+<button class="btn btn-primary w-100" type="submit">Activate company</button></form>
+{% else %}
+<form method="post" action="{% url 'platform_company_action' org.pk %}" onsubmit="return confirm('Suspend {{ org.name }}? Its users will be locked out.');">{% csrf_token %}
+<input type="hidden" name="action" value="suspend">
+<button class="btn btn-danger w-100" type="submit">Suspend company</button></form>
+{% endif %}
+<hr>
+<form method="post" action="{% url 'platform_company_action' org.pk %}">{% csrf_token %}
+<input type="hidden" name="action" value="resend_invite">
+<button class="btn btn-outline-primary w-100" type="submit">Resend owner invite</button></form>
+<hr>
+<form method="post" action="{% url 'platform_company_action' org.pk %}">{% csrf_token %}
+<input type="hidden" name="action" value="rename">
+<label class="form-label" for="rename">Edit company name</label>
+<div class="d-flex gap-2"><input id="rename" name="name" class="form-control" value="{{ org.name }}" required>
+<button class="btn btn-outline-primary" type="submit">Save</button></div></form>
+</div></div></div>
+</div>
+{% endblock %}
