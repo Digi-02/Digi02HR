@@ -11,6 +11,11 @@
     
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
 /* DIGI HR app shell — strict black & white. Status colours only for statuses. */
@@ -33,7 +38,7 @@
     --radius-card: 12px;
     --radius-input: 8px;
     --sidebar-width: 264px;
-    --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-ui: Poppins, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
 html { scroll-behavior: smooth; }
 body {
@@ -54,10 +59,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     border-radius: 4px;
 }
 
-/* ---- Sidebar (black) ---- */
+/* ---- Sidebar (per-company nav variables; never --accent except via vars) ---- */
+:root {
+    --nav-bg: #0A0A0A;
+    --nav-fg: #FFFFFF;
+    --nav-fg-muted: #D4D4D4;
+    --nav-border: rgba(255,255,255,0.14);
+    --nav-hover-bg: rgba(255,255,255,0.07);
+    --nav-active-bg: rgba(255,255,255,0.1);
+    --nav-active-fg: #FFFFFF;
+    --nav-active-indicator: #FFFFFF;
+}
 .sidebar {
-    background: var(--black);
-    color: var(--white);
+    background: var(--nav-bg);
+    color: var(--nav-fg);
     position: fixed;
     width: var(--sidebar-width);
     top: 0; bottom: 0; left: 0;
@@ -65,16 +80,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     display: flex;
     flex-direction: column;
     transition: transform 0.25s ease;
+    border-right: 1px solid var(--nav-border);
 }
 .sidebar-brand {
     padding: 20px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.14);
+    border-bottom: 1px solid var(--nav-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     flex: 0 0 auto;
-    color: var(--white);
+    color: var(--nav-fg);
 }
 .sidebar-brand img { border-radius: 8px; object-fit: cover; }
 .brand-logo-tile {
@@ -90,41 +106,47 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     width: 34px; height: 34px; border-radius: 8px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
     font-weight: 800; font-size: 14px;
-    background: var(--accent); color: var(--accent-contrast);
+    background: var(--nav-fg); color: var(--nav-bg);
 }
-.brand-name { color: var(--white); font-weight: 700; font-size: 15px; }
-.sidebar-close { display: none; background: none; border: 1px solid #404040; border-radius: 8px; color: var(--white); width: 40px; height: 40px; font-size: 16px; cursor: pointer; }
-.sidebar-close:hover { background: rgba(255,255,255,0.08); }
+.brand-name { color: var(--nav-fg); font-weight: 700; font-size: 15px; }
+.sidebar-close { display: none; background: none; border: 1px solid var(--nav-border); border-radius: 8px; color: var(--nav-fg); width: 40px; height: 40px; font-size: 16px; cursor: pointer; }
+.sidebar-close:hover { background: var(--nav-hover-bg); }
 .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 12px; }
 .sidebar-nav::-webkit-scrollbar { width: 6px; }
-.sidebar-nav::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--nav-fg-muted); border-radius: 3px; opacity: .5; }
 .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
-.nav-section { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: rgba(255,255,255,0.55); padding: 16px 12px 6px; margin: 0; }
+.nav-section { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--nav-fg-muted); padding: 16px 12px 6px; margin: 0; }
 .nav-link {
     position: relative;
     display: flex; align-items: center;
     padding: 10px 12px 10px 15px;
     border-radius: 0 8px 8px 0;
-    color: rgba(255,255,255,0.82);
+    color: var(--nav-fg-muted);
     font-weight: 550; font-size: 14.5px;
     text-decoration: none;
     margin-bottom: 2px;
     border: 0; background: none; width: 100%; text-align: left; cursor: pointer;
 }
-.nav-link i { margin-right: 12px; font-size: 17px; width: 22px; text-align: center; color: rgba(255,255,255,0.6); }
-.nav-link:hover { background: rgba(255,255,255,0.07); color: var(--white); }
-.nav-link:hover i { color: var(--white); }
-.nav-link.active { background: rgba(255,255,255,0.1); color: var(--white); font-weight: 700; }
-.nav-link.active i { color: var(--white); }
-.nav-link.active::before {
+.nav-link i { margin-right: 12px; font-size: 17px; width: 22px; text-align: center; color: var(--nav-fg-muted); }
+.nav-link:hover { background: var(--nav-hover-bg); color: var(--nav-fg); }
+.nav-link:hover i { color: var(--nav-fg); }
+.nav-link.active { background: var(--nav-active-bg); color: var(--nav-active-fg); font-weight: 700; }
+.nav-link.active i { color: var(--nav-active-fg); }
+body[data-nav-highlight="left_bar"] .nav-link.active::before {
     content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
-    border-radius: 2px; background: var(--accent-bar);
+    border-radius: 2px; background: var(--nav-active-indicator);
 }
-.sidebar-foot { flex: 0 0 auto; border-top: 1px solid rgba(255,255,255,0.14); padding: 12px; }
-.sidebar-foot .user-line { display: flex; align-items: center; gap: 10px; color: var(--white); font-size: 14px; padding: 8px 12px; }
-.sidebar-foot .user-line .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--white); color: var(--black); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex: 0 0 auto; }
-.nav-divider { border: 0; border-top: 1px solid rgba(255,255,255,0.14); margin: 12px 4px; }
-.powered { text-align: center; color: var(--white); opacity: .55; font-size: 12px; padding: 8px 0 4px; }
+body[data-nav-highlight="outline"] .nav-link.active {
+    box-shadow: inset 0 0 0 1px var(--nav-active-indicator);
+}
+.sidebar-foot { flex: 0 0 auto; border-top: 1px solid var(--nav-border); padding: 12px; }
+.sidebar-foot .user-line { display: flex; align-items: center; gap: 10px; color: var(--nav-fg); font-size: 14px; padding: 8px 12px; }
+.sidebar-foot .user-line .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--nav-fg); color: var(--nav-bg); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex: 0 0 auto; }
+.nav-divider { border: 0; border-top: 1px solid var(--nav-border); margin: 12px 4px; }
+.powered { text-align: center; color: var(--nav-fg); opacity: .55; font-size: 12px; padding: 8px 0 4px; }
+.mobile-header { background: var(--nav-bg); color: var(--nav-fg); }
+.mobile-header .menu-toggle { border-color: var(--nav-border); color: var(--nav-fg); }
+.mobile-header .brand { color: var(--nav-fg); }
 .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1039; }
 .sidebar-overlay.active { display: block; }
 
@@ -264,6 +286,20 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
     </style>
     
     {% block extra_css %}{% endblock %}
+    {% if nav_styles %}
+    <style>
+        :root {
+            --nav-bg: {{ nav_styles.nav_bg }};
+            --nav-fg: {{ nav_styles.nav_fg }};
+            --nav-fg-muted: {{ nav_styles.nav_fg_muted }};
+            --nav-border: {{ nav_styles.nav_border }};
+            --nav-hover-bg: {{ nav_styles.nav_hover_bg }};
+            --nav-active-bg: {{ nav_styles.nav_active_bg }};
+            --nav-active-fg: {{ nav_styles.nav_active_fg }};
+            --nav-active-indicator: {{ nav_styles.nav_active_indicator }};
+        }
+    </style>
+    {% endif %}
     {% if brand_accent %}
     <style>
         :root {
@@ -310,7 +346,7 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
     </style>
     {% endif %}
 </head>
-<body>
+<body data-nav-highlight="{{ nav_styles.nav_highlight_style|default:'pill' }}">
     <!-- Mobile Header -->
     <div class="mobile-header">
         <button class="menu-toggle" id="menuToggle">
@@ -356,7 +392,7 @@ body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
             {% endif %}
             {% if user_has_hr_access %}
             <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
+                <i class="bi bi-grid"></i> <span>Dashboard</span>
             </a>
 <p class="nav-section">PEOPLE</p>
             <a href="{% url 'employee_list' %}" class="nav-link {% if request.resolver_match.url_name == 'employee_list' %}active{% endif %}">

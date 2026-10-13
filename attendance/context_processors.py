@@ -49,12 +49,21 @@ def global_context(request):
         context["active_organization"] = get_active_organization(request)
         context["user_organizations"] = get_user_organizations(request.user)
         try:
-            from .branding import accent_vars
+            from .branding import accent_vars, nav_vars
             org = context.get("active_organization")
             if org is not None:
-                context["brand_accent"] = accent_vars(getattr(org, "brand_color", "#0A0A0A"))
+                accent = getattr(org, "brand_color", "#0A0A0A") or "#0A0A0A"
+                context["brand_accent"] = accent_vars(accent)
                 context["company_today"] = company_today(org)
                 context["company_greeting"] = company_greeting(org)
+                context["nav_styles"] = nav_vars(
+                    nav_style=getattr(org, "nav_style", "black"),
+                    nav_bg_color=getattr(org, "nav_bg_color", "#0A0A0A"),
+                    nav_highlight_style=getattr(org, "nav_highlight_style", "pill"),
+                    nav_highlight_source=getattr(org, "nav_highlight_source", "auto"),
+                    nav_highlight_color=getattr(org, "nav_highlight_color", "#0A0A0A"),
+                    accent=accent,
+                )
             from .models import PlatformSettings
             ps = PlatformSettings.objects.filter(pk=1).first()
             if ps is not None and ps.announcement_active and ps.announcement:

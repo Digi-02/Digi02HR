@@ -102,6 +102,37 @@ class Organization(models.Model):
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
     timezone = models.CharField(max_length=50, default='Africa/Lagos', validators=[validate_iana_timezone])
+    NAV_STYLE_CHOICES = [
+        ('black', 'Black'),
+        ('white', 'White'),
+        ('light_grey', 'Light grey'),
+        ('brand', 'Brand colour'),
+        ('custom', 'Custom'),
+    ]
+    NAV_HIGHLIGHT_STYLE_CHOICES = [
+        ('pill', 'Pill'),
+        ('left_bar', 'Left bar'),
+        ('soft_tint', 'Soft tint'),
+        ('outline', 'Outline'),
+    ]
+    NAV_HIGHLIGHT_SOURCE_CHOICES = [
+        ('auto', 'Auto'),
+        ('accent', 'Accent'),
+        ('custom', 'Custom'),
+    ]
+    nav_style = models.CharField(max_length=20, choices=NAV_STYLE_CHOICES, default='black')
+    nav_bg_color = models.CharField(
+        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_highlight_style = models.CharField(
+        max_length=20, choices=NAV_HIGHLIGHT_STYLE_CHOICES, default='pill'
+    )
+    nav_highlight_source = models.CharField(
+        max_length=20, choices=NAV_HIGHLIGHT_SOURCE_CHOICES, default='auto'
+    )
+    nav_highlight_color = models.CharField(
+        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+    )
     is_suspended = models.BooleanField(default=False)
     suspended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)

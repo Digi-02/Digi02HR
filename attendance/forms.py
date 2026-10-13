@@ -1400,10 +1400,34 @@ class OrganizationBrandingForm(forms.ModelForm):
         max_length=50,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Africa/Lagos', 'list': 'tz-list'}),
     )
+    nav_style = forms.ChoiceField(
+        choices=Organization.NAV_STYLE_CHOICES,
+        widget=forms.RadioSelect,
+    )
+    nav_bg_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$',
+        error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A', 'maxlength': 7}),
+    )
+    nav_highlight_style = forms.ChoiceField(
+        choices=Organization.NAV_HIGHLIGHT_STYLE_CHOICES,
+        widget=forms.RadioSelect,
+    )
+    nav_highlight_source = forms.ChoiceField(
+        choices=Organization.NAV_HIGHLIGHT_SOURCE_CHOICES,
+        widget=forms.RadioSelect,
+    )
+    nav_highlight_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$',
+        error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A', 'maxlength': 7}),
+    )
 
     class Meta:
         model = Organization
-        fields = ['name', 'logo', 'brand_color', 'timezone']
+        fields = ['name', 'logo', 'brand_color', 'timezone',
+                  'nav_style', 'nav_bg_color', 'nav_highlight_style',
+                  'nav_highlight_source', 'nav_highlight_color']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'logo': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
@@ -1436,6 +1460,14 @@ class OrganizationBrandingForm(forms.ModelForm):
     def clean_brand_color(self):
         from .branding import normalize_hex
         return normalize_hex(self.cleaned_data.get('brand_color', ''))
+
+    def clean_nav_bg_color(self):
+        from .branding import normalize_hex
+        return normalize_hex(self.cleaned_data.get('nav_bg_color', ''), '#0A0A0A')
+
+    def clean_nav_highlight_color(self):
+        from .branding import normalize_hex
+        return normalize_hex(self.cleaned_data.get('nav_highlight_color', ''), '#0A0A0A')
 
     def save(self, commit=True):
         instance = super().save(commit=False)
