@@ -1042,6 +1042,21 @@ def dashboard_view(request):
             'absent': max(total_in_category - present_in_category, 0),
         })
     
+    show_checklist = (total_employees == 0)
+    late_today = []
+    for employee in active_employees.filter(pk__in=late_employee_ids).order_by('first_name', 'last_name')[:10]:
+        late_today.append({
+            'employee': employee,
+            'record': latest_records_by_employee.get(employee.pk),
+        })
+    checklist = {
+        'profile_done': bool((organization.email or '').strip() or (organization.address or '').strip()),
+        'hours_done': bool(
+            workday_start.strftime('%H:%M') != '08:00'
+            or late_threshold.strftime('%H:%M') != '08:30'
+        ),
+        'invite_done': OnboardingInvitation.objects.filter(organization=organization).exists(),
+    }
     context = {
         'today': today,
         'total_employees': total_employees,
@@ -1061,6 +1076,9 @@ def dashboard_view(request):
         'kiosk_url': request.build_absolute_uri(reverse('organization_kiosk', kwargs={'org_slug': organization.slug})),
         'late_threshold': late_threshold,
         'workday_start': workday_start,
+        'show_checklist': show_checklist,
+        'checklist': checklist,
+        'late_today': late_today,
         'page_title': 'Dashboard',
     }
     

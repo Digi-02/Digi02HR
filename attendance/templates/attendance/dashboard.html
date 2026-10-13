@@ -3,668 +3,240 @@
 
 {% block title %}Dashboard | HR Management{% endblock %}
 
-{% block page_title %}Dashboard Overview{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
-    
-    <!-- Overall Stats Cards -->
-    <div class="dashboard-metrics-grid mb-4">
-        <div class="card metric-card h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div class="metric-copy">
-                        <div class="metric-label">Total People</div>
-                        <div class="metric-value">{{ total_employees }}</div>
-                    </div>
-                    <div class="metric-icon bg-primary bg-opacity-10 text-primary">
-                        <i class="bi bi-people-fill"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <a href="{% url 'dashboard' %}?attendance_status=present#attendance-people" class="metric-card-link text-decoration-none text-reset d-block h-100">
-        <div class="card metric-card h-100 metric-accent-success {% if attendance_status == 'present' %}metric-card-active{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div class="metric-copy">
-                        <div class="metric-label">Present</div>
-                        <div class="metric-value text-success">{{ present_count }}</div>
-                    </div>
-                    <div class="metric-icon bg-success bg-opacity-10 text-success">
-                        <i class="bi bi-box-arrow-in-right"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="page-head">
+        <div>
+            <h5>{{ company_greeting|default:"Good day" }}, {{ organization.name }}</h5>
+            <p>{{ company_today|default:today|date:"l, F j, Y" }} &middot; Work starts {{ workday_start|time:"H:i" }}, late after {{ late_threshold|time:"H:i" }}</p>
         </div>
-        </a>
-
-        <a href="{% url 'dashboard' %}?attendance_status=late#attendance-people" class="metric-card-link text-decoration-none text-reset d-block h-100">
-        <div class="card metric-card h-100 metric-accent-warning {% if attendance_status == 'late' %}metric-card-active{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div class="metric-copy">
-                        <div class="metric-label">Late Today</div>
-                        <div class="metric-value text-warning">{{ late_count }}</div>
-                        <small class="text-muted metric-note">Starts {{ workday_start|time:"H:i" }} &middot; late after {{ late_threshold|time:"H:i" }}</small>
-                    </div>
-                    <div class="metric-icon bg-warning bg-opacity-10 text-warning">
-                        <i class="bi bi-clock-history"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="responsive-actions">
+            <a href="{% url 'employee_create' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-person-plus me-1"></i> Add employee
+            </a>
         </div>
-        </a>
+    </div>
 
-        <a href="{% url 'dashboard' %}?attendance_status=absent#attendance-people" class="metric-card-link text-decoration-none text-reset d-block h-100">
-        <div class="card metric-card h-100 metric-accent-danger {% if attendance_status == 'absent' %}metric-card-active{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div class="metric-copy">
-                        <div class="metric-label">Absent</div>
-                        <div class="metric-value text-danger">{{ absent_count }}</div>
-                    </div>
-                    <div class="metric-icon bg-danger bg-opacity-10 text-danger">
-                        <i class="bi bi-person-x"></i>
-                    </div>
-                </div>
-            </div>
+    {% if show_checklist %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Get started</h5>
+            <small class="text-muted">Three steps and {{ organization.name }} is ready for daily HR.</small>
+        </div>
+        <div class="card-body">
+            <ul class="checklist">
+                <li class="{% if checklist.profile_done %}done{% endif %}">
+                    <span class="box">{% if checklist.profile_done %}✓{% endif %}</span>
+                    <span><strong>Add company details</strong><br><small class="text-muted">Name, contact email and address.</small></span>
+                    <a href="{% url 'organization_edit' organization.pk %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                </li>
+                <li class="{% if checklist.hours_done %}done{% endif %}">
+                    <span class="box">{% if checklist.hours_done %}✓{% endif %}</span>
+                    <span><strong>Set working hours</strong><br><small class="text-muted">Work start and late threshold (now {{ workday_start|time:"H:i" }} / {{ late_threshold|time:"H:i" }}).</small></span>
+                    <a href="{% url 'organization_attendance_settings' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                </li>
+                <li class="{% if checklist.invite_done %}done{% endif %}">
+                    <span class="box">{% if checklist.invite_done %}✓{% endif %}</span>
+                    <span><strong>Invite your team</strong><br><small class="text-muted">Add employees or send onboarding invites by email.</small></span>
+                    <a href="{% url 'applicant_invite' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% else %}
+
+    <div class="stat-grid mb-4">
+        <div class="card stat-card">
+            <span class="stat-label">Total employees</span>
+            <span class="stat-value"><span class="status-dot dot-neutral"></span>{{ total_employees }}</span>
+            <span class="stat-sub">Active profiles</span>
+        </div>
+        <a href="{% url 'dashboard' %}?attendance_status=present" class="text-decoration-none">
+        <div class="card stat-card">
+            <span class="stat-label">Present</span>
+            <span class="stat-value"><span class="status-dot dot-success"></span>{{ present_count }}</span>
+            <span class="stat-sub">Checked in today</span>
         </div>
         </a>
-
+        <a href="{% url 'dashboard' %}?attendance_status=late" class="text-decoration-none">
+        <div class="card stat-card">
+            <span class="stat-label">Late today</span>
+            <span class="stat-value"><span class="status-dot dot-warning"></span>{{ late_count }}</span>
+            <span class="stat-sub">Late after {{ late_threshold|time:"H:i" }}</span>
+        </div>
+        </a>
+        <a href="{% url 'dashboard' %}?attendance_status=absent" class="text-decoration-none">
+        <div class="card stat-card">
+            <span class="stat-label">Absent</span>
+            <span class="stat-value"><span class="status-dot dot-danger"></span>{{ absent_count }}</span>
+            <span class="stat-sub">No check-in today</span>
+        </div>
+        </a>
     </div>
 
     {% if attendance_status %}
-    <div class="card border-0 mb-4" id="attendance-people">
-        <div class="card-header bg-white border-0 pt-4 px-4">
+    <div class="card mb-4" id="attendance-people">
+        <div class="card-header">
             <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
                 <div>
                     <h5 class="mb-1">
-                        {% if attendance_status == 'present' %}
-                            <i class="bi bi-box-arrow-in-right me-2 text-success"></i>Present People Today
-                        {% elif attendance_status == 'late' %}
-                            <i class="bi bi-clock-history me-2 text-warning"></i>Late People Today
-                        {% else %}
-                            <i class="bi bi-person-x me-2 text-danger"></i>Absent People Today
-                        {% endif %}
+                        {% if attendance_status == 'present' %}Present employees today
+                        {% elif attendance_status == 'late' %}Late employees today
+                        {% else %}Absent employees today{% endif %}
                     </h5>
-                    <small class="text-muted">Filtered from active employees for {{ today|date:"F j, Y" }}.</small>
+                    <small class="text-muted">Active employees for {{ company_today|default:today|date:"F j, Y" }}.</small>
                 </div>
                 <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-x-circle me-1"></i> Clear Filter
                 </a>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Person</th>
-                            <th>Category</th>
-                            <th>Department</th>
-                            <th>Check In</th>
-                            <th>Status</th>
-                            <th class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in attendance_people %}
-                        <tr>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="bg-{{ row.employee.category.color }} bg-opacity-10 p-2 rounded me-3">
-                                        <i class="bi {{ row.employee.category.icon }} text-{{ row.employee.category.color }}"></i>
-                                    </div>
-                                    <div>
-                                        <strong>{{ row.employee.display_name }}</strong>
-                                        <br>
-                                        <small class="text-muted">{{ row.employee.employee_id }}</small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge bg-{{ row.employee.category.color }} bg-opacity-10 text-{{ row.employee.category.color }} px-3 py-2">
-                                    {{ row.employee.category.name }}
-                                </span>
-                            </td>
-                            <td>{{ row.employee.department|default:"-" }}</td>
-                            <td>
-                                {% if row.record %}
-                                    {{ row.record.check_in_time|time:"H:i" }}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="badge bg-{{ row.status_color }} bg-opacity-10 text-{{ row.status_color }} px-3 py-2">
-                                    {{ row.status_label }}
-                                </span>
-                            </td>
-                            <td class="text-end">
-                                <a href="{% url 'employee_detail' row.employee.pk %}" class="btn btn-sm btn-outline-primary">
-                                    Open
-                                </a>
-                            </td>
-                        </tr>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Category</th>
+                        <th>Department</th>
+                        <th>Check in</th>
+                        <th>Status</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in attendance_people %}
+                    <tr>
+                        <td><strong>{{ row.employee.display_name }}</strong><br><small class="text-muted">{{ row.employee.employee_id }}</small></td>
+                        <td><span class="badge badge-neutral">{{ row.employee.category.name }}</span></td>
+                        <td>{{ row.employee.department|default:"-" }}</td>
+                        <td>{% if row.record %}{{ row.record.check_in_time|time:"H:i" }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                        <td>
+                            {% if row.status_color == 'warning' %}<span class="badge badge-late">{{ row.status_label }}</span>
+                            {% elif row.status_color == 'danger' %}<span class="badge badge-absent">{{ row.status_label }}</span>
+                            {% else %}<span class="badge badge-present">{{ row.status_label }}</span>{% endif %}
+                        </td>
+                        <td class="text-end"><a href="{% url 'employee_detail' row.employee.pk %}" class="btn btn-sm btn-outline-primary">Open</a></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6"><div class="empty-state"><i class="bi bi-calendar-x"></i>No employees found for this filter.</div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Late today</h5>
+                    <a href="{% url 'attendance_reports' %}" class="text-decoration-none small">View all <i class="bi bi-arrow-right"></i></a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Department</th>
+                                <th>Check in</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in late_today %}
+                            <tr>
+                                <td><strong>{{ row.employee.display_name }}</strong><br><small class="text-muted">{{ row.employee.employee_id }}</small></td>
+                                <td>{{ row.employee.department|default:"-" }}</td>
+                                <td>{% if row.record %}{{ row.record.check_in_time|time:"H:i" }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                                <td><span class="badge badge-late">Late</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4"><div class="empty-state"><i class="bi bi-check-circle"></i>No late arrivals today.</div></td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Employees by category</h5></div>
+                <div class="card-body">
+                    <ul class="count-list">
+                        {% for stat in category_stats %}
+                        <li>
+                            <span><strong>{{ stat.category.name }}</strong> <small class="text-muted">&middot; {{ stat.total }} total</small></span>
+                            <span>
+                                <span class="count-pill" title="Present">{{ stat.present }} present</span>
+                                <span class="count-pill" title="Late">{{ stat.late }} late</span>
+                                <span class="count-pill" title="Absent">{{ stat.absent }} absent</span>
+                            </span>
+                        </li>
                         {% empty %}
-                        <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
-                                <i class="bi bi-calendar-x fs-1 d-block mb-3"></i>
-                                No people found for this attendance filter
-                            </td>
-                        </tr>
+                        <li><span class="text-muted">No categories yet.</span></li>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent activity</h5>
+                    <a href="{% url 'attendance_reports' %}" class="text-decoration-none small">View all <i class="bi bi-arrow-right"></i></a>
+                </div>
+                <div class="card-body">
+                    <ul class="count-list">
+                        {% for record in recent_attendance %}
+                        <li>
+                            <span><strong>{{ record.employee.display_name }}</strong><br><small class="text-muted">{{ record.check_in_time|time:"H:i" }}{% if record.is_late %} &middot; late{% endif %}</small></span>
+                            {% if record.is_active %}<span class="badge badge-present">Active</span>
+                            {% else %}<span class="badge badge-neutral">Done</span>{% endif %}
+                        </li>
+                        {% empty %}
+                        <li><span class="text-muted">No activity today yet.</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            {% if birthdays_this_week %}
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Birthdays this week</h5></div>
+                <div class="card-body">
+                    <ul class="count-list">
+                        {% for bday in birthdays_this_week %}
+                        <li>
+                            <span><strong>{{ bday.employee.display_name }}</strong><br><small class="text-muted">{{ bday.date|date:"F j" }}</small></span>
+                            <span class="count-pill">{% if bday.days_until == 0 %}Today{% elif bday.days_until == 1 %}Tomorrow{% else %}In {{ bday.days_until }} days{% endif %}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Quick actions</h5></div>
+                <div class="card-body">
+                    <a href="{% url 'employee_create' %}" class="btn btn-primary w-100 mb-2"><i class="bi bi-person-plus me-1"></i> Add employee</a>
+                    <a href="{% url 'manual_attendance_add' %}" class="btn btn-outline-secondary w-100 mb-2"><i class="bi bi-calendar-plus me-1"></i> Manual attendance</a>
+                    <a href="{% url 'attendance_reports' %}" class="btn btn-outline-secondary w-100"><i class="bi bi-file-spreadsheet me-1"></i> View reports</a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-1"><i class="bi bi-qr-code me-1"></i> Kiosk ready</h6>
+                    <p class="text-muted small mb-0">Employees check in at:<br><code>{{ kiosk_url }}</code></p>
+                </div>
             </div>
         </div>
     </div>
     {% endif %}
-    
-    <!-- Category Breakdown Cards -->
-    <div class="category-grid mb-4">
-        {% for stat in category_stats %}
-        <a href="{% url 'category_dashboard' stat.category.code %}" class="text-decoration-none text-reset category-card-link d-block h-100">
-            <div class="card border-0 h-100 category-card">
-                <div class="card-body">
-                    <div class="category-card-header">
-                        <div class="category-card-title">
-                            <div class="category-icon bg-{{ stat.category.color }} bg-opacity-10">
-                                <i class="bi {{ stat.category.icon }} fs-4 text-{{ stat.category.color }}"></i>
-                            </div>
-                            <div class="category-title-copy">
-                                <h6 class="mb-0">{{ stat.category.name }}</h6>
-                                <small class="text-muted">Total: {{ stat.total }}</small>
-                            </div>
-                        </div>
-                        <i class="bi bi-arrow-up-right-circle text-muted"></i>
-                    </div>
-                    <div class="category-stats-grid border-top">
-                        <div class="category-stat">
-                            <h5 class="text-success mb-0">{{ stat.present }}</h5>
-                            <small class="text-muted">Present</small>
-                        </div>
-                        <div class="category-stat">
-                            <h5 class="text-warning mb-0">{{ stat.late }}</h5>
-                            <small class="text-muted">Late</small>
-                        </div>
-                        <div class="category-stat">
-                            <h5 class="text-danger mb-0">{{ stat.absent }}</h5>
-                            <small class="text-muted">Absent</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </a>
-        {% empty %}
-        <div>
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>No categories defined. Please run <code>python manage.py init_data</code>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    
-    <div class="row g-4">
-        <!-- Recent Activity -->
-        <div class="col-lg-8">
-            <div class="card border-0">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-clock-history me-2"></i>Recent Activity
-                        </h5>
-                        <a href="{% url 'attendance_reports' %}" class="text-decoration-none">
-                            View All <i class="bi bi-arrow-right"></i>
-                        </a>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Person</th>
-                                    <th>Category</th>
-                                    <th>Check In</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for record in recent_attendance %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="bg-{{ record.employee.category.color }} bg-opacity-10 p-2 rounded me-3">
-                                                <i class="bi {{ record.employee.category.icon }} text-{{ record.employee.category.color }}"></i>
-                                            </div>
-                                            <div>
-                                                <strong>{{ record.employee.display_name }}</strong>
-                                                <br>
-                                                <small class="text-muted">{{ record.employee.employee_id }}</small>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-{{ record.employee.category.color }} bg-opacity-10 text-{{ record.employee.category.color }} px-3 py-2">
-                                            {{ record.employee.category.name }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if record.is_late %}
-                                            <span class="text-warning">
-                                                <i class="bi bi-exclamation-triangle me-1"></i>
-                                                {{ record.check_in_time|time:"H:i" }}
-                                            </span>
-                                        {% else %}
-                                            {{ record.check_in_time|time:"H:i" }}
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if record.is_active %}
-                                            <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
-                                                <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i> Active
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-info bg-opacity-10 text-info px-3 py-2">
-                                                <i class="bi bi-check-circle me-1"></i> Completed
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="4" class="text-center py-5 text-muted">
-                                        <i class="bi bi-inbox fs-1 d-block mb-3"></i>
-                                        No activity today yet
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% if recent_attendance %}
-                <div class="card-footer bg-white border-0 py-3">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Showing last {{ recent_attendance|length }} check-ins
-                    </small>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Right Sidebar -->
-        <div class="col-lg-4">
-            <!-- Birthdays -->
-            {% if birthdays_this_week %}
-            <div class="card border-0 mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0">
-                        <i class="bi bi-gift-fill me-2 text-danger"></i>Birthdays This Week
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% for bday in birthdays_this_week %}
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="bg-danger bg-opacity-10 p-3 rounded me-3">
-                            <i class="bi bi-cake2 text-danger fs-5"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <strong>{{ bday.employee.display_name }}</strong>
-                            <br>
-                            <small class="text-muted">
-                                {% if bday.days_until == 0 %}
-                                    <span class="text-danger fw-bold">
-                                        <i class="bi bi-stars"></i> Today!
-                                    </span>
-                                {% elif bday.days_until == 1 %}
-                                    <i class="bi bi-calendar-event"></i> Tomorrow
-                                {% else %}
-                                    <i class="bi bi-calendar3"></i> In {{ bday.days_until }} days
-                                {% endif %}
-                                <span class="d-block small">{{ bday.date|date:"F j" }}</span>
-                            </small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            
-            <!-- Work Anniversaries -->
-            {% if anniversaries_this_week %}
-            <div class="card border-0 mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0">
-                        <i class="bi bi-trophy-fill me-2 text-warning"></i>Work Anniversaries
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% for anniv in anniversaries_this_week %}
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="bg-warning bg-opacity-10 p-3 rounded me-3">
-                            <i class="bi bi-star-fill text-warning fs-5"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <strong>{{ anniv.employee.display_name }}</strong>
-                            <br>
-                            <small class="text-muted">
-                                <i class="bi bi-briefcase"></i> {{ anniv.years }} year{{ anniv.years|pluralize }}
-                                <br>
-                                {% if anniv.days_until == 0 %}
-                                    <span class="text-warning fw-bold">
-                                        <i class="bi bi-stars"></i> Today!
-                                    </span>
-                                {% elif anniv.days_until == 1 %}
-                                    <i class="bi bi-calendar-event"></i> Tomorrow
-                                {% else %}
-                                    <i class="bi bi-calendar3"></i> In {{ anniv.days_until }} days
-                                {% endif %}
-                            </small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            {% if internship_endings %}
-            <div class="card border-0 mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0">
-                        <i class="bi bi-hourglass-split me-2 text-warning"></i>Internship Ending Soon
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% for item in internship_endings %}
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="bg-warning bg-opacity-10 p-3 rounded me-3">
-                            <i class="bi bi-briefcase text-warning fs-5"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <strong>{{ item.employee.display_name }}</strong>
-                            <br>
-                            <small class="text-muted">
-                                {% if item.days_until == 0 %}
-                                    <span class="text-warning fw-bold">
-                                        <i class="bi bi-stars"></i> Ends today
-                                    </span>
-                                {% elif item.days_until == 1 %}
-                                    <i class="bi bi-calendar-event"></i> Ends tomorrow
-                                {% else %}
-                                    <i class="bi bi-calendar3"></i> Ends in {{ item.days_until }} days
-                                {% endif %}
-                                <span class="d-block small">{{ item.date|date:"F j" }}</span>
-                            </small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            
-            <!-- Quick Actions -->
-            <div class="card border-0 mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0">
-                        <i class="bi bi-lightning-charge me-2"></i>Quick Actions
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'employee_create' %}" class="btn btn-primary w-100 mb-2">
-                        <i class="bi bi-person-plus"></i> Add New Person
-                    </a>
-                    <a href="{% url 'manual_attendance_add' %}" class="btn btn-outline-secondary w-100 mb-2">
-                        <i class="bi bi-calendar-plus"></i> Manual Attendance
-                    </a>
-                    <a href="{% url 'attendance_reports' %}" class="btn btn-outline-info w-100">
-                        <i class="bi bi-file-spreadsheet"></i> View Reports
-                    </a>
-                </div>
-            </div>
-            
-            <!-- Kiosk Info -->
-            <div class="card border-0 bg-light">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="bg-dark bg-opacity-10 p-3 rounded me-3">
-                            <i class="bi bi-qr-code fs-4"></i>
-                        </div>
-                        <div>
-                            <h6 class="mb-1">Kiosk Ready</h6>
-                            <p class="text-muted small mb-0">
-                                Employees can check in at:<br>
-                                <code>{{ kiosk_url }}</code>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
 </div>
-
-<style>
-    .dashboard-metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1.5rem;
-        align-items: stretch;
-    }
-
-    .metric-card {
-        overflow: hidden;
-        min-height: 168px;
-    }
-    .metric-card .card-body {
-        height: 100%;
-    }
-    .metric-card::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 6px;
-        background: rgba(2, 6, 23, 0.12);
-    }
-    .metric-accent-primary::before { background: rgba(2, 6, 23, 0.9); }
-    .metric-accent-success::before { background: rgba(var(--bs-success-rgb), 0.9); }
-    .metric-accent-warning::before { background: rgba(var(--bs-warning-rgb), 0.9); }
-    .metric-accent-danger::before { background: rgba(var(--bs-danger-rgb), 0.9); }
-    .metric-accent-info::before { background: rgba(var(--bs-info-rgb), 0.9); }
-
-    .metric-label {
-        font-size: 0.78rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: rgba(2, 6, 23, 0.55);
-        font-weight: 700;
-    }
-    .metric-copy {
-        min-width: 0;
-    }
-    .metric-value {
-        font-size: clamp(2rem, 3vw, 2.6rem);
-        font-weight: 750;
-        margin-top: 10px;
-        line-height: 1.1;
-    }
-    .metric-note {
-        display: block;
-        max-width: 13rem;
-        line-height: 1.55;
-    }
-    .metric-icon {
-        width: 56px;
-        height: 56px;
-        border-radius: 12px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-    }
-    .metric-icon i {
-        font-size: 1.6rem;
-        line-height: 1;
-    }
-
-    .metric-card {
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .metric-card-link:focus-visible .metric-card,
-    .metric-card-active {
-        outline: 3px solid rgba(var(--bs-primary-rgb), 0.22);
-        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
-    }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 20px 45px rgba(0,0,0,0.18);
-    }
-
-    .badge {
-        font-weight: 500;
-    }
-    .category-card-link {
-        transition: transform 0.2s ease;
-    }
-    .category-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1.5rem;
-        align-items: stretch;
-    }
-    .category-card {
-        min-height: 190px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-    .category-card .card-body {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        padding: 1.25rem;
-    }
-    .category-card-link:hover .category-card,
-    .category-card-link:focus .category-card {
-        transform: translateY(-4px);
-        box-shadow: 0 22px 48px rgba(15, 23, 42, 0.14);
-    }
-    .category-card-link:hover h6,
-    .category-card-link:focus h6 {
-        color: var(--bs-primary);
-    }
-    .category-card-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-        min-width: 0;
-    }
-    .category-card-title {
-        display: flex;
-        align-items: center;
-        gap: 0.9rem;
-        min-width: 0;
-    }
-    .category-icon {
-        width: 64px;
-        height: 64px;
-        border-radius: 8px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-    }
-    .category-title-copy {
-        min-width: 0;
-    }
-    .category-card h6 {
-        font-size: 1rem;
-        font-weight: 700;
-        line-height: 1.2;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .category-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(58px, 1fr));
-        gap: 0.5rem;
-        margin-top: auto;
-        padding-top: 1rem;
-        text-align: center;
-    }
-    .category-stat {
-        min-width: 0;
-    }
-    .category-stat h5 {
-        font-size: 1.25rem;
-        font-weight: 750;
-        line-height: 1.1;
-    }
-    .category-stat small {
-        display: block;
-        margin-top: 0.45rem;
-        font-size: 0.74rem;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        line-height: 1.1;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-    code {
-        background: #f1f5f9;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    @media (max-width: 1199.98px) {
-        .dashboard-metrics-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .category-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 767.98px) {
-        .category-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-        }
-        .category-card {
-            min-height: auto;
-        }
-    }
-
-    @media (max-width: 576px) {
-        .dashboard-metrics-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-        }
-        .metric-card {
-            min-height: auto;
-        }
-        .metric-icon {
-            width: 48px;
-            height: 48px;
-        }
-        .category-card .card-body {
-            padding: 1rem;
-        }
-        .category-icon {
-            width: 56px;
-            height: 56px;
-        }
-        .category-stat small {
-            font-size: 0.7rem;
-        }
-    }
-</style>
 {% endblock %}

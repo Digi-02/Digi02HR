@@ -10,6 +10,31 @@ from .organization import (
 )
 
 
+def company_today(organization):
+    """Current date in the company's timezone (falls back to server TZ)."""
+    try:
+        from zoneinfo import ZoneInfo
+        tzname = getattr(organization, "timezone", "") or timezone.get_default_timezone_name()
+        return timezone.now().astimezone(ZoneInfo(tzname)).date()
+    except Exception:
+        return timezone.localdate()
+
+
+def company_greeting(organization):
+    """Morning/afternoon/evening in the company's timezone."""
+    try:
+        from zoneinfo import ZoneInfo
+        tzname = getattr(organization, "timezone", "") or timezone.get_default_timezone_name()
+        hour = timezone.now().astimezone(ZoneInfo(tzname)).hour
+    except Exception:
+        hour = timezone.localtime().hour
+    if hour < 12:
+        return 'Good morning'
+    if hour < 17:
+        return 'Good afternoon'
+    return 'Good evening'
+
+
 def global_context(request):
     context = {
         "today": timezone.localdate(),
@@ -27,7 +52,9 @@ def global_context(request):
             from .branding import accent_vars
             org = context.get("active_organization")
             if org is not None:
-                context["brand_accent"] = accent_vars(getattr(org, "brand_color", "#3B5BFF"))
+                context["brand_accent"] = accent_vars(getattr(org, "brand_color", "#0A0A0A"))
+                context["company_today"] = company_today(org)
+                context["company_greeting"] = company_greeting(org)
         except Exception:
             pass
 

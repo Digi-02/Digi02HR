@@ -77,6 +77,9 @@ def accent_vars(hex_color):
         'accent_tint': tint(base),
         'accent_contrast': contrast_text(base),
         'accent_text': readable_on_white(base),
+        # Left bar on the black sidebar: fall back to white when the
+        # accent itself is near-black and would be invisible.
+        'accent_bar': '#FFFFFF' if _luminance(base) < 0.08 else base,
     }
 
 

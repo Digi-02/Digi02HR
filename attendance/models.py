@@ -57,8 +57,9 @@ class Organization(models.Model):
     address = models.TextField(blank=True)
     logo = models.ImageField(upload_to=organization_logo_path, blank=True, null=True)
     brand_color = models.CharField(
-        max_length=7, default='#3B5BFF', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
+    timezone = models.CharField(max_length=50, default='Africa/Lagos')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
