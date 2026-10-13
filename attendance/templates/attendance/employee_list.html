@@ -3,13 +3,25 @@
 
 {% block title %}Employees | HR Management{% endblock %}
 
-{% block page_title %}Employee Management{% endblock %}
+{% block page_title %}Employees{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
-    
+
+    <div class="page-head">
+        <div>
+            <h5>Employees</h5>
+            <p>Everyone in {{ organization.name }}. Search, filter and manage profiles.</p>
+        </div>
+        <div class="responsive-actions">
+            <a href="{% url 'employee_create' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-person-plus me-1"></i> Add employee
+            </a>
+        </div>
+    </div>
+
     <!-- Filters and Actions Bar -->
-    <div class="card border-0 mb-4 toolbar-card">
+    <div class="card mb-4 toolbar-card">
         <div class="card-body">
             <div class="responsive-toolbar">
                 <form method="GET" class="search-control">
@@ -54,22 +66,17 @@
                         <i class="bi bi-funnel"></i> Filter
                     </button>
                     {% if search_query or selected_department or selected_category or selected_status %}
-                        <a href="{% url 'employee_list' %}" class="btn btn-outline-danger">
+                        <a href="{% url 'employee_list' %}" class="btn btn-outline-secondary">
                             <i class="bi bi-x-circle"></i> Clear
                         </a>
                     {% endif %}
                 </form>
-                <div class="toolbar-actions">
-                    <a href="{% url 'employee_create' %}" class="btn btn-primary w-100">
-                        <i class="bi bi-person-plus"></i> Add Employee
-                    </a>
-                </div>
             </div>
         </div>
     </div>
     
     <!-- Employee Table -->
-    <div class="card border-0">
+    <div class="card">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -92,8 +99,8 @@
                                     {% if employee.profile_photo %}
                                         <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
                                     {% else %}
-                                        <div class="bg-primary bg-opacity-10 p-2 rounded me-3">
-                                            <i class="bi bi-person text-primary"></i>
+                                        <div class="bg-light p-2 rounded me-3 border">
+                                            <i class="bi bi-person"></i>
                                         </div>
                                     {% endif %}
                                     <div>
@@ -111,23 +118,23 @@
                             </td>
                             <td>
                                 {% if employee.is_active %}
-                                    <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                                    <span class="badge badge-present">
                                         <i class="bi bi-check-circle me-1"></i> Active
                                     </span>
                                 {% else %}
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary px-3 py-2">
+                                    <span class="badge badge-neutral">
                                         <i class="bi bi-dash-circle me-1"></i> Inactive
                                     </span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if employee.is_checked_in_today %}
-                                    <span class="badge bg-warning bg-opacity-10 text-warning px-3 py-2">
-                                        <i class="bi bi-clock me-1"></i> Checked In
+                                    <span class="badge badge-present">
+                                        <i class="bi bi-clock me-1"></i> Checked in
                                     </span>
                                 {% else %}
-                                    <span class="badge bg-light text-muted px-3 py-2">
-                                        <i class="bi bi-dash me-1"></i> Not Present
+                                    <span class="badge badge-neutral">
+                                        <i class="bi bi-dash me-1"></i> Not present
                                     </span>
                                 {% endif %}
                             </td>
@@ -153,13 +160,15 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="bi bi-people fs-1 d-block mb-3"></i>
-                                No employees found
-                                <br>
-                                <a href="{% url 'employee_create' %}" class="btn btn-primary mt-3">
-                                    <i class="bi bi-person-plus"></i> Add Your First Employee
-                                </a>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <i class="bi bi-people"></i>
+                                    <p><strong>No employees found.</strong></p>
+                                    <p>Try a different search, or add your first employee.</p>
+                                    <a href="{% url 'employee_create' %}" class="btn btn-primary mt-2">
+                                        <i class="bi bi-person-plus me-1"></i> Add employee
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
