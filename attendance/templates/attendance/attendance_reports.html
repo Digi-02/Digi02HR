@@ -3,46 +3,48 @@
 
 {% block title %}Attendance Reports | HR Management{% endblock %}
 
-{% block page_title %}Attendance Reports{% endblock %}
+{% block page_title %}Attendance{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
-    <div class="row g-4 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 h-100">
-                <div class="card-body">
-                    <small class="text-muted text-uppercase fw-semibold">Filtered Records</small>
-                    <h3 class="mt-2 mb-0">{{ records|length }}</h3>
-                </div>
-            </div>
+    <div class="page-head">
+        <div>
+            <h5>Attendance</h5>
+            <p>Check-ins, late arrivals, exceptions and exports for {{ organization.name }}.</p>
         </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 h-100">
-                <div class="card-body">
-                    <small class="text-muted text-uppercase fw-semibold">Late Check-Ins</small>
-                    <h3 class="mt-2 mb-0 text-warning">{{ late_records }}</h3>
-                </div>
-            </div>
+        <div class="responsive-actions">
+            <a href="{% url 'manual_attendance_add' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Add manual entry
+            </a>
+            <a href="{% url 'export_attendance_csv' %}?{{ request.GET.urlencode }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-download me-1"></i> Export CSV
+            </a>
         </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 h-100">
-                <div class="card-body">
-                    <small class="text-muted text-uppercase fw-semibold">Completed Hours</small>
-                    <h3 class="mt-2 mb-0">{{ total_hours }}</h3>
-                </div>
-            </div>
+    </div>
+    <div class="stat-grid mb-4">
+        <div class="card stat-card">
+            <span class="stat-label">Filtered records</span>
+            <span class="stat-value"><span class="status-dot dot-neutral"></span>{{ records|length }}</span>
+            <span class="stat-sub">In current filter</span>
         </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 h-100">
-                <div class="card-body">
-                    <small class="text-muted text-uppercase fw-semibold">Exceptions Logged</small>
-                    <h3 class="mt-2 mb-0 text-primary">{{ exception_count }}</h3>
-                </div>
-            </div>
+        <div class="card stat-card">
+            <span class="stat-label">Late check-ins</span>
+            <span class="stat-value"><span class="status-dot dot-warning"></span>{{ late_records }}</span>
+            <span class="stat-sub">At or after threshold</span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Completed hours</span>
+            <span class="stat-value"><span class="status-dot dot-neutral"></span>{{ total_hours }}</span>
+            <span class="stat-sub">Checked out sessions</span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Exceptions logged</span>
+            <span class="stat-value"><span class="status-dot dot-neutral"></span>{{ exception_count }}</span>
+            <span class="stat-sub">Leave, sick, remote</span>
         </div>
     </div>
 
-    <div class="card border-0 mb-4">
+    <div class="card mb-4">
         <div class="card-body">
             <form method="GET" class="row g-3 align-items-end report-filter-form">
                 <div class="col-12 col-xl-3">
@@ -78,7 +80,7 @@
                 </div>
                 <div class="col-12">
                     <div class="responsive-actions justify-content-lg-end report-filter-actions">
-                        <a href="{% url 'manual_attendance_add' %}" class="btn btn-success flex-fill flex-lg-grow-0">
+                        <a href="{% url 'manual_attendance_add' %}" class="btn btn-primary flex-fill flex-lg-grow-0">
                             <i class="bi bi-plus-circle"></i> Add Manual Entry
                         </a>
                         <button type="submit" class="btn btn-primary flex-fill flex-lg-grow-0">
@@ -96,31 +98,28 @@
         </div>
     </div>
 
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
+    <div class="page-head">
         <div>
-            <h5 class="mb-1">
-                <i class="bi bi-list-ul me-2"></i>
+            <h5>
                 {% if date_form.cleaned_data.date %}
                     Records for {{ date_form.cleaned_data.date|date:"F j, Y" }}
                 {% elif date_form.cleaned_data.start_date and date_form.cleaned_data.end_date %}
                     Records from {{ date_form.cleaned_data.start_date|date:"M j" }} to {{ date_form.cleaned_data.end_date|date:"M j, Y" }}
                 {% else %}
-                    Today's Records
+                    Today's records
                 {% endif %}
             </h5>
-            <small class="text-muted">All filters are respected in the export.</small>
+            <p>All filters are respected in the export.</p>
         </div>
     </div>
 
 
 
-    <div class="card border-0 mb-4">
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <div>
-                    <h5 class="mb-1"><i class="bi bi-calendar2-x me-2"></i>Attendance Exceptions</h5>
-                    <small class="text-muted">Leave, sick days, remote work, training, and approved absences in the current filter.</small>
-                </div>
+    <div class="card mb-4">
+        <div class="card-header">
+            <div>
+                <h5 class="mb-1">Attendance exceptions</h5>
+                <small class="text-muted">Leave, sick days, remote work, training, and approved absences in the current filter.</small>
             </div>
         </div>
         <div class="card-body p-0">
@@ -143,7 +142,7 @@
                                 <strong>{{ exception.employee.full_name }}</strong>
                                 <div class="small text-muted">{{ exception.employee.employee_id }} · {{ exception.employee.category.name }}</div>
                             </td>
-                            <td><span class="badge bg-{{ exception.exception_type_color }} bg-opacity-10 text-{{ exception.exception_type_color }}">{{ exception.get_exception_type_display }}</span></td>
+                            <td><span class="badge badge-neutral">{{ exception.get_exception_type_display }}</span></td>
                             <td>{{ exception.start_date|date:"M d, Y" }}</td>
                             <td>{{ exception.end_date|date:"M d, Y" }}</td>
                             <td>{{ exception.day_count }}</td>
@@ -151,10 +150,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
-                                <i class="bi bi-check2-circle fs-1 d-block mb-3"></i>
-                                No attendance exceptions found for this period
-                            </td>
+                            <td colspan="6"><div class="empty-state"><i class="bi bi-check2-circle"></i>No attendance exceptions found for this period.</div></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -164,13 +160,11 @@
         </div>
     </div>
 
-      <div class="card border-0" id="attendance-records">
-        <div class="card-header bg-white border-0 pt-4 px-4">
+      <div class="card" id="attendance-records">
+        <div class="card-header">
             <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
                 <div>
-                    <h5 class="mb-1">
-                        <i class="bi bi-table me-2"></i>Attendance Records
-                    </h5>
+                    <h5 class="mb-1">Attendance records</h5>
                     <small class="text-muted">
                         {% if date_form.cleaned_data.date %}
                             Showing the detailed entries for {{ date_form.cleaned_data.date|date:"F j, Y" }}.
@@ -209,8 +203,8 @@
                             </td>
                             <td>
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-{{ record.employee.category.color }} bg-opacity-10 p-2 rounded me-3">
-                                        <i class="bi {{ record.employee.category.icon }} text-{{ record.employee.category.color }}"></i>
+                                    <div class="bg-light p-2 rounded me-3 border">
+                                        <i class="bi bi-person"></i>
                                     </div>
                                     <div>
                                         <strong>{{ record.employee.full_name }}</strong>
@@ -220,12 +214,12 @@
                             </td>
                             <td>{{ record.employee.department|default:"-" }}</td>
                             <td>
-                                <i class="bi bi-box-arrow-in-right me-2 text-success"></i>
+                                <i class="bi bi-box-arrow-in-right me-2 text-muted"></i>
                                 {{ record.check_in_time|time:"H:i" }}
                             </td>
                             <td>
                                 {% if record.check_out_time %}
-                                    <i class="bi bi-box-arrow-right me-2 text-warning"></i>
+                                    <i class="bi bi-box-arrow-right me-2 text-muted"></i>
                                     {{ record.check_out_time|time:"H:i" }}
                                 {% else %}
                                     <span class="text-muted">—</span>
@@ -240,15 +234,15 @@
                             </td>
                             <td>
                                 {% if record.is_active %}
-                                    <span class="badge bg-warning bg-opacity-10 text-warning px-3 py-2">
+                                    <span class="badge badge-present">
                                         <i class="bi bi-hourglass-split me-1"></i> Active
                                     </span>
                                 {% elif record.is_late %}
-                                    <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2">
+                                    <span class="badge badge-late">
                                         <i class="bi bi-exclamation-triangle me-1"></i> Late
                                     </span>
                                 {% else %}
-                                    <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                                    <span class="badge badge-neutral">
                                         <i class="bi bi-check-circle me-1"></i> Completed
                                     </span>
                                 {% endif %}
@@ -256,14 +250,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="bi bi-calendar-x fs-1 d-block mb-3"></i>
-                                No attendance records found for this period
-                                <br>
-                                <a href="{% url 'manual_attendance_add' %}" class="btn btn-primary mt-3">
-                                    <i class="bi bi-plus-circle"></i> Add Manual Entry
-                                </a>
-                            </td>
+                            <td colspan="7"><div class="empty-state"><i class="bi bi-calendar-x"></i><p><strong>No attendance records found for this period.</strong></p><a href="{% url 'manual_attendance_add' %}" class="btn btn-primary mt-2"><i class="bi bi-plus-circle me-1"></i> Add manual entry</a></div></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -294,12 +281,12 @@
 
 
     {% if date_form.cleaned_data.date %}
-    <div class="card border-0 mb-4 report-focus-card">
+    <div class="card mb-4">
         <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
             <div>
-                <small class="text-uppercase fw-semibold report-focus-label">Current View</small>
-                <h6 class="mb-1 report-focus-title">You are viewing attendance for {{ date_form.cleaned_data.date|date:"F j, Y" }}</h6>
-                <p class="mb-0 report-focus-copy">Use the day list below to switch dates, or return to today when you are done.</p>
+                <small class="text-uppercase fw-semibold text-muted">Current view</small>
+                <h6 class="mb-1">You are viewing attendance for {{ date_form.cleaned_data.date|date:"F j, Y" }}</h6>
+                <p class="mb-0 text-muted">Use the day list below to switch dates, or return to today when you are done.</p>
             </div>
             <div class="responsive-actions">
                 <a href="{% url 'attendance_reports' %}" class="btn btn-primary">
@@ -313,15 +300,11 @@
     </div>
     {% endif %}
 
-    <div class="card border-0 mb-4" id="attendance-day-list">
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <div>
-                    <h5 class="mb-1">
-                        <i class="bi bi-calendar-week me-2"></i>Previous Attendance Days
-                    </h5>
-                    <small class="report-step-copy">Step 1: pick a day. Step 2: review its records in the table below.</small>
-                </div>
+    <div class="card mb-4" id="attendance-day-list">
+        <div class="card-header">
+            <div>
+                <h5 class="mb-1">Previous attendance days</h5>
+                <small class="text-muted">Pick a day, then review its records in the table below.</small>
             </div>
         </div>
         <div class="card-body p-0">
@@ -330,7 +313,7 @@
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>People Present</th>
+                            <th>Employees present</th>
                             <th>Entries</th>
                             <th>Completed</th>
                             <th></th>
@@ -342,7 +325,7 @@
                             <td>
                                 <strong>{{ day.attendance_date|date:"D, M j, Y" }}</strong>
                                 {% if date_form.cleaned_data.date == day.attendance_date %}
-                                    <span class="badge bg-primary bg-opacity-10 text-primary ms-2">Viewing</span>
+                                    <span class="badge badge-neutral ms-2">Viewing</span>
                                 {% endif %}
                             </td>
                             <td>{{ day.people_count }}</td>
@@ -362,10 +345,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <i class="bi bi-calendar-x fs-1 d-block mb-3"></i>
-                                No attendance history yet
-                            </td>
+                            <td colspan="5"><div class="empty-state"><i class="bi bi-calendar-x"></i>No attendance history yet.</div></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -394,41 +374,8 @@
             min-width: 0;
         }
 
-        .report-focus-card {
-            background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.96));
-            border: 1px solid rgba(59, 130, 246, 0.18);
-            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .report-focus-card::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 6px;
-            background: linear-gradient(180deg, #2563eb, #0f172a);
-        }
-
-        .report-focus-label {
-            color: #2563eb;
-            letter-spacing: 0.08em;
-        }
-
-        .report-focus-title {
-            color: #0f172a;
-            font-size: 1.1rem;
-        }
-
-        .report-focus-copy,
-        .report-step-copy {
-            color: #475569;
-        }
-
         .day-list-active td {
-            background: rgba(37, 99, 235, 0.08) !important;
+            background: #F5F5F5 !important;
         }
 
         @media (max-width: 767.98px) {
