@@ -3,6 +3,12 @@
 {% block page_title %}Company Branding{% endblock %}
 {% block content %}
 <div class="container-fluid p-0">
+  <div class="page-head">
+    <div>
+      <h5>Company branding</h5>
+      <p>Logo, brand colour and timezone for {{ organization.name }}. Only the accent changes — never the layout or status colours.</p>
+    </div>
+  </div>
   <div class="row g-4">
     <div class="col-lg-7">
       <div class="card"><div class="card-body p-4">
@@ -20,6 +26,22 @@
               {{ form.brand_color }}
               <button type="button" id="eyeBtn" class="btn btn-outline-secondary btn-sm">Eyedropper</button>
             </div>
+          </div>
+          <div class="mb-3"><label class="form-label" for="id_timezone">Company timezone</label>{{ form.timezone }}
+            <datalist id="tz-list">
+              <option value="Africa/Lagos"></option>
+              <option value="Africa/Accra"></option>
+              <option value="Africa/Nairobi"></option>
+              <option value="Africa/Johannesburg"></option>
+              <option value="Europe/London"></option>
+              <option value="Europe/Berlin"></option>
+              <option value="America/New_York"></option>
+              <option value="America/Chicago"></option>
+              <option value="Asia/Dubai"></option>
+              <option value="Asia/Kolkata"></option>
+              <option value="UTC"></option>
+            </datalist>
+            <small class="text-muted">Late arrivals and dates use this timezone, not the server's.</small>
           </div>
           {% if form.errors %}<div class="alert alert-danger">{{ form.errors }}</div>{% endif %}
           <button class="btn btn-primary" type="submit">Save branding</button>
@@ -43,8 +65,15 @@
   var hex=document.getElementById('id_brand_color');
   var pvBtn=document.getElementById('pvBtn'),pvLink=document.getElementById('pvLink'),
       pvBadge=document.getElementById('pvBadge'),pvMenu=document.getElementById('pvMenu');
-  function paint(c){ pvBtn.style.background=c;pvBtn.style.borderColor=c;pvLink.style.color=c;
-    pvBadge.style.background=c;pvBadge.style.color='#fff';pvMenu.style.borderColor=c;pvMenu.style.background='#f7f7f8'; }
+  function lum(hex){var c=[0,2,4].map(function(i){var v=parseInt(hex.substr(1+i,2),16)/255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];}
+  function ratio(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);}
+  function shade(hex,f){var r=parseInt(hex.substr(1,2),16)*f,g=parseInt(hex.substr(3,2),16)*f,b=parseInt(hex.substr(5,2),16)*f;
+    function h(v){v=Math.max(0,Math.min(255,Math.round(v))).toString(16);return v.length<2?"0"+v:v;}return "#"+h(r)+h(g)+h(b);}
+  function contrastText(c){return ratio(c,"#FFFFFF")>=ratio(c,"#0A0A0B")?"#FFFFFF":"#0A0A0B";}
+  function readableOnWhite(c){var k=0;while(ratio(c,"#FFFFFF")<4.5&&k<20){c=shade(c,0.88);k++;}return ratio(c,"#FFFFFF")>=4.5?c:"#0A0A0A";}
+  function paint(c){ pvBtn.style.background=c;pvBtn.style.borderColor=c;pvBtn.style.color=contrastText(c);
+    pvLink.style.color=readableOnWhite(c);
+    pvBadge.style.background=c;pvBadge.style.color=contrastText(c);pvMenu.style.borderColor=c;pvMenu.style.background='#f7f7f8'; }
   picker.addEventListener('input',function(){hex.value=picker.value;paint(picker.value);});
   hex.addEventListener('input',function(){ if(/^#[0-9a-fA-F]{6}$/.test(hex.value)){picker.value=hex.value;paint(hex.value);} });
   paint(picker.value);

@@ -892,7 +892,8 @@ def kiosk_view(request, org_slug=None):
             return redirect('organization_kiosk', org_slug=organization.slug)
         
         now = timezone.now()
-        local_now = timezone.localtime(now)
+        from .models import organization_now
+        local_now = organization_now(organization)
         today = local_now.date()
         
         if action == 'check_in':
@@ -953,7 +954,8 @@ def dashboard_view(request):
     
     organization = get_active_organization(request)
     ensure_default_categories(organization)
-    today = timezone.localdate()
+    from .models import organization_today, organization_date_range_filter
+    today = organization_today(organization)
     settings_obj = get_attendance_settings(organization)
     late_threshold = settings_obj.late_threshold
     workday_start = settings_obj.workday_start
@@ -970,15 +972,15 @@ def dashboard_view(request):
     
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
-        **local_date_range_filter('check_in_time', today),
+        **organization_date_range_filter('check_in_time', today, organization),
     ).select_related('employee__category', 'employee__department')
-    
+
     present_count = todays_records.values('employee_id').distinct().count()
     checked_in_count = todays_records.filter(check_out_time__isnull=True).count()
     checked_out_count = todays_records.filter(check_out_time__isnull=False).count()
     late_count = count_distinct_late_employees(todays_records)
     absent_count = max(total_employees - present_count, 0)
-    
+
     # Recent activity
     recent_attendance = todays_records.order_by('-check_in_time')[:5]
 

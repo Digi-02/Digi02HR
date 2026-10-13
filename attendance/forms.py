@@ -1393,17 +1393,27 @@ class OrganizationBrandingForm(forms.ModelForm):
     remove_logo = forms.BooleanField(required=False)
     brand_color = forms.RegexField(
         regex=r'^#[0-9A-Fa-f]{6}$',
-        error_messages={'invalid': 'Enter a valid hex color like #3B5BFF.'},
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#3B5BFF', 'maxlength': 7}),
+        error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A', 'maxlength': 7}),
+    )
+    timezone = forms.CharField(
+        max_length=50,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Africa/Lagos', 'list': 'tz-list'}),
     )
 
     class Meta:
         model = Organization
-        fields = ['name', 'logo', 'brand_color']
+        fields = ['name', 'logo', 'brand_color', 'timezone']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'logo': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
         }
+
+    def clean_timezone(self):
+        from .models import validate_iana_timezone
+        value = (self.cleaned_data.get('timezone') or '').strip()
+        validate_iana_timezone(value)
+        return value
 
     def clean_logo(self):
         from PIL import Image
@@ -1426,3 +1436,33 @@ class OrganizationBrandingForm(forms.ModelForm):
     def clean_brand_color(self):
         from .branding import normalize_hex
         return normalize_hex(self.cleaned_data.get('brand_color', ''))
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        logo = self.cleaned_data.get('logo')
+        if logo:
+            # Resize to a sensible maximum, keep format, keep random filename.
+            from io import BytesIO
+            from django.core.files.base import ContentFile
+            from PIL import Image
+            try:
+                logo.seek(0)
+                img = Image.open(logo)
+                img.load()
+                if img.width > 512 or img.height > 512:
+                    img.thumbnail((512, 512))
+                    buffer = BytesIO()
+                    fmt = (img.format or 'PNG').upper()
+                    if fmt == 'JPG':
+                        fmt = 'JPEG'
+                    save_kwargs = {'format': fmt}
+                    if fmt == 'JPEG':
+                        save_kwargs['quality'] = 85
+                    img.save(buffer, **save_kwargs)
+                    logo = ContentFile(buffer.getvalue(), name=logo.name)
+                    instance.logo = logo
+            except Exception:
+                pass
+        if commit:
+            instance.save()
+        return instance

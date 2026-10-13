@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 
 def local_date_range_filter(field_name, target_date):
@@ -16,6 +17,47 @@ def local_date_range_filter(field_name, target_date):
         f'{field_name}__gte': start_at,
         f'{field_name}__lt': end_at,
     }
+
+
+def organization_timezone_name(organization):
+    name = getattr(organization, 'timezone', '') if organization else ''
+    if name:
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(name)
+            return name
+        except Exception:
+            pass
+    return timezone.get_default_timezone_name()
+
+
+def organization_now(organization):
+    from zoneinfo import ZoneInfo
+    return timezone.now().astimezone(ZoneInfo(organization_timezone_name(organization)))
+
+
+def organization_today(organization):
+    return organization_now(organization).date()
+
+
+def organization_date_range_filter(field_name, target_date, organization):
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(organization_timezone_name(organization))
+    start_at = timezone.make_aware(datetime.combine(target_date, time.min), tz)
+    end_at = timezone.make_aware(datetime.combine(target_date + timedelta(days=1), time.min), tz)
+    return {
+        f'{field_name}__gte': start_at,
+        f'{field_name}__lt': end_at,
+    }
+
+
+def validate_iana_timezone(value):
+    from zoneinfo import ZoneInfo
+    from django.core.exceptions import ValidationError
+    try:
+        ZoneInfo(value)
+    except Exception:
+        raise ValidationError('Enter a valid IANA timezone, e.g. Africa/Lagos.')
 
 
 def employee_profile_photo_path(instance, filename):
@@ -59,7 +101,7 @@ class Organization(models.Model):
     brand_color = models.CharField(
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
-    timezone = models.CharField(max_length=50, default='Africa/Lagos')
+    timezone = models.CharField(max_length=50, default='Africa/Lagos', validators=[validate_iana_timezone])
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -429,19 +471,19 @@ class Employee(models.Model):
     
     @property
     def is_checked_in_today(self):
-        """Check if employee has an open attendance record today"""
-        today = timezone.localdate()
+        """Check if employee has an open attendance record today (company timezone)"""
+        today = organization_today(self.organization)
         return self.attendance_records.filter(
-            **local_date_range_filter('check_in_time', today),
+            **organization_date_range_filter('check_in_time', today, self.organization),
             check_out_time__isnull=True
         ).exists()
-    
+
     @property
     def today_attendance(self):
-        """Get today's attendance record if it exists"""
-        today = timezone.localdate()
+        """Get today's attendance record if it exists (company timezone)"""
+        today = organization_today(self.organization)
         return self.attendance_records.filter(
-            **local_date_range_filter('check_in_time', today)
+            **organization_date_range_filter('check_in_time', today, self.organization)
         ).first()
     
     @property
@@ -1234,8 +1276,10 @@ class AttendanceRecord(models.Model):
     
     @property
     def is_late(self):
-        """Check if check-in was after the configured late threshold."""
-        local_check_in = timezone.localtime(self.check_in_time)
+        """Check if check-in was after the configured late threshold (company timezone)."""
+        local_check_in = self.check_in_time.astimezone(
+            ZoneInfo(organization_timezone_name(self.organization))
+        )
         threshold = AttendanceSettings.get_solo(self.organization).late_threshold
         return local_check_in.time() >= threshold
     

@@ -1,1 +1,32 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{% block t %}Reset password - DIGI HR{% endblock %}</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{background:#0A0A0B;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif}.cardx{background:#fff;border-radius:10px;padding:36px;width:100%;max-width:400px}.btn-p{background:#0A0A0B;color:#fff;width:100%;padding:12px;border-radius:8px;border:0}.form-control{border-radius:8px;padding:10px 14px}</style></head><body><div class="cardx">{% block c %}{% endblock %}<p class="text-center mt-3"><small class="text-muted">Powered by DIGI</small></p></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Password — DIGI HR{% endblock %}</title>
+<style>
+:root{--white:#FFFFFF;--off:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);color:var(--body);font-size:17px;background:var(--off);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.cardx{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:40px;width:100%;max-width:420px}
+.cardx h2{color:var(--black);font-size:28px;margin:0 0 8px;letter-spacing:-.02em}
+.cardx p{margin:0 0 20px}
+label{display:block;font-weight:650;font-size:15px;color:var(--black);margin:16px 0 8px}
+input[type=email],input[type=password],input[type=text]{width:100%;padding:13px 16px;min-height:52px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:17px;color:var(--black)}
+input:hover{border-color:var(--muted)}
+a{color:var(--black)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--black);outline-offset:2px}
+.btn-p{width:100%;min-height:52px;border:0;border-radius:8px;background:var(--black);color:var(--white);font:inherit;font-weight:700;font-size:17px;cursor:pointer;margin-top:24px}
+.btn-p:hover{background:#404040}
+.err,.errorlist{border:1px solid var(--black);background:var(--off);color:var(--black);border-radius:8px;padding:12px 14px;font-size:15px;list-style:none;margin:0 0 16px}
+.foot{margin-top:32px;text-align:center;color:var(--muted);font-size:14px}
+.back{margin-top:20px;font-size:15px;text-align:center}
+</style>
+</head>
+<body>
+<main class="cardx">
+{% block content %}{% endblock %}
+<p class="foot">Powered by DIGI</p>
+</main>
+</body>
+</html>
