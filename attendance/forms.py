@@ -1440,6 +1440,12 @@ class OrganizationBrandingForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         logo = self.cleaned_data.get('logo')
+        old_logo = None
+        if instance.pk:
+            try:
+                old_logo = Organization.objects.get(pk=instance.pk).logo
+            except Organization.DoesNotExist:
+                old_logo = None
         if logo:
             # Resize to a sensible maximum, keep format, keep random filename.
             from io import BytesIO
@@ -1465,4 +1471,10 @@ class OrganizationBrandingForm(forms.ModelForm):
                 pass
         if commit:
             instance.save()
+            # Delete the replaced file so media/ doesn't fill with orphans.
+            try:
+                if logo and old_logo and old_logo.name and old_logo.name != instance.logo.name:
+                    old_logo.delete(save=False)
+            except Exception:
+                pass
         return instance

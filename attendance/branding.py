@@ -71,8 +71,10 @@ def readable_on_white(hex_color):
 
 def accent_vars(hex_color):
     base = normalize_hex(hex_color)
+    r, g, b = _rgb(base)
     return {
         'accent': base,
+        'accent_rgb': f'{r},{g},{b}',
         'accent_hover': darken(base),
         'accent_tint': tint(base),
         'accent_contrast': contrast_text(base),
