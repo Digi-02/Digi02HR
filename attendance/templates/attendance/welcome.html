@@ -1,235 +1,258 @@
-{% load static %}{# DIGI HR LANDING PAGE — EDIT ALL COPY HERE (layout below uses only these). #}
-{# Brand: DIGI HR. Tone: short, concrete, honest. No stats, no testimonials, #}
-{# no pricing (product is free for now). Logo lives ONLY at static/logo.png — #}
-{# swap that file to change it everywhere (navbar, footer, login). #}
-{% with nav_features="Features" nav_how="How it works" nav_faq="FAQ" nav_contact="Contact" nav_login="Log in" nav_cta="Request access" hero_h="Your whole workforce in one calm place." hero_sub="DIGI HR keeps employees, attendance, onboarding, documents, reports and payroll preparation together. No spreadsheets. No paper sheets." hero_cta1="Request access" hero_cta2="Log in" hero_img_alt="Four colleagues discussing work around a table in a modern office" problem_eyebrow="Why DIGI HR" problem_h="Paper sheets slow you down." problem_p="Attendance on paper. Employee files in folders. Payroll assembled late. DIGI HR puts it all in one place." problem1_h="Attendance you can trust" problem1_p="Check-ins are timestamped at the kiosk. Late arrivals are flagged automatically." problem2_h="Records in one place" problem2_p="Profiles, documents and onboarding live together, separated by company." problem3_h="Payroll without panic" problem3_p="Monthly runs are generated from salary fields, then reviewed and approved." feat_eyebrow="Features" feat_h="Everything HR needs. Nothing it doesn't." feat1_h="Attendance that marks itself" feat1_p="Staff open your kiosk link and check in with their work email. Work starts 08:00, late after 08:30 by default. You can change both in Settings." feat1_li1="Live check-in and check-out terminal" feat1_li2="Automatic late flags and daily counts" feat1_li3="CSV export for reports" feat1_alt="Two colleagues checking a phone together in an office" feat2_h="Employee records and documents" feat2_p="Profiles, IDs, contracts and certificates in one secure store. Each company sees only its own people." feat2_li1="Full employee profiles and history" feat2_li2="Document uploads with expiry dates" feat2_li3="Role-based access" feat2_alt="A man working at a laptop while on a phone call at his desk" feat3_h="Onboarding checklists" feat3_p="Invite applicants by email, review applications, and move people through pipeline stages with per-employee tasks." feat3_li1="Email invitations with secure links" feat3_li2="Pipeline stages you can rename" feat3_li3="Task due dates and completions" feat3_alt="Two colleagues looking at a phone beside a desk" feat4_h="Payroll and reports" feat4_p="Monthly payroll runs are generated from salary fields, then reviewed, approved and marked paid, with payslips. Attendance, lateness, headcount and leave reports export to CSV." feat4_li1="Draft, processed, approved, paid" feat4_li2="Payslips per employee" feat4_li3="One-click CSV export" feat4_alt="Colleagues reviewing papers around a table in an office lounge" how_eyebrow="How it works" how_h="Running HR takes three steps." how1_h="Register your company" how1_p="We create your workspace. You add your name and upload your logo." how2_h="Invite your team" how2_p="Add employees and send onboarding invites by email." how3_h="Run HR in minutes" how3_p="Share the kiosk link, track attendance, approve leave, prepare payroll." sec_eyebrow="Security and data" sec_h="Your company's data stays yours." sec_p="Isolation by organization. Access by role. A written record of sensitive actions." sec1_h="Isolated by company" sec1_p="Every record belongs to one organization. Staff only see their own workspace." sec2_h="Role-based access" sec2_p="Owner, HR admin, manager, payroll officer and viewer roles gate each area." sec3_h="Audit trail" sec3_p="Sensitive employee, attendance, leave, payroll and report actions are logged." free_h="Free to get started." free_p="DIGI HR is free while we onboard early teams. Request access and we will set up your workspace." faq_h="Questions, answered." faq1_q="Is DIGI HR really free?" faq1_a="Yes, for now. There are no plans or subscriptions." faq2_q="How does attendance work?" faq2_a="Employees open your kiosk link and check in with their work email. Arrivals at or after your threshold (default 08:30) are flagged late." faq3_q="Can I use my company logo and color?" faq3_a="Yes. Settings, then Company Branding, holds your logo, brand color and a live preview." faq4_q="Is each company's data separated?" faq4_a="Yes. Records belong to one organization, and people only see their own workspace." faq5_q="Does it run payroll?" faq5_a="It prepares monthly payroll runs and payslips for review, approval and payment tracking." faq6_q="How do I get access?" faq6_a="Send the contact form below. We will create your workspace and reply by email." contact_eyebrow="Contact" contact_h="Request access." contact_p="Tell us about your team. We reply by email." form_name="Name" form_email="Work email" form_msg="Message" form_send="Send request" cta_h="Ready for calmer HR?" cta_p="One place for your people, time and pay preparation." foot_note="Powered by DIGI" %}
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DIGI HR — HR management system, attendance tracking, employee management</title>
-<meta name="description" content="DIGI HR is a calm HR management system: attendance tracking with late flags, employee management, onboarding, documents, reports and payroll preparation. Free to get started.">
-<meta property="og:title" content="DIGI HR — Your whole workforce in one calm place">
-<meta property="og:description" content="Attendance tracking, employee management, onboarding, documents, reports and payroll preparation. Free to get started.">
-<meta property="og:type" content="website">
-<meta property="og:image" content="{% static 'image-1.jpg' %}">
-<meta name="theme-color" content="#0A0A0A">
+<title>DIGI HR — Run your whole team from one place</title>
+<meta name="description" content="DIGI HR brings employee records, attendance, leave and payroll together.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--white:#FFFFFF;--off:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font-family:var(--font);color:var(--body);background:var(--white);font-size:18px;line-height:1.65;-webkit-font-smoothing:antialiased}
-h1,h2,h3{color:var(--black);line-height:1.15;letter-spacing:-.02em;margin:0 0 16px}
-h1{font-size:clamp(40px,6vw,68px);font-weight:800}
-h2{font-size:clamp(30px,4vw,44px);font-weight:800}
-h3{font-size:22px;font-weight:750}
-p{margin:0 0 16px}.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-section{padding:96px 0}.eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
-.lede{max-width:640px}
-a{color:var(--black)}
-a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--black);outline-offset:2px;border-radius:4px}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:12px 26px;border-radius:8px;font-weight:700;font-size:16px;text-decoration:none;border:1px solid transparent;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease}
-.btn:active{transform:translateY(1px)}
-.btn-white{background:var(--white);color:var(--black)}
-.btn-white:hover{background:var(--off)}
-.btn-outline-w{background:transparent;color:var(--white);border-color:var(--white)}
-.btn-outline-w:hover{background:#404040;border-color:#404040}
-.btn-black{background:var(--black);color:var(--white)}
-.btn-black:hover{background:#404040}
-.btn-outline-b{background:var(--white);color:var(--black);border-color:var(--black)}
-.btn-outline-b:hover{background:var(--off)}
-.skip{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;background:var(--black);color:var(--white);z-index:100}
-.skip:focus{width:auto;height:auto;clip:auto;padding:10px 18px;color:var(--white)}
-.nav{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
-.nav-inner{max-width:1120px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:24px;padding:0 24px;min-height:72px}
-.brand img{display:block;height:34px;width:auto}
-.nav-links{display:flex;gap:32px;justify-content:center}
-.nav-links a{color:var(--body);text-decoration:none;font-size:16px;font-weight:550;min-height:48px;display:inline-flex;align-items:center}
-.nav-links a:hover{color:var(--black)}
-.nav-cta{display:flex;gap:12px;align-items:center}
-.nav-cta .btn{min-height:44px;padding:9px 20px;font-size:15px}
-.menu-btn{display:none;background:var(--white);border:1px solid var(--black);border-radius:8px;min-width:48px;min-height:48px;font-size:20px;color:var(--black);cursor:pointer}
-.menu-btn:hover{background:var(--off)}
-.hero{background:var(--black);color:var(--white)}
-.hero h1{color:var(--white);max-width:640px}
-.hero .sub{color:var(--white);opacity:.78;font-size:19px;max-width:600px;margin-bottom:32px}
-.hero-ctas{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:48px}
-.frame{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--white)}
-.frame img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
-.foot nav{display:flex;gap:20px;flex-wrap:wrap}.alt{background:var(--off)}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
-.grid3 article{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:32px}
-.grid3 h3{font-size:19px}.grid3 p{font-size:17px;margin:0}
-.feat{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;padding:48px 0;border-bottom:1px solid var(--border)}
-.feat:last-child{border-bottom:0;padding-bottom:0}
-.feat.flip>.copy{order:2}
-.copy p{color:var(--body)}.copy ul{margin:0 0 16px;padding-left:22px;font-size:17px}.copy li{margin-bottom:8px}
-.feat .frame img{aspect-ratio:4/3}
-.steps{background:var(--black);color:var(--white)}
-.steps h2{color:var(--white)}.steps .lede{color:var(--white);opacity:.78}
-.step-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
-.step{border:1px solid #404040;border-radius:12px;padding:32px;background:var(--black)}
-.step-num{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--white);color:var(--black);font-weight:800;font-size:15px;margin-bottom:16px}
-.step h3{color:var(--white);font-size:19px}.step p{color:var(--white);opacity:.78;font-size:17px;margin:0}
-.faq-list{max-width:760px;margin-top:32px}
-.faq-list details{border:1px solid var(--border);border-radius:12px;padding:16px 22px;margin-bottom:12px;background:var(--white)}
-.faq-list summary{font-weight:700;color:var(--black);cursor:pointer;min-height:48px;display:flex;align-items:center;font-size:18px}
-.faq-list p{margin:8px 0 4px;font-size:17px}
-.contact-form{max-width:560px;margin-top:32px}
-.field{margin-bottom:20px}.field label{display:block;font-weight:650;font-size:15px;color:var(--black);margin-bottom:8px}
-.field input,.field textarea{width:100%;padding:13px 16px;min-height:52px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:17px;color:var(--black);background:var(--white)}
-.field input:hover,.field textarea:hover{border-color:var(--muted)}
-.cta{background:var(--black);color:var(--white);text-align:center}
-.cta h2{color:var(--white)}.cta p{color:var(--white);opacity:.78}
-footer{background:var(--black);font-size:14px;color:var(--white);padding:40px 0;border-top:1px solid #404040;}
-footer .foot>span{opacity:.78}
-footer .foot nav a{opacity:.78}
-footer img{height:30px;width:auto;filter:invert(1)}
-.foot{display:flex;gap:24px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.foot nav{display:flex;gap:20px;flex-wrap:wrap}
-.foot a{color:var(--white);opacity:.78;text-decoration:none}.foot a:hover{color:var(--white);opacity:1}
-@media(max-width:900px){.feat{grid-template-columns:1fr;gap:32px}.feat.flip>.copy{order:0}.grid3,.step-grid{grid-template-columns:1fr}}
-@media(max-width:760px){
-section{padding:64px 0}
-.nav-inner{grid-template-columns:auto auto}
-.nav-links,.nav-cta{display:none}
-.menu-btn{display:inline-flex;align-items:center;justify-content:center;justify-self:end}
-.nav.open .nav-links{display:flex;flex-direction:column;position:absolute;top:72px;left:0;right:0;background:var(--white);border-bottom:1px solid var(--border);padding:8px 24px 16px;margin:0;gap:0}
-.nav.open .nav-cta{display:flex;flex-direction:column;position:absolute;top:280px;left:0;right:0;background:var(--white);padding:0 24px 24px;margin:0;align-items:stretch}
-.nav.open .nav-cta .btn{width:100%}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#F02A4C;
+  --accent-dark:#D61F40;
+  --ink:#0A0A0A;
+  --body:#404040;
+  --muted:#6b6b6b;
+  --line:#E5E5E5;
+  --nav-h:80px;
+  --wrap:1320px;
+  --pad:clamp(24px,5vw,80px);
+  --gap-hero:clamp(48px,6vw,120px);
+  --sec-pad:clamp(80px,10vw,160px);
 }
+@media(min-width:1600px){:root{--wrap:1440px}}
+html{scroll-behavior:smooth}
+body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:var(--wrap);margin:0 auto;padding-inline:var(--pad)}
+/* ---------- navbar ---------- */
+.nav{background:#fff;position:sticky;top:0;z-index:50;min-height:var(--nav-h);display:flex;align-items:center;transition:box-shadow .2s ease,border-color .2s ease;border-bottom:1px solid transparent}
+.nav.scrolled{border-bottom-color:var(--line)}
+.nav-inner{width:100%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:2.5rem;min-height:var(--nav-h)}
+.brand img{display:block;height:44px;width:auto}
+.nav-links{display:flex;gap:40px;justify-content:center;list-style:none}
+.nav-links a{color:var(--ink);text-decoration:none;font-size:1rem;font-weight:500;position:relative;padding:4px 0}
+.nav-links a:hover{color:var(--accent)}
+.nav-links a::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--accent);transition:width .15s ease}
+.nav-links a:hover::after{width:100%}
+.nav-cta{display:flex;gap:16px;align-items:center}
+.menu{display:contents}
+.menu-btn{display:none;background:#fff;border:1.5px solid var(--ink);border-radius:12px;min-width:48px;min-height:48px;font-size:1.25rem;color:var(--ink);cursor:pointer}
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:0.625rem;min-height:48px;padding:0 2rem;border-radius:12px;font-weight:600;font-size:1rem;text-decoration:none;cursor:pointer;border:1.5px solid transparent;font-family:inherit;transition:background .15s ease,transform .15s ease,box-shadow .15s ease,color .15s ease,border-color .15s ease;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:3px solid rgba(240,42,76,.45);outline-offset:2px}
+.btn-primary{background:var(--accent);color:#fff;box-shadow:0 8px 20px rgba(240,42,76,.25)}
+.btn-primary:hover{background:var(--accent-dark);transform:translateY(-2px);box-shadow:0 12px 26px rgba(240,42,76,.32)}
+.btn-primary .arr{transition:transform .15s ease;font-weight:700}
+.btn-primary:hover .arr{transform:translateX(4px)}
+.btn-secondary{background:#fff;color:var(--ink);border-color:var(--ink)}
+.btn-secondary:hover{background:#F2F2F2}
+/* ---------- hero ---------- */
+.hero{background:linear-gradient(180deg,#FDF9FA 0%,#fff 70%);min-height:calc(100vh - var(--nav-h));display:flex;align-items:center;padding-block:clamp(2.5rem,5vh,4rem)}
+.hero-inner{width:100%;display:grid;grid-template-columns:55% 45%;gap:var(--gap-hero);align-items:center}
+.eyebrow{font-size:0.875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:1.5rem}
+.hero-copy h1{font-size:clamp(2.5rem,5.2vw,5.25rem);font-weight:800;line-height:1.05;letter-spacing:-.02em;color:var(--ink);max-width:13ch;margin-bottom:1.5rem}
+.hero-copy .sub{font-size:clamp(1.125rem,1.5vw,1.375rem);line-height:1.6;color:var(--body);max-width:56ch;margin-bottom:2.5rem;font-weight:500}
+.hero-ctas{display:flex;gap:16px;flex-wrap:wrap}
+.hero-ctas .btn{min-height:56px;font-size:1.0625rem}
+/* hero image: rounded rectangle + floating chip */
+.hero-media{position:relative}
+.hero-photo{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;object-position:top center;border-radius:24px;background:#FBE9EC;border:1px solid rgba(10,10,10,.08);box-shadow:0 32px 64px rgba(10,10,10,.14)}
+.chip{position:absolute;left:-1.25rem;bottom:2rem;display:inline-flex;align-items:center;gap:0.625rem;background:#fff;border:1px solid var(--line);border-radius:999px;padding:0.75rem 1.25rem;font-size:0.9375rem;font-weight:600;color:var(--ink);box-shadow:0 12px 28px rgba(10,10,10,.14)}
+.chip .pulse{width:0.625rem;height:0.625rem;border-radius:50%;background:#16A34A;box-shadow:0 0 0 0 rgba(22,163,74,.5);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+@media(prefers-reduced-motion:reduce){.chip .pulse{animation:none}.btn,.svc{transition:none}}
+/* ---------- about ---------- */
+.about{background:#FFF5F5;padding-block:var(--sec-pad)}
+.about-inner{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap-hero);align-items:center}
+.about-photo img{display:block;width:100%;height:auto;border-radius:16px;object-fit:cover;box-shadow:0 24px 48px rgba(10,10,10,.1)}
+.about-eyebrow{font-size:0.875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
+.about-copy h2{font-size:clamp(1.75rem,3vw,2.75rem);line-height:1.15;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:1.5rem}
+.about-copy p{font-size:1.0625rem;line-height:1.7;color:var(--body);font-weight:500;margin-bottom:2rem;max-width:56ch}
+.advice{display:flex;gap:1rem;align-items:flex-start}
+.advice-ic{flex:0 0 auto;width:2.5rem;height:2.5rem;color:var(--accent)}
+.advice-ic svg{width:100%;height:100%;display:block}
+.advice strong{display:block;font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:0.25rem}
+.advice span{font-size:1rem;color:var(--body);font-weight:500}
+.advice span b{color:var(--accent);font-weight:700}
+/* ---------- what we do ---------- */
+.services{background:#fff;padding-block:var(--sec-pad)}
+.services h2{text-align:center;font-size:clamp(1.75rem,3vw,2.75rem);font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:2.5rem}
+.svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem}
+.svc{background:#F4F5F7;border-radius:16px;padding:2rem 1.75rem;position:relative;border:1px solid transparent;transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease}
+.svc:hover{transform:translateY(-8px);background:#fff;border-color:#FFD9E0;box-shadow:0 18px 36px rgba(240,42,76,.12)}
+.svc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem}
+.svc-ic{width:2rem;height:2rem;color:var(--accent)}
+.svc-ic svg{width:100%;height:100%;display:block}
+.svc-num{font-size:1.375rem;font-weight:800;color:#E3E5E9;letter-spacing:.02em}
+.svc h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:0.75rem}
+.svc p{font-size:1rem;line-height:1.65;color:var(--body);font-weight:500;margin:0}
+/* ---------- contact ---------- */
+.contact{background:#fff;border-top:1px solid var(--line);padding-block:var(--sec-pad)}
+.contact h2{font-size:clamp(1.75rem,3vw,2.75rem);color:var(--ink);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
+.contact>p{font-size:1.0625rem;color:var(--body);margin-bottom:2rem}
+.contact form{max-width:560px;display:grid;gap:1rem}
+.contact input,.contact textarea{width:100%;padding:0.875rem 1rem;border:1px solid #d4d4d4;border-radius:12px;font:inherit;font-size:1rem}
+.contact button{justify-self:start;min-height:56px}
+.msg{font-size:1rem;margin-bottom:0.75rem;color:var(--accent)}
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line);padding:2rem 0}
+.foot{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.foot img{height:2rem;width:auto}
+.foot nav{display:flex;gap:1.5rem;flex-wrap:wrap}
+.foot nav a{color:var(--body);text-decoration:none;font-size:1rem;font-weight:500}
+.foot nav a:hover{color:var(--accent)}
+.foot span{color:var(--muted);font-size:0.875rem}
+/* ---------- responsive ---------- */
+@media(max-width:1024px){
+  .nav-links{gap:1.5rem}
+  .hero-inner{gap:3rem}
+}
+@media(max-width:768px){
+  :root{--nav-h:64px}
+  .nav-inner{grid-template-columns:auto auto;padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+  .brand img{height:36px}
+  .nav-links,.nav-cta{display:none}
+  .menu-btn{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;justify-self:end;width:44px;height:44px;min-width:44px;min-height:44px;background:transparent;border:none;border-radius:8px;cursor:pointer}
+  .menu-btn span{display:block;width:22px;height:2px;background:var(--ink);border-radius:2px;transition:transform .2s ease,opacity .2s ease}
+  .nav.open .menu-btn span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  .nav.open .menu-btn span:nth-child(2){opacity:0}
+  .nav.open .menu-btn span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  .menu{display:none}
+  .nav.open .menu{display:flex;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 24px 40px rgba(10,10,10,.12);max-height:calc(100vh - var(--nav-h));max-height:calc(100dvh - var(--nav-h));overflow-y:auto;padding:0 max(20px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));z-index:60}
+  .nav.open .menu nav{display:block}
+  .nav.open .nav-links{display:flex;flex-direction:column;gap:0}
+  .nav-links li{border-bottom:1px solid var(--line)}
+  .nav-links a{display:flex;align-items:center;min-height:56px;font-size:1.125rem}
+  .nav-links a::after{display:none}
+  .nav.open .nav-cta{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding-top:20px}
+  .nav.open .nav-cta .btn{width:100%;min-height:52px}
+  .nav.open .nav-cta .btn-primary{order:-1}
+  /* hero: label, headline, sub, image, buttons */
+  .hero{display:block;min-height:0;padding:32px 0 56px}
+  .hero-inner{display:flex;flex-direction:column;gap:0;padding-inline:max(20px,env(safe-area-inset-left))}
+  .hero-copy{display:contents}
+  .hero-copy .eyebrow{order:1;margin-bottom:1rem}
+  .hero-copy h1{order:2;font-size:clamp(2rem,9vw,2.75rem);line-height:1.1;max-width:none;margin-bottom:1.5rem}
+  .hero-copy .sub{order:3;font-size:1.0625rem;line-height:1.6;margin-bottom:1.5rem}
+  .hero-media{order:4;width:100%;margin-bottom:1.75rem}
+  .hero-photo{aspect-ratio:4/5;border-radius:20px}
+  .chip{left:1rem;bottom:1rem}
+  .hero-ctas{order:5;width:100%;flex-direction:column;flex-wrap:nowrap;gap:12px}
+  .hero-ctas .btn{width:100%;min-height:56px;font-size:1.0625rem;white-space:nowrap}
+  .about-inner{grid-template-columns:1fr;gap:2rem}
+  .svc-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){.svc-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
 <header class="nav" id="topnav">
-  <div class="nav-inner">
-    <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80"></a>
-    <nav class="nav-links" id="navlinks" aria-label="Primary">
-      <a href="#features">{{ nav_features }}</a>
-      <a href="#how">{{ nav_how }}</a>
-      <a href="#faq">{{ nav_faq }}</a>
-      <a href="#contact">{{ nav_contact }}</a>
-    </nav>
+  <div class="wrap nav-inner">
+    <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
+    <nav aria-label="Primary"><ul class="nav-links" id="navlinks">
+      <li><a href="#about">About</a></li>
+      <li><a href="#services">What we do</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul></nav>
     <div class="nav-cta">
-      <a class="btn btn-outline-b" href="/login/">{{ nav_login }}</a>
-      <a class="btn btn-black" href="#contact">{{ nav_cta }}</a>
+      <a class="btn btn-secondary" href="/login/">Login</a>
+      <a class="btn btn-primary" href="#contact">Request access <span class="arr" aria-hidden="true">&rarr;</span></a>
     </div>
-    <button class="menu-btn" id="menubtn" aria-expanded="false" aria-controls="navlinks" aria-label="Open menu">☰</button>
+    <button class="menu-btn" id="menubtn" aria-expanded="false" aria-controls="navlinks" aria-label="Open menu">&#9776;</button>
   </div>
 </header>
-<main id="main">
-<section class="hero" aria-labelledby="hero-h" style="padding:96px 0">
-  <div class="wrap">
-    <h1 id="hero-h">{{ hero_h }}</h1>
-    <p class="sub">{{ hero_sub }}</p>
-    <div class="hero-ctas">
-      <a class="btn btn-white" href="#contact">{{ hero_cta1 }}</a>
-      <a class="btn btn-outline-w" href="/login/">{{ hero_cta2 }}</a>
+<main>
+<section class="hero" aria-labelledby="hero-h">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <p class="eyebrow">HR management system</p>
+      <h1 id="hero-h">Run your whole team from one place.</h1>
+      <p class="sub">DIGI HR brings employee records, attendance, leave and payroll together, so your HR team spends less time on spreadsheets and more time on people.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="#contact">Request access <span class="arr" aria-hidden="true">&rarr;</span></a>
+        <a class="btn btn-secondary" href="/login/">Login</a>
+      </div>
     </div>
-    <div class="frame"><img src="{% static 'image-1.jpg' %}" alt="{{ hero_img_alt }}" width="1600" height="1067" fetchpriority="high"></div>
+    <div class="hero-media">
+      <img class="hero-photo" src="{% static 'female in circle background.png' %}" alt="Smiling HR professional holding a tablet">
+      <span class="chip"><span class="pulse" aria-hidden="true"></span>Present today</span>
+    </div>
   </div>
 </section>
-<section aria-labelledby="problem-h"><div class="wrap">
-  <span class="eyebrow">{{ problem_eyebrow }}</span>
-  <h2 id="problem-h">{{ problem_h }}</h2>
-  <p class="lede">{{ problem_p }}</p>
-  <div class="grid3">
-    <article><h3>{{ problem1_h }}</h3><p>{{ problem1_p }}</p></article>
-    <article><h3>{{ problem2_h }}</h3><p>{{ problem2_p }}</p></article>
-    <article><h3>{{ problem3_h }}</h3><p>{{ problem3_p }}</p></article>
+<section class="about" id="about" aria-labelledby="about-h">
+  <div class="wrap about-inner">
+    <div class="about-photo"><img src="{% static 'second page image.png' %}" alt="Team celebrating with a high five in the office"></div>
+    <div class="about-copy">
+      <p class="about-eyebrow">About us</p>
+      <h2 id="about-h">People management made simple.</h2>
+      <p>DIGI HR was built to replace the paper sheets, scattered files and late payroll that slow teams down. We&rsquo;re a small team focused on making HR simple enough that everyone in the company can use it.</p>
+      <div class="advice">
+        <span class="advice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="12" width="4" height="7" rx="1.6"/><rect x="17" y="12" width="4" height="7" rx="1.6"/><path d="M19 19a3 3 0 0 1-3 3h-3"/></svg></span>
+        <div><strong>Get Instant Professional Advice</strong><span>Ready to Help : <b>+1 356 678 7897</b></span></div>
+      </div>
+    </div>
   </div>
-</div></section>
-<section class="alt" id="features" aria-labelledby="feat-h"><div class="wrap">
-  <span class="eyebrow">{{ feat_eyebrow }}</span>
-  <h2 id="feat-h">{{ feat_h }}</h2>
-  <div class="feat">
-    <div class="copy"><h3>{{ feat1_h }}</h3><p>{{ feat1_p }}</p>
-      <ul><li>{{ feat1_li1 }}</li><li>{{ feat1_li2 }}</li><li>{{ feat1_li3 }}</li></ul></div>
-    <div class="frame"><img src="{% static 'image-2.jpg' %}" alt="{{ feat1_alt }}" width="1600" height="1067" loading="lazy"></div>
+</section>
+<section class="services" id="services" aria-labelledby="svc-h">
+  <div class="wrap">
+    <h2 id="svc-h">What we do</h2>
+    <div class="svc-grid">
+      <article class="svc">
+        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="10" r="2.4"/><path d="M15.5 14.6A4.3 4.3 0 0 1 21 18.5"/></svg></span><span class="svc-num">01</span></div>
+        <h3>People records</h3>
+        <p>Keep every employee&rsquo;s profile, documents and contracts in one secure place, so nothing gets lost in folders or chat threads.</p>
+      </article>
+      <article class="svc">
+        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m10.5 15 1.8 1.8 3.2-3.6"/></svg></span><span class="svc-num">02</span></div>
+        <h3>Attendance</h3>
+        <p>Record check-ins and check-outs, and see who&rsquo;s present, late or absent. You set the working hours and the late rule.</p>
+      </article>
+      <article class="svc">
+        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6.5 9.5h.01M17.5 16h.01"/></svg></span><span class="svc-num">03</span></div>
+        <h3>Payroll and reports</h3>
+        <p>Prepare monthly payroll, generate payslips, track payments, and export reports when you need them.</p>
+      </article>
+      <article class="svc">
+        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="13" height="17" rx="2"/><path d="M9 8.5h6M9 12h6M9 15.5h4"/></svg></span><span class="svc-num">04</span></div>
+        <h3>Leave and onboarding</h3>
+        <p>Staff request leave and managers approve it. New hires follow a checklist, so nothing is missed in their first week.</p>
+      </article>
+    </div>
   </div>
-  <div class="feat flip">
-    <div class="copy"><h3>{{ feat2_h }}</h3><p>{{ feat2_p }}</p>
-      <ul><li>{{ feat2_li1 }}</li><li>{{ feat2_li2 }}</li><li>{{ feat2_li3 }}</li></ul></div>
-    <div class="frame"><img src="{% static 'image-3.jpg' %}" alt="{{ feat2_alt }}" width="1600" height="1067" loading="lazy"></div>
-  </div>
-  <div class="feat">
-    <div class="copy"><h3>{{ feat3_h }}</h3><p>{{ feat3_p }}</p>
-      <ul><li>{{ feat3_li1 }}</li><li>{{ feat3_li2 }}</li><li>{{ feat3_li3 }}</li></ul></div>
-    <div class="frame"><img src="{% static 'image-4.jpg' %}" alt="{{ feat3_alt }}" width="1067" height="1600" loading="lazy"></div>
-  </div>
-  <div class="feat flip">
-    <div class="copy"><h3>{{ feat4_h }}</h3><p>{{ feat4_p }}</p>
-      <ul><li>{{ feat4_li1 }}</li><li>{{ feat4_li2 }}</li><li>{{ feat4_li3 }}</li></ul></div>
-    <div class="frame"><img src="{% static 'image-1.jpg' %}" alt="{{ feat4_alt }}" width="1600" height="1067" loading="lazy"></div>
-  </div>
-</div></section>
-<section class="steps" id="how" aria-labelledby="how-h"><div class="wrap">
-  <span class="eyebrow" style="color:var(--white);opacity:.7">{{ how_eyebrow }}</span>
-  <h2 id="how-h">{{ how_h }}</h2>
-  <div class="step-grid">
-    <div class="step"><span class="step-num">1</span><h3>{{ how1_h }}</h3><p>{{ how1_p }}</p></div>
-    <div class="step"><span class="step-num">2</span><h3>{{ how2_h }}</h3><p>{{ how2_p }}</p></div>
-    <div class="step"><span class="step-num">3</span><h3>{{ how3_h }}</h3><p>{{ how3_p }}</p></div>
-  </div>
-</div></section>
-<section aria-labelledby="sec-h"><div class="wrap">
-  <span class="eyebrow">{{ sec_eyebrow }}</span>
-  <h2 id="sec-h">{{ sec_h }}</h2>
-  <p class="lede">{{ sec_p }}</p>
-  <div class="grid3">
-    <article><h3>{{ sec1_h }}</h3><p>{{ sec1_p }}</p></article>
-    <article><h3>{{ sec2_h }}</h3><p>{{ sec2_p }}</p></article>
-    <article><h3>{{ sec3_h }}</h3><p>{{ sec3_p }}</p></article>
-  </div>
-</div></section>
-<section class="alt" aria-labelledby="free-h"><div class="wrap" style="text-align:center">
-  <h2 id="free-h">{{ free_h }}</h2>
-  <p class="lede" style="margin:0 auto">{{ free_p }}</p>
-</div></section>
-<section id="faq" aria-labelledby="faq-h"><div class="wrap">
-  <h2 id="faq-h">{{ faq_h }}</h2>
-  <div class="faq-list">
-    <details><summary>{{ faq1_q }}</summary><p>{{ faq1_a }}</p></details>
-    <details><summary>{{ faq2_q }}</summary><p>{{ faq2_a }}</p></details>
-    <details><summary>{{ faq3_q }}</summary><p>{{ faq3_a }}</p></details>
-    <details><summary>{{ faq4_q }}</summary><p>{{ faq4_a }}</p></details>
-    <details><summary>{{ faq5_q }}</summary><p>{{ faq5_a }}</p></details>
-    <details><summary>{{ faq6_q }}</summary><p>{{ faq6_a }}</p></details>
-  </div>
-</div></section>
-<section class="alt" id="contact" aria-labelledby="contact-h"><div class="wrap">
-  <span class="eyebrow">{{ contact_eyebrow }}</span>
-  <h2 id="contact-h">{{ contact_h }}</h2>
-  <p class="lede">{{ contact_p }}</p>
-  {% if messages %}{% for m in messages %}<p role="status">{{ m }}</p>{% endfor %}{% endif %}
-  <form class="contact-form" method="post" action="{% url 'welcome_contact' %}">
+</section>
+<section class="contact" id="contact" aria-labelledby="contact-h">
+  <div class="wrap">
+  <h2 id="contact-h">Request access</h2>
+  <p>Tell us about your team and we will get you set up.</p>
+  {% if messages %}{% for m in messages %}<p class="msg" role="status">{{ m }}</p>{% endfor %}{% endif %}
+  <form method="post" action="{% url 'welcome_contact' %}">
     {% csrf_token %}
-    <div class="field"><label for="cname">{{ form_name }}</label><input id="cname" name="name" type="text" required autocomplete="name"></div>
-    <div class="field"><label for="ccompany">Company name</label><input id="ccompany" name="company" type="text" autocomplete="organization"></div>
-    <div class="field"><label for="cemail">{{ form_email }}</label><input id="cemail" name="email" type="email" required autocomplete="email"></div>
-    <div class="field"><label for="cphone">Phone (optional)</label><input id="cphone" name="phone" type="tel" autocomplete="tel"></div>
-    <div class="field"><label for="cteam">Team size (optional)</label><input id="cteam" name="team_size" type="text" placeholder="e.g. 25"></div>
-    <div class="field"><label for="cmsg">{{ form_msg }}</label><textarea id="cmsg" name="message" rows="4" required></textarea></div>
+    <input name="name" type="text" required placeholder="Your name" autocomplete="name">
+    <input name="company" type="text" placeholder="Company name" autocomplete="organization">
+    <input name="email" type="email" required placeholder="Work email" autocomplete="email">
+    <input name="phone" type="tel" placeholder="Phone (optional)" autocomplete="tel">
+    <input name="team_size" type="text" placeholder="Team size (e.g. 25)">
+    <textarea name="message" rows="4" required placeholder="What do you need?"></textarea>
     <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-    <button class="btn btn-black" type="submit">{{ form_send }}</button>
+    <button class="btn btn-primary" type="submit">Request access <span class="arr" aria-hidden="true">&rarr;</span></button>
   </form>
-</div></section>
-<section class="cta" aria-labelledby="cta-h"><div class="wrap">
-  <h2 id="cta-h">{{ cta_h }}</h2>
-  <p>{{ cta_p }}</p>
-  <p><a class="btn btn-white" href="#contact">{{ hero_cta1 }}</a></p>
-</div></section>
+  </div>
+</section>
 </main>
 <footer><div class="wrap foot">
-  <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80"></a>
-  <span>{{ foot_note }} · © 2026 DIGI HR</span>
-  <nav aria-label="Footer"><a href="#features">{{ nav_features }}</a><a href="#how">{{ nav_how }}</a><a href="#faq">{{ nav_faq }}</a><a href="/login/">{{ nav_login }}</a></nav>
+  <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
+  <span>&copy; 2026 DIGI HR</span>
+  <nav aria-label="Footer"><a href="#about">About</a><a href="#services">What we do</a><a href="/login/">Login</a></nav>
 </div></footer>
 <script>
 (function(){var b=document.getElementById('menubtn'),n=document.getElementById('topnav');
-b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');b.setAttribute('aria-label',o?'Close menu':'Open menu');b.textContent=o?'✕':'☰';});
-n.addEventListener('click',function(e){if(e.target.closest('a')&&n.classList.contains('open')){n.classList.remove('open');b.setAttribute('aria-expanded','false');b.textContent='☰';}});})();
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');b.setAttribute('aria-label',o?'Close menu':'Open menu');b.textContent=o?'\u2715':'\u2630';});
+n.addEventListener('click',function(e){if(e.target.closest('a')&&n.classList.contains('open')){n.classList.remove('open');b.setAttribute('aria-expanded','false');b.textContent='\u2630';}});
+var nav=n;function onScroll(){nav.classList.toggle('scrolled',window.scrollY>8)}window.addEventListener('scroll',onScroll,{passive:true});onScroll();})();
 </script>
-</body></html>
-{% endwith %}
+</body>
+</html>
