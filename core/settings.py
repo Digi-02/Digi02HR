@@ -273,6 +273,14 @@ LOGIN_URL = os.getenv("DJANGO_LOGIN_URL", "login")
 LOGIN_REDIRECT_URL = os.getenv("DJANGO_LOGIN_REDIRECT_URL", "dashboard")
 LOGOUT_REDIRECT_URL = os.getenv("DJANGO_LOGOUT_REDIRECT_URL", "login")
 
+# Password reset: owner invite links expire after 72 hours (single-use by
+# virtue of Django's default token generator being bound to the password hash).
+PASSWORD_RESET_TIMEOUT = _env_int("DJANGO_PASSWORD_RESET_TIMEOUT", default=259200)
+
+# When True, the setup wizard cannot be finished until the company mailbox
+# connection test passes. When False, a "I'll do this later" link is shown.
+REQUIRE_MAILBOX_SETUP = _env_bool("REQUIRE_MAILBOX_SETUP", default=False)
+
 EMAIL_BACKEND = _env_str_any(
     ["DJANGO_EMAIL_BACKEND", "EMAIL_BACKEND"],
     default="django.core.mail.backends.console.EmailBackend",
