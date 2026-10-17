@@ -140,6 +140,11 @@ class Organization(models.Model):
     is_suspended = models.BooleanField(default=False)
     suspended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    # Setup wizard tracking. setup_completed=True means the company has finished
+    # its initial setup and will not be redirected into the wizard.
+    setup_completed = models.BooleanField(default=False)
+    setup_completed_steps = models.JSONField(default=list, blank=True)
+    setup_current_step = models.PositiveSmallIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
