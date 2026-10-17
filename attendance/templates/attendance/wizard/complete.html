@@ -1,0 +1,67 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup complete — {{ organization.name }}</title>
+<style>
+:root{--white:#FFFFFF;--canvas:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);background:var(--canvas);color:var(--body);font-size:16px;line-height:1.5}
+.wiz-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 24px}
+.wiz-header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:16px}
+.wiz-brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px;color:var(--black);text-decoration:none}
+.wiz-brand img{height:32px;width:auto;filter:invert(1)}
+.wiz-main{max-width:720px;margin:0 auto;padding:48px 20px 80px}
+.wiz-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:40px}
+.wiz-card h1{margin:0 0 12px;font-size:30px;font-weight:800;color:var(--black);letter-spacing:-0.02em}
+.wiz-card p{margin:0 0 28px;color:var(--body);font-size:15px}
+.wiz-summary{background:var(--canvas);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:28px}
+.wiz-summary h3{margin:0 0 12px;font-size:15px;font-weight:800;color:var(--black);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.wiz-summary p{margin:4px 0;font-size:14px;color:var(--body)}
+.wiz-summary .pending{color:#B45309}
+.wiz-actions{display:flex;gap:10px}
+.wiz-btn{min-height:48px;padding:0 24px;border-radius:8px;font-weight:600;font-size:16px;border:1px solid transparent;cursor:pointer;font:inherit}
+.wiz-btn-primary{background:var(--black);color:var(--white);border-color:var(--black)}
+.wiz-btn-primary:hover{background:#404040;border-color:#404040}
+.wiz-btn-secondary{background:var(--white);border-color:var(--border);color:var(--black)}
+.wiz-btn-secondary:hover{background:var(--canvas)}
+@media(max-width:576px){.wiz-main{padding:24px 16px 64px}.wiz-card{padding:28px 20px}.wiz-actions{flex-direction:column;gap:8px}.wiz-btn{width:100%}}
+</style>
+</head>
+<body>
+<header class="wiz-header">
+  <div class="wiz-header-inner">
+    <a class="wiz-brand" href="/">
+      <img src="{% static 'logo.png' %}" alt="DIGI HR logo">
+      <span>DIGI HR</span>
+    </a>
+  </div>
+</header>
+
+<main class="wiz-main">
+  <div class="wiz-card">
+    <h1>Setup complete</h1>
+    <p>Your workspace is ready. Choose where to go next.</p>
+
+    <div class="wiz-summary">
+      <h3>What is set up</h3>
+      <p>Company details: <span style="color:var(--black)">Complete</span></p>
+      <p>Branding: <span style="color:var(--black)">Complete</span></p>
+      <p>Dashboard: <span style="color:var(--black)">Complete</span></p>
+      {% if not require_mailbox %}
+      <p>Company email: <span class="pending">Optional — skipped</span></p>
+      {% else %}
+      <p>Company email: <span style="color:var(--black)">Complete</span></p>
+      {% endif %}
+    </div>
+
+    <div class="wiz-actions">
+      <a href="{% url 'dashboard' %}" class="wiz-btn wiz-btn-secondary">Go to dashboard</a>
+      <a href="#" class="wiz-btn wiz-btn-primary">Start the tour</a>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>

@@ -158,6 +158,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'attendance.middleware.SuspendedOrganizationMiddleware',
+    'attendance.middleware.SetupWizardMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'

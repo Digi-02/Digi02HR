@@ -97,6 +97,9 @@ class Organization(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
     address = models.TextField(blank=True)
+    industry = models.CharField(max_length=100, blank=True)
+    company_size = models.CharField(max_length=30, blank=True)
+    country = models.CharField(max_length=100, blank=True)
     logo = models.ImageField(upload_to=organization_logo_path, blank=True, null=True)
     logo_is_light = models.BooleanField(
         default=False,

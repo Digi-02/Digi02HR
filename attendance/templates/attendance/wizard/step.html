@@ -1,0 +1,117 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page_title }} — {{ organization.name }}</title>
+<style>
+:root{--white:#FFFFFF;--canvas:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);background:var(--canvas);color:var(--body);font-size:16px;line-height:1.5}
+.wiz-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 24px}
+.wiz-header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.wiz-brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px;color:var(--black);text-decoration:none}
+.wiz-brand img{height:32px;width:auto;filter:invert(1)}
+.wiz-org{color:var(--muted);font-size:14px}
+.wiz-main{max-width:720px;margin:0 auto;padding:32px 20px 64px}
+.wiz-steps{display:flex;gap:8px;margin-bottom:24px;overflow-x:auto;padding-bottom:8px}
+.wiz-step{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:70px}
+.wiz-step-num{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);color:var(--muted);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wiz-step.completed .wiz-step-num{background:var(--black);color:var(--white);border-color:var(--black)}
+.wiz-step.active .wiz-step-num{border-color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %}}
+.wiz-step-label{font-size:11px;font-weight:600;color:var(--muted);text-align:center;width:60px}
+.wiz-step.completed .wiz-step-label{color:var(--black)}
+.wiz-step.active .wiz-step-label{color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %}}
+.wiz-progress{height:4px;background:var(--border);border-radius:2px;margin-bottom:24px;overflow:hidden}
+.wiz-progress-bar{height:100%;background:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};width:{{ progress_pct }}%;border-radius:2px;transition:width .3s ease}
+.wiz-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:32px}
+.wiz-card h2{margin:0 0 8px;font-size:26px;font-weight:800;color:var(--black);letter-spacing:-0.02em}
+.wiz-card p{margin:0 0 24px;color:var(--body);font-size:15px}
+.wiz-field{margin-bottom:20px}
+.wiz-field label{display:block;font-weight:600;font-size:14px;color:var(--black);margin-bottom:6px}
+.wiz-field input[type=text],.wiz-field input[type=email],.wiz-field input[type=time],.wiz-field input[type=file],.wiz-field select,.wiz-field textarea{width:100%;padding:10px 14px;min-height:46px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:15px;color:var(--black);background:var(--white)}
+.wiz-field input[type=file]{padding:8px 14px;min-height:auto;background:transparent}
+.wiz-field input:focus,.wiz-field select:focus,.wiz-field textarea:focus{outline:none;border-color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};box-shadow:0 0 0 3px rgba(10,10,10,0.12)}
+.wiz-field.err input,.wiz-field.err select{border-color:#DC2626}
+.wiz-err{margin-top:6px;font-size:13px;color:#DC2626;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:8px 12px}
+.wiz-actions{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:32px;padding-top:24px;border-top:1px solid var(--border)}
+.wiz-btn{min-height:46px;padding:0 20px;border-radius:8px;font-weight:600;font-size:15px;border:1px solid transparent;cursor:pointer;font:inherit}
+.wiz-btn-secondary{background:var(--white);border-color:var(--border);color:var(--black)}
+.wiz-btn-secondary:hover{background:var(--canvas)}
+.wiz-btn-primary{background:var(--black);color:var(--white);border-color:var(--black)}
+.wiz-btn-primary:hover:not(:disabled){background:#404040;border-color:#404040}
+.wiz-btn-outline{border-color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};color:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};background:transparent}
+.wiz-btn-outline:hover:not(:disabled){background:{% if brand_accent %}{{ brand_accent.accent }}{% else %}var(--black){% endif %};color:var(--white)}
+.wiz-btn:disabled{opacity:.55;cursor:not-allowed}
+.wiz-skip{background:transparent;border:none;color:var(--muted);font-size:14px;font-weight:600;padding:0;text-decoration:underline}
+.wiz-skip:hover{color:var(--black)}
+.wiz-save{background:transparent;border:none;color:var(--muted);font-size:14px;font-weight:600;padding:0}
+.wiz-save:hover{color:var(--black)}
+.wiz-loading{opacity:.65;pointer-events:none}
+.wiz-loading .wiz-btn-primary{opacity:.85}
+@media(max-width:576px){.wiz-main{padding:20px 16px 48px}.wiz-card{padding:24px}.wiz-actions{flex-direction:column;gap:8px}.wiz-btn{width:100%}}
+</style>
+</head>
+<body>
+<header class="wiz-header">
+  <div class="wiz-header-inner">
+    <a class="wiz-brand" href="/">
+      <img src="{% static 'logo.png' %}" alt="DIGI HR logo">
+      <span>DIGI HR</span>
+    </a>
+    <span class="wiz-org">{{ organization.name }}</span>
+  </div>
+</header>
+
+<main class="wiz-main">
+  <div class="wiz-progress">
+    <div class="wiz-progress-bar"></div>
+  </div>
+
+  <div class="wiz-steps">
+    {% for s in wizard_steps %}
+    <div class="wiz-step{% if s.number == step_number %} active{% endif %}{% if s.number in completed_steps %} completed{% endif %}">
+      <div class="wiz-step-num">{{ s.number }}</div>
+      <div class="wiz-step-label">{{ s.title }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="wiz-card">
+    <h2>{{ step.title }}</h2>
+    {% if step.optional %}<p style="font-size:13px;color:var(--muted)">Optional step — you can skip this and come back later.</p>{% endif %}
+
+    {% if form.errors %}
+    <div class="wiz-err" role="alert">Please correct the errors below and continue.</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="wiz-form">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+      <div class="wiz-err" role="alert">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+      <div class="wiz-field{% if field.errors %} err{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+        <div class="wiz-err">{{ field.errors|striptags }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <div class="wiz-actions">
+        {% if step_number > 1 %}
+        <button type="submit" name="action" value="back" class="wiz-btn wiz-btn-secondary">Back</button>
+        {% endif %}
+        <button type="submit" name="action" value="save_later" class="wiz-btn wiz-save">Save and continue later</button>
+        {% if step.optional %}
+        <button type="submit" name="action" value="skip" class="wiz-btn wiz-skip">Skip</button>
+        {% endif %}
+        <button type="submit" name="action" value="next" class="wiz-btn wiz-btn-primary">{% if step.optional %}Next{% else %}Continue{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</main>
+
+</body>
+</html>

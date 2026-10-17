@@ -6,6 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
 from attendance import views
+from attendance import wizard as wizard_views
 from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
 
 from django.contrib.auth import views as auth_views
@@ -119,6 +120,10 @@ urlpatterns = [
     path('', views.kiosk_view, name='kiosk'),
     path('o/<slug:org_slug>/kiosk/', views.kiosk_view, name='organization_kiosk'),
     
+    # Setup wizard (owner / hr_admin only, first-time company setup)
+    path('setup/wizard/', wizard_views.setup_wizard, name='setup_wizard'),
+    path('setup/complete/', wizard_views.setup_complete, name='setup_complete'),
+
     # Dashboard
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('dashboard/category/<str:code>/', views.category_dashboard, name='category_dashboard'),
