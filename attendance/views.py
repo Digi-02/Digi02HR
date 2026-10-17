@@ -90,6 +90,7 @@ from .organization import (
     user_has_manager_access,
     user_has_payroll_access,
 )
+from .platform import platform_admin_required
 
 
 # ==================== AUTHENTICATION VIEWS ====================
@@ -597,8 +598,7 @@ def organization_list(request):
     return render(request, 'attendance/organization_list.html', context)
 
 
-@login_required
-@hr_required
+@platform_admin_required
 def organization_create(request):
     if request.method == 'POST':
         form = OrganizationForm(request.POST)
