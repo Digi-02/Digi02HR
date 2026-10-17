@@ -9,10 +9,15 @@ from attendance import views
 from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
 
 from django.contrib.auth import views as auth_views
+from django.contrib.auth import get_user_model
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
 from django.views.decorators.cache import never_cache
 from django.core.cache import cache
 from django.http import HttpResponseRedirect
 import time
+
+User = get_user_model()
 
 _ratelimit_store = {}
 
@@ -32,12 +37,41 @@ def _reset_ratelimited(request):
 
 
 class RateLimitedPasswordResetView(auth_views.PasswordResetView):
+    html_email_template_name = 'registration/email/password_reset.html'
+
     def dispatch(self, request, *args, **kwargs):
         if _reset_ratelimited(request):
             from django.contrib import messages as dj_messages
             dj_messages.error(request, 'Too many reset attempts. Try again later.')
             return HttpResponseRedirect(request.path)
         return super().dispatch(request, *args, **kwargs)
+
+    def send_mail(self, subject_template_name, email_template_name, context,
+                  from_email, to_email, html_email_template_name=None):
+        # Add organization name from the user's first active membership.
+        org_name = ''
+        try:
+            user = User.objects.filter(email=to_email).first()
+            if user:
+                membership = user.organization_memberships.filter(
+                    is_active=True).select_related('organization').first()
+                if membership:
+                    org_name = membership.organization.name
+        except Exception:
+            pass
+        context['organization_name'] = org_name or 'DIGI HR'
+
+        html_content = render_to_string(self.html_email_template_name, context)
+        text_content = render_to_string(email_template_name, context)
+        subject = render_to_string(subject_template_name, context).strip()
+        email = EmailMessage(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=[to_email],
+        )
+        email.attach_alternative(html_content, 'text/html')
+        email.send(fail_silently=False)
 
 from attendance import platform as platform_views
 
@@ -55,14 +89,16 @@ urlpatterns = [
     path('welcome/contact/', views.contact_request_view, name='welcome_contact'),
     path('password-reset/', RateLimitedPasswordResetView.as_view(
         template_name='registration/password_reset_form.html',
-        email_template_name='registration/password_reset_email.html',
+        email_template_name='registration/email/password_reset.txt',
         subject_template_name='registration/password_reset_subject.txt',
+        html_email_template_name='registration/email/password_reset.html',
         success_url='/password-reset/done/'), name='password_reset'),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(
         template_name='registration/password_reset_done.html'), name='password_reset_done'),
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
         template_name='registration/password_reset_confirm.html',
         success_url='/reset/complete/'), name='password_reset_confirm'),
+    path('set-password/<uidb64>/<token>/', platform_views.set_owner_password, name='set_owner_password'),
     path('reset/complete/', auth_views.PasswordResetCompleteView.as_view(
         template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
     path('password-change/', auth_views.PasswordChangeView.as_view(

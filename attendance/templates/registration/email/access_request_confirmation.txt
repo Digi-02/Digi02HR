@@ -1,0 +1,7 @@
+We received your request — DIGI HR
+
+Hi {{ contact_name }}, thanks for requesting access for {{ company_name|default:"your company" }}.
+
+Our team will review your request and be in touch shortly. Once approved, you will receive an invite to set up your workspace.
+
+Powered by DIGI

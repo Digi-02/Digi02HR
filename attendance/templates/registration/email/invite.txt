@@ -1,0 +1,11 @@
+Set your password — {{ organization_name }}
+
+Your {{ organization_name }} workspace on DIGI HR is ready. Create your password to get started.
+
+Open this secure link:
+{{ invite_link }}
+
+This link is personal to you and expires after 72 hours. It can be used once.
+If you did not request this, you can ignore this email.
+
+Powered by DIGI

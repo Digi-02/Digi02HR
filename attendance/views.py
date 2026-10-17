@@ -90,7 +90,7 @@ from .organization import (
     user_has_manager_access,
     user_has_payroll_access,
 )
-from .platform import platform_admin_required
+from .platform import platform_admin_required, _send_templated_mail
 
 
 # ==================== AUTHENTICATION VIEWS ====================
@@ -4767,15 +4767,40 @@ def contact_request_view(request):
         phone = (request.POST.get('phone') or '').strip()[:30]
         team_size = (request.POST.get('team_size') or '').strip()[:30]
         if name and email and message:
-            AccessRequest.objects.create(
+            access_request = AccessRequest.objects.create(
                 company_name=company, contact_name=name, email=email,
                 phone=phone, team_size=team_size, message=message)
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')
+            platform_url = request.build_absolute_uri(reverse('platform_access_requests'))
             try:
-                send_mail(
+                # Notify platform admin
+                _send_templated_mail(
                     subject=f'DIGI HR access request from {name}',
-                    message=f'From: {name} <{email}>\n\n{message}',
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local'),
-                    recipient_list=[getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')],
+                    html_template='registration/email/access_request_admin.html',
+                    text_template='registration/email/access_request_admin.txt',
+                    context={
+                        'contact_name': name,
+                        'email': email,
+                        'company_name': company,
+                        'team_size': team_size,
+                        'phone': phone,
+                        'message': message,
+                        'platform_url': platform_url,
+                    },
+                    recipient_list=[from_email],
+                    from_email=from_email,
+                )
+                # Confirmation to requester
+                _send_templated_mail(
+                    subject='We received your access request — DIGI HR',
+                    html_template='registration/email/access_request_confirmation.html',
+                    text_template='registration/email/access_request_confirmation.txt',
+                    context={
+                        'contact_name': name,
+                        'company_name': company,
+                    },
+                    recipient_list=[email],
+                    from_email=from_email,
                 )
             except Exception:
                 pass

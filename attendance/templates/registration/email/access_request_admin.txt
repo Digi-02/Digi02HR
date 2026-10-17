@@ -1,0 +1,16 @@
+New access request — DIGI HR Platform
+
+A prospective company has requested access to DIGI HR. Review and approve in the platform admin.
+
+Contact: {{ contact_name }}
+Email: {{ email }}
+Company: {{ company_name|default:"-" }}
+Team size: {{ team_size|default:"-" }}
+Phone: {{ phone|default:"-" }}
+
+Message:
+{{ message }}
+
+Review access requests: {{ platform_url }}
+
+Powered by DIGI

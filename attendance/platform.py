@@ -1,20 +1,23 @@
 # attendance/platform.py — separate product-owner admin area (NOT a company workspace).
 from functools import wraps
 
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
 from .models import (
@@ -204,23 +207,80 @@ def company_create(request):
     return render(request, 'platform/company_form.html', context)
 
 
+def _send_templated_mail(subject, html_template, text_template, context, recipient_list, from_email=None):
+    html_content = render_to_string(html_template, context)
+    text_content = render_to_string(text_template, context)
+    email = EmailMessage(
+        subject=subject,
+        body=text_content,
+        from_email=from_email,
+        to=recipient_list,
+    )
+    email.attach_alternative(html_content, 'text/html')
+    email.send(fail_silently=False)
+
+
 def send_owner_invite(request, user, org):
+    # New owner accounts start with an unusable password; the invite link is
+    # the only way to set one. Django's default token generator is bound to the
+    # password hash, so after the password is set the token becomes invalid
+    # (single-use).
+    user.set_unusable_password()
+    user.save(update_fields=['password'])
+
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     link = request.build_absolute_uri(
-        reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token}))
-    send_mail(
+        reverse('set_owner_password', kwargs={'uidb64': uid, 'token': token}))
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+    _send_templated_mail(
         subject=f'Your {org.name} workspace is ready — set your password',
-        message=(
-            f'Hello,\n\nYour {org.name} workspace on DIGI HR is ready.\n\n'
-            f'Set your password here:\n{link}\n\n'
-            f'This link expires after use.\n\nPowered by DIGI'
-        ),
-        from_email=None,
+        html_template='registration/email/invite.html',
+        text_template='registration/email/invite.txt',
+        context={
+            'organization_name': org.name,
+            'invite_link': link,
+        },
         recipient_list=[user.email],
+        from_email=from_email,
     )
     platform_audit(None if request is None else request, 'owner.invite_sent', org,
                    f'Invite sent to {user.email}.')
+
+
+def set_owner_password(request, uidb64, token):
+    """Custom 'set your password' page for owner invites, matching the login design."""
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    validlink = user is not None and default_token_generator.check_token(user, token)
+
+    if request.method == 'POST' and validlink:
+        form = SetPasswordForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            login(request, user)
+            platform_audit(request, 'owner.password_set', None, f'Owner {user.email} set password.')
+            messages.success(request, 'Your password is set. Welcome to your workspace.')
+            return redirect('dashboard')
+    else:
+        form = SetPasswordForm(user) if validlink else None
+
+    organization_name = ''
+    if user:
+        membership = user.organization_memberships.filter(is_active=True).select_related('organization').first()
+        if membership:
+            organization_name = membership.organization.name
+
+    context = {
+        'form': form,
+        'validlink': validlink,
+        'organization_name': organization_name,
+    }
+    return render(request, 'registration/set_password.html', context)
 
 
 @platform_admin_required
