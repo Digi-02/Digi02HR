@@ -145,6 +145,22 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .tst-dot::before{content:"";display:block;width:.75rem;height:.75rem;border-radius:50%;border:1.5px solid var(--coral);background:transparent;transition:background .2s ease}
 .tst-dot.is-active::before{background:var(--coral)}
 .tst-dot:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+/* ---------- how it works ---------- */
+.how{background:#fff;padding-block:6rem}
+.how-head{text-align:center;margin-bottom:3.5rem}
+.how-head h2{font-size:2.5rem;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:#111}
+.how-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2rem;list-style:none;align-items:stretch}
+.how-card{display:flex;flex-direction:column;height:100%;min-width:0;padding:2.5rem;background:#F6F6F6;border:0;border-radius:10px;box-shadow:none;transition:transform .2s ease,box-shadow .2s ease}
+.how-num{display:block;text-align:center;font-size:3.5rem;line-height:1;font-weight:800;letter-spacing:-.02em;color:#E3E3EA;margin-bottom:1.5rem}
+.how-card h3{font-size:1.4375rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;color:#111;margin:0}
+.how-accent{display:flex;align-items:center;gap:8px;margin:1.25rem 0}
+.how-accent span{display:block;height:5px;border-radius:999px;background:#FF3D57}
+.how-accent .how-accent-long{width:90px}
+.how-accent .how-accent-short{width:26px}
+.how-card p{font-size:1.0625rem;line-height:1.7;font-weight:400;color:#1A1A1A;margin:0}
+@media(hover:hover){
+  .how-card:hover{transform:translateY(-3px);box-shadow:0 14px 28px rgba(17,17,17,.07)}
+}
 /* ---------- contact ---------- */
 .contact{background:#fff;border-top:1px solid var(--line);padding-block:var(--sec-pad)}
 .contact h2{font-size:clamp(1.75rem,3vw,2.75rem);color:var(--ink);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
@@ -154,13 +170,21 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .contact button{justify-self:start;min-height:56px}
 .msg{font-size:1rem;margin-bottom:0.75rem;color:var(--accent)}
 /* ---------- footer ---------- */
-footer{border-top:1px solid var(--line);padding:2rem 0}
-.foot{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.foot img{height:2rem;width:auto}
-.foot nav{display:flex;gap:1.5rem;flex-wrap:wrap}
-.foot nav a{color:var(--body);text-decoration:none;font-size:1rem;font-weight:500}
-.foot nav a:hover{color:var(--accent)}
-.foot span{color:var(--muted);font-size:0.875rem}
+.footer{background:#FBD5DB;padding-block:4rem 3.5rem}
+.footer-grid{display:grid;grid-template-columns:1fr auto 1fr;align-items:start;column-gap:2rem}
+.footer-meta{font-size:1.0625rem;line-height:1.7;font-weight:500;color:#1F1F1F}
+.footer-meta span{display:block}
+.footer-meta .footer-rights{margin-top:.45rem}
+.footer-contact{justify-self:center;padding-top:1.75rem;font-size:1.0625rem;line-height:1.7;font-weight:500;color:#1F1F1F}
+.footer-contact a{display:block;width:max-content;color:inherit;text-decoration:none;transition:color .15s ease}
+.footer-contact a:hover{color:var(--coral-dark)}
+.footer-social{justify-self:end;display:flex;flex-direction:column;gap:1.35rem;padding-top:.35rem;font-size:1.0625rem;font-weight:500;color:#1F1F1F}
+.footer-social a{display:inline-flex;align-items:center;gap:.65rem;color:inherit;text-decoration:none;transition:color .15s ease}
+.footer-social a:hover{color:var(--coral-dark)}
+.footer-social svg{display:block;flex:0 0 auto;width:1.35rem;height:1.35rem}
+.footer-brand{display:flex;justify-content:center;margin-top:3rem}
+.footer-brand img{display:block;height:2.75rem;width:auto}
+.footer a:focus-visible{outline:2px solid var(--coral-dark);outline-offset:3px;border-radius:2px}
 /* ---------- responsive ---------- */
 @media(min-width:768px) and (max-width:1023px){
   .testimonials{--tst-card:70vw;--tst-gap:1.25rem;--tst-logo-h:2.75rem;padding-block:5rem}
@@ -168,6 +192,15 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   .tst-head h2{font-size:2.5rem}
   .tst-quote{font-size:.9375rem}
   .tst-quote-icon{width:2.25rem}
+  .how{padding-block:5rem}
+  .how-head{margin-bottom:2.5rem}
+  .how-head h2{font-size:2.25rem}
+  .how-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:2rem}
+  .how-card{padding:1.75rem}
+  .how-card:nth-child(3){grid-column:1/-1}
+  .how-num{font-size:3rem;margin-bottom:1.25rem}
+  .how-card h3{font-size:1.375rem}
+  .how-card p{font-size:1rem}
 }
 @media(max-width:768px){
   :root{--nav-h:64px}
@@ -197,6 +230,12 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   .d2{width:9rem;height:9rem;left:-2rem;bottom:-2.5rem}
   .about-inner{grid-template-columns:1fr;gap:2rem}
   .svc-grid{grid-template-columns:1fr 1fr}
+  .footer{padding-block:2.75rem 2.5rem}
+  .footer-grid{grid-template-columns:1fr;row-gap:1.75rem;justify-items:start}
+  .footer-contact{justify-self:start;padding-top:0}
+  .footer-social{justify-self:start;padding-top:0;flex-direction:row;gap:1.75rem}
+  .footer-brand{margin-top:2.25rem}
+  .footer-brand img{height:2.125rem}
 }
 @media(max-width:767.98px){
   .testimonials{--tst-card:86vw;--tst-gap:.875rem;--tst-logo-h:2.5rem;padding-block:4rem}
@@ -208,6 +247,15 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   .tst-quote-icon{width:2rem}
   .tst-role{font-size:.75rem}
   .tst-dots-wrap{margin-top:1.5rem}
+  .how{padding-block:4rem}
+  .how-head{margin-bottom:2rem}
+  .how-head h2{font-size:2rem}
+  .how-grid{grid-template-columns:1fr;gap:1rem}
+  .how-card{grid-column:auto;padding:1.75rem}
+  .how-num{font-size:2.75rem;margin-bottom:1.25rem}
+  .how-card h3{font-size:1.25rem}
+  .how-card p{font-size:1rem}
+  .how-accent{margin:1rem 0}
 }
 @media(max-width:560px){.svc-grid{grid-template-columns:1fr}}
 </style>
@@ -322,6 +370,26 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   </div>
 </section>
 {% endif %}
+{% get_how_it_works as how %}
+{% if how.steps %}
+<section class="how" id="how-it-works" aria-labelledby="how-title">
+  <div class="wrap how-head">
+    <h2 id="how-title">{{ how.title }}</h2>
+  </div>
+  <div class="wrap">
+    <ol class="how-grid">
+      {% for step in how.steps %}
+      <li class="how-card">
+        <span class="how-num" aria-hidden="true">{{ step.number }}</span>
+        <h3>{{ step.title }}</h3>
+        <span class="how-accent" aria-hidden="true"><span class="how-accent-long"></span><span class="how-accent-short"></span></span>
+        <p>{{ step.body }}</p>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+{% endif %}
 <section class="contact" id="contact" aria-labelledby="contact-h">
   <div class="wrap">
   <h2 id="contact-h">Request access</h2>
@@ -341,11 +409,34 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   </div>
 </section>
 </main>
-<footer><div class="wrap foot">
-  <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
-  <span>&copy; 2026 DIGI HR</span>
-  <nav aria-label="Footer"><a href="#about">About</a><a href="#services">What we do</a><a href="/login/">Login</a></nav>
-</div></footer>
+<footer class="footer" aria-label="Site footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-meta">
+        <span>&copy; {% now "Y" %}</span>
+        <span>DIGI HR</span>
+        <span class="footer-rights">All Rights Reserved.</span>
+      </div>
+      <div class="footer-contact">
+        <a href="mailto:info@digi02.org">info@digi02.org</a>
+        <a href="tel:+2347082779317">+234 (0) 7082779317</a>
+      </div>
+      <div class="footer-social">
+        <a href="https://www.instagram.com/digihr" target="_blank" rel="noopener" aria-label="DIGI HR on Instagram">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>
+          <span>DigiHR</span>
+        </a>
+        <a href="https://www.linkedin.com/company/digihr/" target="_blank" rel="noopener" aria-label="DIGI HR on LinkedIn">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12Zm1.78 13.02H3.56V9h3.56v11.45Z"/></svg>
+          <span>DigiHR</span>
+        </a>
+      </div>
+    </div>
+    <div class="footer-brand">
+      <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'brand/digi-hr-logo.png' %}" alt="DIGI HR" width="733" height="161" loading="lazy" decoding="async"></a>
+    </div>
+  </div>
+</footer>
 <script>
 (function(){
   var btn=document.getElementById('menubtn'),nav=document.getElementById('topnav');

@@ -1,5 +1,5 @@
 {
-  "_comment": "Welcome-page testimonials. Edit this block only. Set approved to true to publish an entry. In DEBUG, unapproved entries still render with a review label; in production they are hidden, and if none are approved the whole Testimonials section is omitted. The current quotes are authored from DIGI HR's feature set (records, attendance, leave, payroll, onboarding, reports) and use the names/roles from the supplied design reference; replace them with signed-off client wording before launch. logo_variant 'digi02' trims the transparent padding in DIGI02 logo 1.png for display; leave it empty for logos that already fill their canvas.",
+  "_comment": "Welcome-page content: testimonials and How it works. Edit this block only. For testimonials, set approved to true to publish an entry. In DEBUG, unapproved entries still render with a review label; in production they are hidden, and if none are approved the whole Testimonials section is omitted. The current quotes are authored from DIGI HR's feature set (records, attendance, leave, payroll, onboarding, reports) and use the names/roles from the supplied design reference; replace them with signed-off client wording before launch. logo_variant 'digi02' trims the transparent padding in DIGI02 logo 1.png for display; leave it empty for logos that already fill their canvas. The how_it_works block holds the section title and the three editable steps.",
   "testimonials": [
     {
       "company": "Digi02",
@@ -23,5 +23,25 @@
       "role": "CEO",
       "approved": true
     }
-  ]
+  ],
+  "how_it_works": {
+    "title": "How it works",
+    "steps": [
+      {
+        "number": "01",
+        "title": "Request access",
+        "body": "Fill in a short form with your company name, team size and contact details. We review every request and get back to you by email once your workspace is ready."
+      },
+      {
+        "number": "02",
+        "title": "Set up your workspace",
+        "body": "Log in and add your company logo, choose your brand colour, and set your working hours and late rule. Your workspace looks and works the way your organisation does."
+      },
+      {
+        "number": "03",
+        "title": "Invite your team",
+        "body": "Add your staff by email. Each person gets an invite to create their password, then they can check in, request leave and view their records from any device."
+      }
+    ]
+  }
 }
