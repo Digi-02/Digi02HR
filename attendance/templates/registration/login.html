@@ -2,79 +2,315 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Log in — DIGI HR</title>
 <meta name="description" content="Log in to DIGI HR to manage employees, attendance, onboarding and payroll preparation.">
+<meta name="theme-color" content="#FFEFF1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--white:#FFFFFF;--off:#F5F5F5;--black:#0A0A0A;--body:#404040;--muted:#737373;--border:#E5E5E5;--font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+:root{
+  --page-bg:#FFEFF1;
+  --panel-bg:#FFD9DE;
+  --ink:#1A1A1A;
+  --coral:#FF3D57;
+  --button:#FFA6B5;
+  --button-hover:#FF93A7;
+  --button-active:#FF7F96;
+  --field-border:#F5C2CA;
+  --muted:#626262;
+  --error:#B3261E;
+  --error-bg:#FFF5F6;
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:var(--font);color:var(--body);font-size:18px;line-height:1.6;min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
-.side{background:var(--black);color:var(--white);padding:64px;display:flex;flex-direction:column;gap:28px;justify-content:center}
-.side img{height:38px;width:auto;filter:invert(1);align-self:flex-start}
-.side h1{color:var(--white);font-size:clamp(30px,3.4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.2;margin:0;max-width:440px}
-.side p{color:var(--white);opacity:.78;margin:0;max-width:420px}
-.main{background:var(--white);display:flex;align-items:center;justify-content:center;padding:64px 32px}
-.card{width:100%;max-width:420px}
-.card .logo{display:inline-block;margin-bottom:8px}
-.card .logo img{display:block;height:36px;width:auto}
-.card h2{color:var(--black);font-size:34px;font-weight:800;letter-spacing:-.02em;margin:16px 0 4px}
-.card .sub{color:var(--muted);margin:0 0 32px}
-.field{margin-bottom:20px}
-label{display:block;font-weight:650;font-size:15px;color:var(--black);margin-bottom:8px}
-input[type=text],input[type=password]{width:100%;padding:13px 16px;min-height:52px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:17px;color:var(--black);background:var(--white)}
-input:hover{border-color:var(--muted)}
-.pw{position:relative}
-.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--white);border:1px solid var(--border);border-radius:8px;color:var(--black);font:inherit;font-size:14px;font-weight:700;min-width:48px;min-height:44px;cursor:pointer}
-.pw button:hover{background:var(--off)}
-a{color:var(--black)}
-a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--black);outline-offset:2px;border-radius:4px}
-.err{border:1px solid var(--black);background:var(--off);color:var(--black);border-radius:8px;padding:14px 16px;font-size:16px;margin-bottom:24px}
-.btn{width:100%;min-height:52px;border:0;border-radius:8px;background:var(--black);color:var(--white);font:inherit;font-weight:700;font-size:17px;cursor:pointer;transition:background .15s ease}
-.btn:hover:not(:disabled){background:#404040}
-.btn:disabled{opacity:.55;cursor:wait}
-.meta{display:flex;justify-content:flex-end;margin:4px 0 24px;font-size:15px}
-.reg{margin-top:24px;font-size:16px;text-align:center}
-.foot{margin-top:40px;text-align:center;color:var(--muted);font-size:14px}
-@media(max-width:860px){body{grid-template-columns:1fr}.side{display:none}.main{padding:48px 24px}}
+html{background:var(--page-bg)}
+body{
+  margin:0;
+  min-height:100vh;
+  min-height:100svh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  overflow-x:hidden;
+  background:var(--page-bg);
+  color:var(--ink);
+  font-family:'Poppins',Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.login-shell{width:100%;display:flex;justify-content:center}
+.login-card{
+  width:min(92vw,1100px);
+  height:min(88vh,700px);
+  height:min(88svh,700px);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  border-radius:16px;
+  overflow:hidden;
+  background:var(--panel-bg);
+  box-shadow:0 24px 60px rgba(255,110,140,.15);
+}
+.photo-panel{position:relative;min-width:0;overflow:hidden;background:#DCA0AF}
+.photo-panel img{
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center 62%;
+}
+.photo-panel::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(to top,rgba(0,0,0,.12) 0%,rgba(0,0,0,.03) 32%,rgba(0,0,0,0) 58%);
+  pointer-events:none;
+}
+.photo-copy{
+  position:absolute;
+  left:48px;
+  right:48px;
+  bottom:48px;
+  z-index:1;
+  color:#fff;
+  text-shadow:0 1px 10px rgba(0,0,0,.22);
+}
+.photo-copy h1{
+  max-width:440px;
+  margin:0;
+  font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  font-size:40px;
+  font-weight:500;
+  line-height:1.15;
+  letter-spacing:.005em;
+}
+.photo-rule{width:72px;height:3px;margin-top:14px;background:#fff}
+.form-panel{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:0 56px;
+  background:var(--panel-bg);
+}
+.form-inner{width:100%;max-width:440px;margin:0 auto}
+.brand{display:flex;justify-content:center;margin:0 0 16px}
+.brand img{display:block;height:36px;width:auto}
+.login-title{
+  margin:0 0 6px;
+  color:var(--ink);
+  font-size:30px;
+  font-weight:700;
+  line-height:1.2;
+  letter-spacing:-.015em;
+  text-align:center;
+}
+.login-subtitle{
+  margin:0;
+  color:var(--ink);
+  font-size:14px;
+  font-weight:400;
+  line-height:1.5;
+  text-align:center;
+}
+.login-form{margin-top:44px}
+.field{margin:0}
+.field + .field{margin-top:22px}
+label{
+  display:block;
+  margin-bottom:8px;
+  color:var(--ink);
+  font-size:15px;
+  font-weight:500;
+  line-height:1.4;
+  text-align:left;
+}
+input[type=text],
+input[type=password]{
+  display:block;
+  width:100%;
+  height:48px;
+  padding:0 16px;
+  border:1px solid var(--field-border);
+  border-radius:8px;
+  background:#fff;
+  color:var(--ink);
+  font:inherit;
+  font-size:16px;
+  line-height:normal;
+  outline:none;
+}
+input[type=text]:hover,
+input[type=password]:hover{border-color:#EFA9B5}
+input[type=text]:focus-visible,
+input[type=password]:focus-visible{outline:2px solid var(--coral);outline-offset:2px;border-color:transparent}
+.forgot{
+  display:block;
+  width:max-content;
+  margin:10px 0 0 auto;
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.3;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.login-alert{
+  margin:22px 0 0;
+  padding:10px 12px;
+  border-radius:8px;
+  background:var(--error-bg);
+  color:var(--error);
+  font-size:14px;
+  line-height:1.45;
+  text-align:left;
+}
+.login-btn{
+  display:block;
+  width:100%;
+  height:48px;
+  margin-top:32px;
+  padding:0 16px;
+  border:0;
+  border-radius:8px;
+  background:var(--button);
+  color:#222;
+  font-family:inherit;
+  font-size:16px;
+  font-weight:500;
+  line-height:1;
+  cursor:pointer;
+  transition:background-color .15s ease,opacity .15s ease;
+}
+.login-alert + .login-btn{margin-top:16px}
+.login-btn:hover:not(:disabled){background:var(--button-hover)}
+.login-btn:active:not(:disabled){background:var(--button-active)}
+.login-btn:disabled{opacity:.62;cursor:wait}
+.signup-line{
+  margin:18px 0 0;
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.5;
+  text-align:center;
+}
+.signup-line a{
+  color:inherit;
+  font-weight:700;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.powered{
+  margin:34px 0 0;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.5;
+  text-align:center;
+}
+a:focus-visible,
+button:focus-visible{
+  outline:2px solid var(--coral);
+  outline-offset:2px;
+}
+@media(hover:hover){
+  .forgot:hover,.signup-line a:hover{color:#A61D32}
+}
+@media(max-width:1023.98px){
+  body{padding:20px}
+  .login-card{width:94vw;height:auto;min-height:560px}
+  .photo-copy{left:36px;right:36px;bottom:36px}
+  .photo-copy h1{font-size:30px}
+  .photo-rule{width:58px}
+  .form-panel{padding:36px}
+  .brand img{height:34px}
+}
+@media(max-width:767.98px){
+  body{
+    padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  }
+  .login-card{
+    width:100%;
+    max-width:540px;
+    min-height:0;
+    height:auto;
+    grid-template-columns:1fr;
+    border-radius:16px;
+  }
+  .photo-panel{height:180px}
+  .photo-panel img{object-position:center 68%}
+  .photo-copy{left:24px;right:24px;bottom:20px}
+  .photo-copy h1{max-width:250px;font-size:22px;line-height:1.12}
+  .photo-rule{width:48px;height:2px;margin-top:10px}
+  .form-panel{padding:28px 24px 26px;justify-content:flex-start}
+  .brand{margin-bottom:14px}
+  .brand img{height:32px}
+  .login-title{font-size:26px}
+  .login-subtitle{font-size:13px}
+  .login-form{margin-top:30px}
+  .field + .field{margin-top:18px}
+  .forgot{margin-top:8px}
+  .login-btn{margin-top:26px}
+  .signup-line{margin-top:16px}
+  .powered{margin-top:26px;font-size:13px}
+}
+@media(max-width:767.98px) and (max-height:760px){
+  body{align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){
+  .login-btn{transition:none}
+}
 </style>
 </head>
 <body>
-<div class="side">
-  <img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80">
-  <h1>Your whole workforce in one calm place.</h1>
-  <p>Attendance that marks itself. Records in one place. Payroll without panic.</p>
-</div>
-<main class="main">
-  <div class="card">
-    <a class="logo" href="/welcome/" aria-label="Back to DIGI HR home"><img src="{% static 'logo.png' %}" alt="DIGI HR logo" width="200" height="80"></a>
-    <h2>Welcome back</h2>
-    <p class="sub">Log in to your workspace.</p>
-    {% if form.errors or messages %}
-    <div class="err" role="alert">Invalid username or password. Check both and try again.</div>
-    {% endif %}
-    <form method="post" id="loginform">
-      {% csrf_token %}
-      <div class="field">
-        <label for="id_username">Username</label>
-        <input type="text" id="id_username" name="username" required autofocus autocomplete="username" value="{{ request.POST.username|default:'' }}">
+<main class="login-shell">
+  <section class="login-card" aria-labelledby="login-title">
+    <div class="photo-panel">
+      <img src="{% static 'login-building.webp' %}" alt="Modern office building against a pink sky" width="1400" height="1946">
+      <div class="photo-copy">
+        <h1>Manage your team from one place.</h1>
+        <div class="photo-rule" aria-hidden="true"></div>
       </div>
-      <div class="field">
-        <label for="id_password">Password</label>
-        <div class="pw">
-          <input type="password" id="id_password" name="password" required autocomplete="current-password">
-          <button type="button" id="pwbtn" aria-pressed="false" aria-label="Show password">Show</button>
-        </div>
+    </div>
+    <div class="form-panel">
+      <div class="form-inner">
+        <div class="brand"><img src="{% static 'brand/digi-hr-logo.png' %}" alt="DIGI HR" width="733" height="161"></div>
+        <h2 class="login-title" id="login-title">Welcome back</h2>
+        <p class="login-subtitle">Login to your workspace</p>
+        <form method="post" id="loginform" class="login-form">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
+          <div class="field">
+            <label for="id_username">Username</label>
+            <input type="text" id="id_username" name="username" required autofocus autocomplete="username" value="{{ request.POST.username|default:'' }}">
+          </div>
+          <div class="field">
+            <label for="id_password">Password</label>
+            <input type="password" id="id_password" name="password" required autocomplete="current-password">
+          </div>
+          <a class="forgot" href="{% url 'password_reset' %}">Forgot password?</a>
+          {% if messages %}
+          <div class="login-alert" role="alert">
+            {% for message in messages %}{{ message }}{% endfor %}
+          </div>
+          {% endif %}
+          <button class="login-btn" type="submit" id="submitbtn">Log in</button>
+        </form>
+        <p class="signup-line">New here? <a href="{% url 'welcome' %}#contact">Request access</a></p>
+        <p class="powered">Powered by Digi02</p>
       </div>
-      <div class="meta"><a href="{% url 'password_reset' %}">Forgot password?</a></div>
-      <button class="btn" type="submit" id="submitbtn">Log in</button>
-    </form>
-    <p class="reg">New here? <a href="/welcome/#contact">Request access</a></p>
-    <p class="foot">Powered by DIGI</p>
-  </div>
+    </div>
+  </section>
 </main>
 <script>
-(function(){var p=document.getElementById('id_password'),b=document.getElementById('pwbtn'),f=document.getElementById('loginform'),s=document.getElementById('submitbtn');
-b.addEventListener('click',function(){var show=p.type==='password';p.type=show?'text':'password';b.textContent=show?'Hide':'Show';b.setAttribute('aria-pressed',show?'true':'false');b.setAttribute('aria-label',show?'Hide password':'Show password');p.focus();});
-f.addEventListener('submit',function(){s.disabled=true;s.textContent='Logging in…';});})();
+(function(){
+  var form=document.getElementById('loginform');
+  var button=document.getElementById('submitbtn');
+  if(!form||!button)return;
+  form.addEventListener('submit',function(){
+    button.disabled=true;
+    button.textContent='Logging in…';
+  });
+})();
 </script>
-</body></html>
+</body>
+</html>
