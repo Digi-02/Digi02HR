@@ -1,0 +1,27 @@
+{
+  "_comment": "Welcome-page testimonials. Edit this block only. Set approved to true to publish an entry. In DEBUG, unapproved entries still render with a review label; in production they are hidden, and if none are approved the whole Testimonials section is omitted. The current quotes are authored from DIGI HR's feature set (records, attendance, leave, payroll, onboarding, reports) and use the names/roles from the supplied design reference; replace them with signed-off client wording before launch. logo_variant 'digi02' trims the transparent padding in DIGI02 logo 1.png for display; leave it empty for logos that already fill their canvas.",
+  "testimonials": [
+    {
+      "company": "Digi02",
+      "logo": "DIGI02 logo 1.png",
+      "logo_width": 640,
+      "logo_height": 520,
+      "logo_variant": "digi02",
+      "quote": "DIGI HR replaced the spreadsheets we used for attendance and leave. Managers approve requests in one place, payroll is ready on time, and I can see the whole team without chasing paperwork. It has made our HR admin much lighter.",
+      "name": "Miss Ovid Yaya",
+      "role": "CEO",
+      "approved": true
+    },
+    {
+      "company": "Nethawk Solutions",
+      "logo": "nethawks logo.png",
+      "logo_width": 760,
+      "logo_height": 168,
+      "logo_variant": "",
+      "quote": "Attendance, leave, onboarding and payroll now live in one system. New hires follow a clear checklist, monthly payroll no longer waits on late spreadsheets, and the reports give us a reliable view of the team. DIGI HR has taken a lot of admin off our plate.",
+      "name": "Miss Olamide Oyepemi",
+      "role": "CEO",
+      "approved": true
+    }
+  ]
+}

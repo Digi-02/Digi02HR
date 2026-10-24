@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static testimonials_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -115,6 +115,36 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .svc-num{font-size:1.375rem;font-weight:800;color:#E3E5E9;letter-spacing:.02em}
 .svc h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:0.75rem}
 .svc p{font-size:1rem;line-height:1.65;color:var(--body);font-weight:500;margin:0}
+/* ---------- testimonials ---------- */
+.testimonials{--tst-card:min(760px,55vw);--tst-gap:clamp(1rem,1.5vw,1.5rem);--tst-logo-h:clamp(2.5rem,3.6vw,3.25rem);background:#FFF1F3;padding-block:clamp(4rem,6.7vw,6rem);overflow:hidden}
+.tst-head{text-align:center;margin-bottom:clamp(2rem,3.5vw,3rem)}
+.tst-eyebrow{font-size:0.8125rem;font-weight:700;letter-spacing:.03em;color:var(--coral);margin-bottom:.625rem}
+.tst-head h2{font-size:clamp(2.25rem,3.2vw,3rem);line-height:1.1;font-weight:800;color:#111;letter-spacing:-.02em}
+.tst-slider{position:relative;width:100%;overflow:hidden;padding-block:24px 56px;margin-block:-24px -32px;outline:none;touch-action:pan-y;cursor:grab;user-select:none}
+.tst-slider:active{cursor:grabbing}
+.tst-slider:focus-visible{outline:2px solid var(--coral);outline-offset:-3px;border-radius:8px}
+.tst-track{display:flex;align-items:stretch;gap:var(--tst-gap);width:max-content;will-change:transform;opacity:0;transition:opacity .25s ease}
+.tst-track.is-ready{opacity:1}
+.tst-card{flex:0 0 var(--tst-card);display:flex;flex-direction:column;min-height:clamp(15rem,21vw,19rem);padding:clamp(1.5rem,2.7vw,2.5rem);background:#fff;border-radius:8px;box-shadow:0 18px 40px rgba(17,17,17,.06);opacity:.6;transition:opacity .3s ease;text-align:left}
+.tst-card.is-active{opacity:1}
+.tst-placeholder{align-self:flex-start;margin:-.35rem 0 1rem;padding:.25rem .55rem;border-radius:999px;background:#FFE3E7;color:#9F1D31;font-size:.6875rem;font-weight:700;letter-spacing:.05em;line-height:1.4;text-transform:uppercase}
+.tst-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:clamp(1rem,2vw,1.5rem)}
+.tst-logo-box{display:flex;align-items:center;height:var(--tst-logo-h);flex:0 1 auto;min-width:0;max-width:14rem}
+.tst-logo{display:block;height:var(--tst-logo-h);width:auto;max-width:100%;object-fit:contain;object-position:left center}
+.tst-logo-box--digi02{position:relative;overflow:hidden;width:calc(var(--tst-logo-h) * 2.795);max-width:none}
+.tst-logo-box--digi02 .tst-logo{position:absolute;left:calc(var(--tst-logo-h) * -0.077);top:calc(var(--tst-logo-h) * -0.817);width:calc(var(--tst-logo-h) * 2.923);height:calc(var(--tst-logo-h) * 2.375);max-width:none;max-height:none}
+.tst-quote-icon{display:block;flex:0 0 auto;width:clamp(2rem,2.8vw,2.75rem);height:auto;color:var(--coral)}
+.tst-quote{font-size:clamp(.9375rem,1.1vw,1rem);line-height:1.75;font-weight:400;color:#4A4A4A;margin:0 0 clamp(1rem,2vw,1.5rem)}
+.tst-quote p{margin:0}
+.tst-person{margin-top:auto}
+.tst-name{display:block;font-style:normal;font-size:.875rem;font-weight:700;line-height:1.4;color:var(--coral)}
+.tst-role{display:block;margin-top:.25rem;font-size:.8125rem;line-height:1.4;color:var(--muted)}
+.tst-dots-wrap{margin-top:clamp(1.5rem,2.5vw,2rem)}
+.tst-dots{display:flex;align-items:center;justify-content:center}
+.tst-dot{display:grid;place-items:center;width:1.5rem;height:1.5rem;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}
+.tst-dot::before{content:"";display:block;width:.75rem;height:.75rem;border-radius:50%;border:1.5px solid var(--coral);background:transparent;transition:background .2s ease}
+.tst-dot.is-active::before{background:var(--coral)}
+.tst-dot:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
 /* ---------- contact ---------- */
 .contact{background:#fff;border-top:1px solid var(--line);padding-block:var(--sec-pad)}
 .contact h2{font-size:clamp(1.75rem,3vw,2.75rem);color:var(--ink);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
@@ -132,6 +162,13 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
 .foot nav a:hover{color:var(--accent)}
 .foot span{color:var(--muted);font-size:0.875rem}
 /* ---------- responsive ---------- */
+@media(min-width:768px) and (max-width:1023px){
+  .testimonials{--tst-card:70vw;--tst-gap:1.25rem;--tst-logo-h:2.75rem;padding-block:5rem}
+  .tst-card{min-height:16rem;padding:2rem}
+  .tst-head h2{font-size:2.5rem}
+  .tst-quote{font-size:.9375rem}
+  .tst-quote-icon{width:2.25rem}
+}
 @media(max-width:768px){
   :root{--nav-h:64px}
   .wrap{padding-left:max(var(--pad),env(safe-area-inset-left));padding-right:max(var(--pad),env(safe-area-inset-right))}
@@ -160,6 +197,17 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   .d2{width:9rem;height:9rem;left:-2rem;bottom:-2.5rem}
   .about-inner{grid-template-columns:1fr;gap:2rem}
   .svc-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:767.98px){
+  .testimonials{--tst-card:86vw;--tst-gap:.875rem;--tst-logo-h:2.5rem;padding-block:4rem}
+  .tst-card{min-height:15rem;padding:1.5rem}
+  .tst-head{margin-bottom:2rem}
+  .tst-eyebrow{font-size:.75rem}
+  .tst-head h2{font-size:2rem}
+  .tst-quote{font-size:.9375rem}
+  .tst-quote-icon{width:2rem}
+  .tst-role{font-size:.75rem}
+  .tst-dots-wrap{margin-top:1.5rem}
 }
 @media(max-width:560px){.svc-grid{grid-template-columns:1fr}}
 </style>
@@ -245,6 +293,35 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
     </div>
   </div>
 </section>
+{% get_testimonials as testimonials %}
+{% if testimonials %}
+<section class="testimonials" id="testimonials" aria-label="Customer testimonials">
+  <div class="wrap tst-head">
+    <p class="tst-eyebrow"><span aria-hidden="true">\</span> From our customers <span aria-hidden="true">\</span></p>
+    <h2 id="tst-h">Testimonials</h2>
+  </div>
+  <div class="tst-slider" role="region" aria-roledescription="carousel" aria-label="Customer testimonials" tabindex="0">
+    <div class="tst-track">
+      {% for t in testimonials %}
+      <article class="tst-card" role="group" aria-roledescription="slide" aria-label="{{ forloop.counter }} of {{ testimonials|length }}" data-real-index="{{ forloop.counter0 }}">
+        {% if t.placeholder %}<p class="tst-placeholder">Placeholder, not approved</p>{% endif %}
+        <div class="tst-top">
+          <span class="tst-logo-box{% if t.logo_variant %} tst-logo-box--{{ t.logo_variant }}{% endif %}"><img class="tst-logo" src="{% static t.logo %}" alt="{{ t.company }} logo" width="{{ t.logo_width }}" height="{{ t.logo_height }}" loading="lazy" decoding="async"></span>
+          <svg class="tst-quote-icon" viewBox="0 0 48 40" aria-hidden="true" focusable="false"><path fill="currentColor" d="M0 24.5C0 11 8.5 2 20 0v8c-6 1.5-10 5.5-10.5 11H16v16H0V24.5zm28 0C28 11 36.5 2 48 0v8c-6 1.5-10 5.5-10.5 11H44v16H28V24.5z"/></svg>
+        </div>
+        <blockquote class="tst-quote"><p>{{ t.quote }}</p></blockquote>
+        <div class="tst-person"><cite class="tst-name">{{ t.name }}</cite><span class="tst-role">{{ t.role }}</span></div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="wrap tst-dots-wrap">
+    <div class="tst-dots" role="group" aria-label="Choose testimonial">
+      {% for t in testimonials %}<button type="button" class="tst-dot{% if forloop.first %} is-active{% endif %}" data-index="{{ forloop.counter0 }}" aria-label="Go to testimonial {{ forloop.counter }} of {{ testimonials|length }}"{% if forloop.first %} aria-current="true"{% endif %}></button>{% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
 <section class="contact" id="contact" aria-labelledby="contact-h">
   <div class="wrap">
   <h2 id="contact-h">Request access</h2>
@@ -280,6 +357,187 @@ footer{border-top:1px solid var(--line);padding:2rem 0}
   });
   nav.addEventListener('click',function(e){if(e.target.closest('a')&&nav.classList.contains('open'))closeMenu();});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&nav.classList.contains('open'))closeMenu();});
+})();
+(function(){
+  var section=document.getElementById('testimonials');
+  if(!section)return;
+  var slider=section.querySelector('.tst-slider'),track=section.querySelector('.tst-track');
+  if(!slider||!track)return;
+  var realCards=Array.prototype.slice.call(track.querySelectorAll('.tst-card[data-real-index]'));
+  var total=realCards.length;
+  if(!total)return;
+  var dots=Array.prototype.slice.call(section.querySelectorAll('.tst-dot'));
+  var base=2,active=base,animating=false,animTimer=null;
+  var dragging=null,suppressClick=false;
+  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function makeClone(card){
+    var clone=card.cloneNode(true);
+    clone.classList.add('is-clone');
+    clone.setAttribute('aria-hidden','true');
+    clone.removeAttribute('role');
+    clone.removeAttribute('aria-roledescription');
+    clone.removeAttribute('aria-label');
+    if(clone.id)clone.removeAttribute('id');
+    var ids=clone.querySelectorAll('[id]');
+    for(var i=0;i<ids.length;i++)ids[i].removeAttribute('id');
+    return clone;
+  }
+
+  var leftSources=total>=2?[realCards[total-2],realCards[total-1]]:[realCards[0],realCards[0]];
+  var rightSources=total>=2?[realCards[0],realCards[1]]:[realCards[0],realCards[0]];
+  for(var l=leftSources.length-1;l>=0;l--)track.insertBefore(makeClone(leftSources[l]),track.firstChild);
+  for(var r=0;r<rightSources.length;r++)track.appendChild(makeClone(rightSources[r]));
+
+  var slides=Array.prototype.slice.call(track.children);
+
+  function metric(){
+    var w=realCards[0].getBoundingClientRect().width;
+    var style=window.getComputedStyle(track);
+    var gap=parseFloat(style.columnGap||style.gap)||0;
+    return {w:w,gap:gap};
+  }
+  function offsetFor(index){
+    var m=metric();
+    return (slider.clientWidth-m.w)/2-index*(m.w+m.gap);
+  }
+  function applyTransform(index,animate){
+    track.style.transition=animate&&!reduced?'transform .4s ease':'none';
+    track.style.transform='translate3d('+offsetFor(index)+'px,0,0)';
+  }
+  function markActive(index){
+    for(var i=0;i<slides.length;i++)slides[i].classList.toggle('is-active',i===index);
+  }
+  function realIndexFor(index){
+    return ((index-base)%total+total)%total;
+  }
+  function updateDots(index){
+    var ri=realIndexFor(index);
+    for(var i=0;i<dots.length;i++){
+      var on=i===ri;
+      dots[i].classList.toggle('is-active',on);
+      if(on)dots[i].setAttribute('aria-current','true');
+      else dots[i].removeAttribute('aria-current');
+    }
+  }
+  function settle(){
+    var target=active;
+    if(target>=base+total)target=base;
+    else if(target<=1)target=base+total-1;
+    active=target;
+    applyTransform(active,false);
+    markActive(active);
+    updateDots(active);
+  }
+  function goTo(index,animate){
+    if(animate&&animating)return;
+    if(index<0||index>=slides.length)return;
+    active=index;
+    applyTransform(index,animate);
+    markActive(index);
+    updateDots(index);
+    if(animate&&!reduced){
+      animating=true;
+      clearTimeout(animTimer);
+      animTimer=setTimeout(function(){
+        animating=false;
+        if(active>=base+total||active<=1)settle();
+      },400);
+    }else{
+      animating=false;
+      if(index>=base+total||index<=1)settle();
+    }
+  }
+  function next(){
+    if(active>=slides.length-1)goTo(base,true);
+    else goTo(active+1,true);
+  }
+  function prev(){
+    if(active<=0)goTo(base+total-1,true);
+    else goTo(active-1,true);
+  }
+  function realTarget(realIndex){
+    return base+((realIndex%total)+total)%total;
+  }
+
+  for(var d=0;d<dots.length;d++){
+    (function(dot){
+      dot.addEventListener('click',function(){
+        var target=realTarget(parseInt(dot.getAttribute('data-index'),10)||0);
+        if(target!==active)goTo(target,true);
+      });
+    })(dots[d]);
+  }
+
+  track.addEventListener('click',function(e){
+    if(suppressClick){suppressClick=false;return;}
+    var card=e.target.closest?e.target.closest('.tst-card'):null;
+    if(!card||!track.contains(card))return;
+    var idx=slides.indexOf(card);
+    if(idx===active)return;
+    var real=parseInt(card.getAttribute('data-real-index'),10);
+    if(isNaN(real))return;
+    var target=realTarget(real);
+    if(target!==active)goTo(target,true);
+  });
+
+  slider.addEventListener('keydown',function(e){
+    if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+    else if(e.key==='ArrowRight'){e.preventDefault();next();}
+  });
+
+  function onDown(e){
+    if(animating)return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    dragging={id:e.pointerId,x:e.clientX,y:e.clientY,start:offsetFor(active),moved:false};
+    try{slider.setPointerCapture(e.pointerId);}catch(_){}
+    track.style.transition='none';
+  }
+  function onMove(e){
+    if(!dragging||e.pointerId!==dragging.id)return;
+    var dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;
+    if(!dragging.moved&&Math.abs(dx)>6&&Math.abs(dx)>Math.abs(dy))dragging.moved=true;
+    if(dragging.moved){
+      if(e.cancelable)e.preventDefault();
+      track.style.transform='translate3d('+(dragging.start+dx)+'px,0,0)';
+    }
+  }
+  function onUp(e){
+    if(!dragging||e.pointerId!==dragging.id)return;
+    var dx=e.clientX-dragging.x,moved=dragging.moved;
+    dragging=null;
+    try{slider.releasePointerCapture(e.pointerId);}catch(_){}
+    if(moved){
+      suppressClick=true;
+      setTimeout(function(){suppressClick=false;},0);
+      if(dx<-40)next();
+      else if(dx>40)prev();
+      else goTo(active,true);
+    }else{
+      applyTransform(active,false);
+    }
+  }
+  slider.addEventListener('pointerdown',onDown);
+  slider.addEventListener('pointermove',onMove);
+  slider.addEventListener('pointerup',onUp);
+  slider.addEventListener('pointercancel',function(e){
+    if(dragging&&e.pointerId===dragging.id){
+      dragging=null;
+      applyTransform(active,false);
+    }
+  });
+  slider.addEventListener('dragstart',function(e){e.preventDefault();});
+
+  applyTransform(base,false);
+  markActive(base);
+  updateDots(base);
+  track.classList.add('is-ready');
+
+  var resizeTimer=null;
+  window.addEventListener('resize',function(){
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(function(){applyTransform(active,false);},100);
+  });
 })();
 </script>
 </body>
