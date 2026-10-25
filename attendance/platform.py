@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
@@ -16,7 +16,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from django.utils.encoding import force_str
+from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
@@ -210,7 +210,7 @@ def company_create(request):
 def _send_templated_mail(subject, html_template, text_template, context, recipient_list, from_email=None):
     html_content = render_to_string(html_template, context)
     text_content = render_to_string(text_template, context)
-    email = EmailMessage(
+    email = EmailMultiAlternatives(
         subject=subject,
         body=text_content,
         from_email=from_email,

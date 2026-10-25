@@ -25,14 +25,11 @@ from .organization import user_has_hr_access, get_active_organization
 # Step definitions
 # ---------------------------------------------------------------------------
 
-REQUIRE_MAILBOX_SETUP = getattr(settings, 'REQUIRE_MAILBOX_SETUP', False)
-
 WIZARD_STEPS = [
     {'number': 1, 'id': 'company_details', 'title': 'Company details', 'optional': False},
     {'number': 2, 'id': 'branding', 'title': 'Branding', 'optional': True},
     {'number': 3, 'id': 'dashboard', 'title': 'Dashboard', 'optional': True},
-    {'number': 4, 'id': 'email', 'title': 'Company email',
-     'optional': not REQUIRE_MAILBOX_SETUP},
+    {'number': 4, 'id': 'email', 'title': 'Company email', 'optional': True},
 ]
 
 STEP_COMPANY_DETAILS = 1
@@ -49,15 +46,19 @@ def get_step_config(step_number):
     return None
 
 
+def _require_mailbox():
+    return getattr(settings, 'REQUIRE_MAILBOX_SETUP', False)
+
+
 def next_step_number(current_step, completed_steps):
-    """Return the next step number after current_step, or STEP_COMPLETE."""
+    """Return the next incomplete step number after current_step, or STEP_COMPLETE."""
     candidate = current_step + 1
     while candidate <= STEP_EMAIL:
         config = get_step_config(candidate)
         if config is None:
             break
-        # Skip optional steps already completed — but they're in completed_steps
-        # only if the user explicitly skipped or saved them.
+        if candidate not in completed_steps:
+            return candidate
         candidate += 1
     return STEP_COMPLETE
 
@@ -205,7 +206,7 @@ def setup_wizard(request):
         if action == 'later':
             # "I'll do this later" — only valid for optional Step 4 when
             # REQUIRE_MAILBOX_SETUP is False.
-            if current_step == STEP_EMAIL and not REQUIRE_MAILBOX_SETUP:
+            if current_step == STEP_EMAIL and not _require_mailbox():
                 completed_steps.add(current_step)
                 org.setup_completed_steps = sorted(completed_steps)
                 org.setup_completed = True
@@ -326,11 +327,29 @@ def setup_wizard(request):
                 messages.success(request, 'Dashboard settings saved.')
                 return redirect('setup_wizard')
         elif current_step == STEP_EMAIL:
-            if REQUIRE_MAILBOX_SETUP:
+            if _require_mailbox():
                 # Mailbox setup is required — must pass connection test before finishing.
-                # The mailbox connection form (from Prompt 2) is not yet integrated.
+                # Re-render step 4 with an error instead of redirecting.
                 messages.error(request, 'Company email setup is required before setup can be completed.')
-                return redirect('setup_wizard')
+                form = None
+                config = get_step_config(STEP_EMAIL)
+                total_steps = len([s for s in WIZARD_STEPS])
+                completed_count = len(completed_steps)
+                pct = int((completed_count / total_steps) * 100) if total_steps else 0
+                context = {
+                    'organization': org,
+                    'step': config,
+                    'step_number': STEP_EMAIL,
+                    'form': form,
+                    'wizard_steps': WIZARD_STEPS,
+                    'completed_steps': sorted(completed_steps),
+                    'total_steps': total_steps,
+                    'completed_count': completed_count,
+                    'progress_pct': pct,
+                    'require_mailbox': _require_mailbox(),
+                    'page_title': f'Setup — {config["title"]}',
+                }
+                return render(request, 'attendance/wizard/step.html', context)
             else:
                 # Optional step — "I'll do this later" link marks it complete.
                 completed_steps.add(current_step)
@@ -384,7 +403,7 @@ def setup_wizard(request):
         'total_steps': total_steps,
         'completed_count': completed_count,
         'progress_pct': pct,
-        'require_mailbox': REQUIRE_MAILBOX_SETUP,
+        'require_mailbox': _require_mailbox(),
         'page_title': f'Setup — {config["title"]}',
     }
     return render(request, 'attendance/wizard/step.html', context)
