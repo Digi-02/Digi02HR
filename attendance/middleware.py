@@ -54,24 +54,21 @@ class SetupWizardMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated:
+        if request.user.is_authenticated and not request.user.is_superuser:
             path = request.path or '/'
             is_exempt = path in self.EXEMPT_EXACT or any(
                 path.startswith(p) for p in self.EXEMPT_PREFIXES
             )
             if not is_exempt:
                 try:
-                    from .organization import get_active_organization, get_user_organizations
+                    from .organization import get_active_organization
                     from .models import OrganizationMembership
                     org = get_active_organization(request)
                     if org is not None and not org.setup_completed:
-                        is_owner_or_hr = (
-                            request.user.is_superuser
-                            or OrganizationMembership.objects.filter(
-                                user=request.user, organization=org,
-                                role__in=('owner', 'hr_admin'), is_active=True,
-                            ).exists()
-                        )
+                        is_owner_or_hr = OrganizationMembership.objects.filter(
+                            user=request.user, organization=org,
+                            role__in=('owner', 'hr_admin'), is_active=True,
+                        ).exists()
                         if is_owner_or_hr:
                             return redirect('setup_wizard')
                 except Exception:

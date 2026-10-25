@@ -202,6 +202,19 @@ def setup_wizard(request):
             messages.success(request, 'Progress saved. Continue setup when you are ready.')
             return redirect('setup_wizard')
 
+        if action == 'later':
+            # "I'll do this later" — only valid for optional Step 4 when
+            # REQUIRE_MAILBOX_SETUP is False.
+            if current_step == STEP_EMAIL and not REQUIRE_MAILBOX_SETUP:
+                completed_steps.add(current_step)
+                org.setup_completed_steps = sorted(completed_steps)
+                org.setup_completed = True
+                org.save(update_fields=['setup_completed_steps', 'setup_completed'])
+                messages.success(request, 'Setup complete. Welcome to your workspace.')
+                return redirect('setup_complete')
+            messages.error(request, 'This step cannot be skipped yet.')
+            return redirect('setup_wizard')
+
         if action == 'back':
             prev = current_step - 1
             while prev >= 1 and get_step_config(prev) is None:
@@ -313,14 +326,19 @@ def setup_wizard(request):
                 messages.success(request, 'Dashboard settings saved.')
                 return redirect('setup_wizard')
         elif current_step == STEP_EMAIL:
-            # Placeholder step — actual mailbox form comes with the mailbox feature.
-            # Mark as complete so the wizard can finish.
-            completed_steps.add(current_step)
-            org.setup_completed_steps = sorted(completed_steps)
-            org.setup_completed = True
-            org.save(update_fields=['setup_completed_steps', 'setup_completed'])
-            messages.success(request, 'Setup complete. Welcome to your workspace.')
-            return redirect('setup_complete')
+            if REQUIRE_MAILBOX_SETUP:
+                # Mailbox setup is required — must pass connection test before finishing.
+                # The mailbox connection form (from Prompt 2) is not yet integrated.
+                messages.error(request, 'Company email setup is required before setup can be completed.')
+                return redirect('setup_wizard')
+            else:
+                # Optional step — "I'll do this later" link marks it complete.
+                completed_steps.add(current_step)
+                org.setup_completed_steps = sorted(completed_steps)
+                org.setup_completed = True
+                org.save(update_fields=['setup_completed_steps', 'setup_completed'])
+                messages.success(request, 'Setup complete. Welcome to your workspace.')
+                return redirect('setup_complete')
 
         # If we get here, form was invalid — fall through to re-render with errors
         form = form  # noqa: F821

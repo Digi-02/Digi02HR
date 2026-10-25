@@ -20,28 +20,33 @@
         </div>
     </div>
 
-    {% if show_checklist %}
+    {% if not organization.setup_completed %}
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0">Get started</h5>
-            <small class="text-muted">Three steps and {{ organization.name }} is ready for daily HR.</small>
+            <h5 class="mb-0">Finish setting up {{ organization.name }}</h5>
+            <small class="text-muted">Complete the setup wizard so your workspace is ready for daily HR.</small>
         </div>
         <div class="card-body">
             <ul class="checklist">
-                <li class="{% if checklist.profile_done %}done{% endif %}">
-                    <span class="box">{% if checklist.profile_done %}✓{% endif %}</span>
-                    <span><strong>Add company details</strong><br><small class="text-muted">Name, contact email and address.</small></span>
-                    <a href="{% url 'organization_edit' organization.pk %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                <li class="{% if 1 in organization.setup_completed_steps %}done{% endif %}">
+                    <span class="box">{% if 1 in organization.setup_completed_steps %}✓{% endif %}</span>
+                    <span><strong>Company details</strong><br><small class="text-muted">Name, industry, size, country, timezone and work hours.</small></span>
+                    <a href="{% url 'setup_wizard' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
                 </li>
-                <li class="{% if checklist.hours_done %}done{% endif %}">
-                    <span class="box">{% if checklist.hours_done %}✓{% endif %}</span>
-                    <span><strong>Set working hours</strong><br><small class="text-muted">Work start and late threshold (now {{ workday_start|time:"H:i" }} / {{ late_threshold|time:"H:i" }}).</small></span>
-                    <a href="{% url 'organization_attendance_settings' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                <li class="{% if 2 in organization.setup_completed_steps %}done{% endif %}">
+                    <span class="box">{% if 2 in organization.setup_completed_steps %}✓{% endif %}</span>
+                    <span><strong>Branding</strong><br><small class="text-muted">Logo and brand colour (optional).</small></span>
+                    <a href="{% url 'setup_wizard' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
                 </li>
-                <li class="{% if checklist.invite_done %}done{% endif %}">
-                    <span class="box">{% if checklist.invite_done %}✓{% endif %}</span>
-                    <span><strong>Invite your team</strong><br><small class="text-muted">Add employees or send onboarding invites by email.</small></span>
-                    <a href="{% url 'applicant_invite' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                <li class="{% if 3 in organization.setup_completed_steps %}done{% endif %}">
+                    <span class="box">{% if 3 in organization.setup_completed_steps %}✓{% endif %}</span>
+                    <span><strong>Dashboard</strong><br><small class="text-muted">Navigation style and sidebar preview (optional).</small></span>
+                    <a href="{% url 'setup_wizard' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
+                </li>
+                <li class="{% if 4 in organization.setup_completed_steps %}done{% endif %}">
+                    <span class="box">{% if 4 in organization.setup_completed_steps %}✓{% endif %}</span>
+                    <span><strong>Company email</strong><br><small class="text-muted">Connect your mailbox.</small></span>
+                    <a href="{% url 'setup_wizard' %}" class="btn btn-outline-secondary btn-sm ms-auto">Open</a>
                 </li>
             </ul>
         </div>
