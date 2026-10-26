@@ -18,7 +18,7 @@
   --muted:#6b6b6b;
   --line:#E5E5E5;
   --nav-h:72px;
-  --wrap:1320px;
+  --wrap:1920px;
   --pad:clamp(24px,5vw,80px);
   --gap-hero:clamp(48px,6vw,120px);
   --sec-pad:clamp(80px,10vw,160px);
@@ -30,14 +30,12 @@
   --pink-outer:#FFECEE;
   --pink-deco:#FFECEE;
   --pink-deco-soft:#FFF5F6;
-  --topline:#836C6C;
-  --stage:clamp(300px,37.5vw,540px);
+  --stage:clamp(300px,37.5vw,720px);
 }
 html{scroll-behavior:smooth}
 body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .wrap{max-width:calc(var(--wrap) + 2 * var(--pad));margin:0 auto;padding-inline:var(--pad)}
-/* ---------- top edge + navbar ---------- */
-.topline{height:2px;background:var(--topline);position:relative;z-index:60}
+/* ---------- navbar ---------- */
 .nav{background:#fff;position:sticky;top:0;z-index:50;min-height:var(--nav-h);display:flex;align-items:center;box-shadow:0 6px 20px rgba(17,17,17,.06)}
 .nav-inner{width:100%;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;min-height:var(--nav-h)}
 .brand{display:block;flex:0 0 auto;position:relative;overflow:hidden;width:9.69rem;height:2.125rem}
@@ -67,8 +65,8 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 /* ---------- hero ---------- */
 .hero{position:relative;background:#fff;min-height:calc(100vh - var(--nav-h));min-height:calc(100svh - var(--nav-h));display:flex;align-items:center;padding-block:clamp(2rem,4vh,3.5rem);overflow:hidden}
 .hero-inner{position:relative;z-index:1;width:100%;display:grid;grid-template-columns:1.02fr 0.98fr;gap:0;align-items:center}
-.hero-copy h1{font-size:clamp(2.25rem,4.1vw,3.75rem);font-weight:800;line-height:1.15;letter-spacing:-.02em;color:var(--coral);margin-bottom:clamp(1.25rem,2.4vh,1.75rem)}
-.hero-copy .sub{font-size:clamp(1rem,1.3vw,1.25rem);line-height:1.9;color:var(--hero-text);font-weight:400;max-width:32.5rem;margin-bottom:clamp(1.75rem,3.4vh,2.75rem)}
+.hero-copy h1{font-size:clamp(2.25rem,4.1vw,4.5rem);font-weight:800;line-height:1.15;letter-spacing:-.02em;color:var(--coral);margin-bottom:clamp(1.25rem,2.4vh,1.75rem)}
+.hero-copy .sub{font-size:clamp(1rem,1.3vw,1.3rem);line-height:1.9;color:var(--hero-text);font-weight:400;max-width:clamp(32.5rem,36vw,36rem);margin-bottom:clamp(1.75rem,3.4vh,2.75rem)}
 .hero-ctas{display:flex;flex-wrap:wrap;gap:1rem}
 /* concentric circles + cutout portrait */
 .hero-media{position:relative;width:100%;max-width:var(--stage);aspect-ratio:1;margin-inline:auto}
@@ -95,7 +93,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .about-inner{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap-hero);align-items:center}
 .about-photo img{display:block;width:100%;height:auto;border-radius:16px;object-fit:cover;box-shadow:0 24px 48px rgba(10,10,10,.1)}
 .about-eyebrow{font-size:0.875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
-.about-copy h2{font-size:clamp(1.75rem,3vw,2.75rem);line-height:1.15;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:1.5rem}
+.about-copy h2{font-size:clamp(1.75rem,3vw,3rem);line-height:1.15;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:1.5rem}
 .about-copy p{font-size:1.0625rem;line-height:1.7;color:var(--body);font-weight:500;margin-bottom:2rem;max-width:56ch}
 .advice{display:flex;gap:1rem;align-items:flex-start}
 .advice-ic{flex:0 0 auto;width:2.5rem;height:2.5rem;color:var(--accent)}
@@ -105,7 +103,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .advice span b{color:var(--accent);font-weight:700}
 /* ---------- what we do ---------- */
 .services{background:#fff;padding-block:var(--sec-pad)}
-.services h2{text-align:center;font-size:clamp(1.75rem,3vw,2.75rem);font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:2.5rem}
+.services h2{text-align:center;font-size:clamp(1.75rem,3vw,3rem);font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-bottom:2.5rem}
 .svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem}
 .svc{background:#F4F5F7;border-radius:16px;padding:2rem 1.75rem;position:relative;border:1px solid transparent;transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease}
 .svc:hover{transform:translateY(-8px);background:#fff;border-color:#FFD9E0;box-shadow:0 18px 36px rgba(240,42,76,.12)}
@@ -116,7 +114,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .svc h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:0.75rem}
 .svc p{font-size:1rem;line-height:1.65;color:var(--body);font-weight:500;margin:0}
 /* ---------- testimonials ---------- */
-.testimonials{--tst-card:min(760px,55vw);--tst-gap:clamp(1rem,1.5vw,1.5rem);--tst-logo-h:clamp(2.5rem,3.6vw,3.25rem);background:#FFF1F3;padding-block:clamp(4rem,6.7vw,6rem);overflow:hidden}
+.testimonials{--tst-card:clamp(760px,46vw,1000px);--tst-gap:clamp(1rem,1.5vw,1.5rem);--tst-logo-h:clamp(2.5rem,3.6vw,3.25rem);background:#FFF1F3;padding-block:clamp(4rem,6.7vw,6rem);overflow:hidden}
 .tst-head{text-align:center;margin-bottom:clamp(2rem,3.5vw,3rem)}
 .tst-eyebrow{font-size:0.8125rem;font-weight:700;letter-spacing:.03em;color:var(--coral);margin-bottom:.625rem}
 .tst-head h2{font-size:clamp(2.25rem,3.2vw,3rem);line-height:1.1;font-weight:800;color:#111;letter-spacing:-.02em}
@@ -134,7 +132,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .tst-logo-box--digi02{position:relative;overflow:hidden;width:calc(var(--tst-logo-h) * 2.795);max-width:none}
 .tst-logo-box--digi02 .tst-logo{position:absolute;left:calc(var(--tst-logo-h) * -0.077);top:calc(var(--tst-logo-h) * -0.817);width:calc(var(--tst-logo-h) * 2.923);height:calc(var(--tst-logo-h) * 2.375);max-width:none;max-height:none}
 .tst-quote-icon{display:block;flex:0 0 auto;width:clamp(2rem,2.8vw,2.75rem);height:auto;color:var(--coral)}
-.tst-quote{font-size:clamp(.9375rem,1.1vw,1rem);line-height:1.75;font-weight:400;color:#4A4A4A;margin:0 0 clamp(1rem,2vw,1.5rem)}
+.tst-quote{font-size:clamp(.9375rem,1.1vw,1.125rem);line-height:1.75;font-weight:400;color:#4A4A4A;margin:0 0 clamp(1rem,2vw,1.5rem)}
 .tst-quote p{margin:0}
 .tst-person{margin-top:auto}
 .tst-name{display:block;font-style:normal;font-size:.875rem;font-weight:700;line-height:1.4;color:var(--coral)}
@@ -163,12 +161,23 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 }
 /* ---------- contact ---------- */
 .contact{background:#fff;border-top:1px solid var(--line);padding-block:var(--sec-pad)}
-.contact h2{font-size:clamp(1.75rem,3vw,2.75rem);color:var(--ink);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
-.contact>p{font-size:1.0625rem;color:var(--body);margin-bottom:2rem}
-.contact form{max-width:560px;display:grid;gap:1rem}
+.contact-inner{display:grid;grid-template-columns:minmax(0,1fr);gap:2rem;align-items:start}
+.contact-intro h2{font-size:clamp(1.75rem,3vw,3rem);color:var(--ink);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
+.contact-intro>p{max-width:42ch;font-size:1.0625rem;color:var(--body);margin-bottom:2rem}
+.contact form{width:100%;max-width:560px;display:grid;gap:1rem}
 .contact input,.contact textarea{width:100%;padding:0.875rem 1rem;border:1px solid #d4d4d4;border-radius:12px;font:inherit;font-size:1rem}
 .contact button{justify-self:start;min-height:56px}
 .msg{font-size:1rem;margin-bottom:0.75rem;color:var(--accent)}
+@media(min-width:1024px){
+  .contact-inner{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(2rem,5vw,6rem)}
+  .contact form{max-width:600px}
+}
+@media(min-width:1280px){
+  .contact form{max-width:none;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .contact form textarea,
+  .contact form input[name="team_size"],
+  .contact form button{grid-column:1/-1}
+}
 /* ---------- footer ---------- */
 .footer{background:#FBD5DB;padding-block:4rem 3.5rem}
 .footer-grid{display:grid;grid-template-columns:1fr auto 1fr;align-items:start;column-gap:2rem}
@@ -185,6 +194,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .footer-brand{display:flex;justify-content:center;margin-top:3rem}
 .footer-brand img{display:block;height:2.75rem;width:auto}
 .footer a:focus-visible{outline:2px solid var(--coral-dark);outline-offset:3px;border-radius:2px}
+#about,#services,#testimonials,#how-it-works,#contact{scroll-margin-top:calc(var(--nav-h) + 1.5rem)}
 /* ---------- responsive ---------- */
 @media(min-width:768px) and (max-width:1023px){
   .testimonials{--tst-card:70vw;--tst-gap:1.25rem;--tst-logo-h:2.75rem;padding-block:5rem}
@@ -261,7 +271,6 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 </style>
 </head>
 <body>
-<div class="topline" aria-hidden="true"></div>
 <header class="nav" id="topnav">
   <div class="wrap nav-inner">
     <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
@@ -391,21 +400,23 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 </section>
 {% endif %}
 <section class="contact" id="contact" aria-labelledby="contact-h">
-  <div class="wrap">
-  <h2 id="contact-h">Request access</h2>
-  <p>Tell us about your team and we will get you set up.</p>
-  {% if messages %}{% for m in messages %}<p class="msg" role="status">{{ m }}</p>{% endfor %}{% endif %}
-  <form method="post" action="{% url 'welcome_contact' %}">
-    {% csrf_token %}
-    <input name="name" type="text" required placeholder="Your name" autocomplete="name">
-    <input name="company" type="text" placeholder="Company name" autocomplete="organization">
-    <input name="email" type="email" required placeholder="Work email" autocomplete="email">
-    <input name="phone" type="tel" placeholder="Phone (optional)" autocomplete="tel">
-    <input name="team_size" type="text" placeholder="Team size (e.g. 25)">
-    <textarea name="message" rows="4" required placeholder="What do you need?"></textarea>
-    <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-    <button class="btn btn-primary" type="submit">Request access <span class="arr" aria-hidden="true">&rarr;</span></button>
-  </form>
+  <div class="wrap contact-inner">
+    <div class="contact-intro">
+      <h2 id="contact-h">Request access</h2>
+      <p>Tell us about your team and we will get you set up.</p>
+      {% if messages %}{% for m in messages %}<p class="msg" role="status">{{ m }}</p>{% endfor %}{% endif %}
+    </div>
+    <form method="post" action="{% url 'welcome_contact' %}">
+      {% csrf_token %}
+      <input name="name" type="text" required placeholder="Your name" autocomplete="name">
+      <input name="company" type="text" placeholder="Company name" autocomplete="organization">
+      <input name="email" type="email" required placeholder="Work email" autocomplete="email">
+      <input name="phone" type="tel" placeholder="Phone (optional)" autocomplete="tel">
+      <input name="team_size" type="text" placeholder="Team size (e.g. 25)">
+      <textarea name="message" rows="4" required placeholder="What do you need?"></textarea>
+      <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+      <button class="btn btn-primary" type="submit">Request access <span class="arr" aria-hidden="true">&rarr;</span></button>
+    </form>
   </div>
 </section>
 </main>

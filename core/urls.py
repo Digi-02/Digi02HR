@@ -89,19 +89,19 @@ urlpatterns = [
     path('welcome/', views.welcome_view, name='welcome'),
     path('welcome/contact/', views.contact_request_view, name='welcome_contact'),
     path('password-reset/', RateLimitedPasswordResetView.as_view(
-        template_name='registration/password_reset_form.html',
+        template_name='registration/auth/password_reset_form.html',
         email_template_name='registration/email/password_reset.txt',
         subject_template_name='registration/password_reset_subject.txt',
         html_email_template_name='registration/email/password_reset.html',
         success_url='/password-reset/done/'), name='password_reset'),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(
-        template_name='registration/password_reset_done.html'), name='password_reset_done'),
+        template_name='registration/auth/password_reset_done.html'), name='password_reset_done'),
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
-        template_name='registration/password_reset_confirm.html',
+        template_name='registration/auth/password_reset_confirm.html',
         success_url='/reset/complete/'), name='password_reset_confirm'),
     path('set-password/<uidb64>/<token>/', platform_views.set_owner_password, name='set_owner_password'),
     path('reset/complete/', auth_views.PasswordResetCompleteView.as_view(
-        template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
+        template_name='registration/auth/password_reset_complete.html'), name='password_reset_complete'),
     path('password-change/', auth_views.PasswordChangeView.as_view(
         template_name='registration/password_change_form.html',
         success_url='/password-change/done/'), name='password_change'),

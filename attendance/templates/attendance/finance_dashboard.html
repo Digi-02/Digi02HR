@@ -227,12 +227,29 @@
 
     .finance-readiness-item {
         display: flex;
+        align-items: center;
         justify-content: space-between;
         gap: 1rem;
         padding: 0.9rem;
         border: 1px solid rgba(226, 232, 240, 0.95);
         border-radius: 0.5rem;
         background: #f8fafc;
+    }
+
+    .finance-readiness-item > div {
+        min-width: 0;
+    }
+
+    .finance-readiness-item .badge {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        padding: 0.35rem 0.6rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
     }
 
     .finance-readiness-item span:not(.badge) {
