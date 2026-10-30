@@ -251,6 +251,14 @@ STATICFILES_DIRS = [_static_dir] if _static_dir.exists() else []
 MEDIA_URL = os.getenv("DJANGO_MEDIA_URL", "/media/")
 MEDIA_ROOT = _env_str("DJANGO_MEDIA_ROOT") or (BASE_DIR / "media")
 
+# DigiDoc files are stored outside the ordinary /media/ tree.
+PRIVATE_MEDIA_ROOT = Path(_env_str("DJANGO_PRIVATE_MEDIA_ROOT") or (BASE_DIR / "private_media"))
+DIGIDOC_LETTERHEAD_MAX_BYTES = 8 * 1024 * 1024
+DIGIDOC_COMPANY_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024
+DIGIDOC_UPLOADS_PER_USER_PER_HOUR = 10
+DIGIDOC_MAX_IMAGE_PIXELS = 25_000_000
+DIGIDOC_MAX_IMAGE_DIMENSION = 10_000
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

@@ -10,10 +10,11 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.core.exceptions import PermissionDenied
 from django.core.mail import send_mail, EmailMessage
 from django.conf import settings
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.db.models.deletion import ProtectedError
@@ -49,6 +50,8 @@ from .models import (
     PayrollRun,
     Payslip,
     Organization,
+    CompanyLetterhead,
+    CompanyLetterheadUpload,
     OrganizationMembership,
 )
 from .forms import (
@@ -5054,6 +5057,10 @@ def organization_branding(request):
     role = membership.role if membership else ''
     if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
         raise PermissionDenied
+    stored_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
+
+    if request.method == 'POST' and request.POST.get('action', '').startswith('letterhead_'):
+        return _handle_company_letterhead_post(request, organization)
 
     if request.method == 'POST' and request.POST.get('action') == 'restore_default':
         for field, value in NAV_DEFAULTS.items():
@@ -5103,6 +5110,15 @@ def organization_branding(request):
         suggested = None
     context = {
         'organization': organization,
+        'letterhead': stored_letterhead or CompanyLetterhead(),
+        'has_letterhead': bool(stored_letterhead),
+        'letterhead_margins': [
+            ('top', stored_letterhead.margin_top_mm if stored_letterhead else 40),
+            ('bottom', stored_letterhead.margin_bottom_mm if stored_letterhead else 30),
+            ('left', stored_letterhead.margin_left_mm if stored_letterhead else 20),
+            ('right', stored_letterhead.margin_right_mm if stored_letterhead else 20),
+        ],
+        'letterhead_image_url': reverse('company_letterhead_image'),
         'form': form,
         'suggested_color': suggested,
         'preview_vars': accent_vars(
@@ -5116,6 +5132,206 @@ def organization_branding(request):
         'page_title': 'Company Branding',
     }
     return render(request, 'attendance/organization_branding.html', context)
+
+
+def _letterhead_values(post):
+    from django.core.exceptions import ValidationError
+
+    values = {}
+    for field, default in (
+        ('top', 40), ('bottom', 30), ('left', 20), ('right', 20),
+    ):
+        raw = post.get(f'letterhead_margin_{field}_mm', str(default))
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise ValidationError('Margins must be whole numbers in millimetres.')
+        if value < 0 or value > 100:
+            raise ValidationError('Margins must be between 0 and 100 mm.')
+        values[field] = value
+    if values['top'] + values['bottom'] >= 297 or values['left'] + values['right'] >= 210:
+        raise ValidationError('The selected margins leave no printable area on A4.')
+    values['scale_mode'] = post.get('letterhead_scale_mode', 'fit')
+    values['default_page_mode'] = post.get('letterhead_default_page_mode', 'every')
+    if values['scale_mode'] not in {'fit', 'fill'}:
+        raise ValidationError('Choose Fit to page or Fill page.')
+    if values['default_page_mode'] not in {'every', 'first'}:
+        raise ValidationError('Choose Every page or First page only.')
+    return values
+
+
+def _handle_company_letterhead_post(request, organization):
+    from django.core.files.base import ContentFile
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+    from django.utils import timezone
+    from .letterhead import sanitize_letterhead
+
+    action = request.POST.get('action')
+    asset = CompanyLetterhead.objects.filter(organization=organization).first()
+    try:
+        values = _letterhead_values(request.POST)
+        if action == 'letterhead_upload':
+            cutoff = timezone.now() - timedelta(hours=1)
+            uploads = CompanyLetterheadUpload.objects.filter(
+                user=request.user, created_at__gte=cutoff
+            ).count()
+            if uploads >= settings.DIGIDOC_UPLOADS_PER_USER_PER_HOUR:
+                return HttpResponse('Upload limit reached. Try again later.', status=429)
+            CompanyLetterheadUpload.objects.create(organization=organization, user=request.user)
+
+            upload = request.FILES.get('letterhead_file')
+            data, image_format, extension, width, height = sanitize_letterhead(upload)
+
+            quota = settings.DIGIDOC_COMPANY_STORAGE_QUOTA_BYTES
+            if len(data) > quota:
+                raise ValidationError('This company has reached its private document storage quota.')
+
+            with transaction.atomic():
+                # Lock the parent so simultaneous first uploads cannot both
+                # pass the one-to-one lookup and race to create the asset.
+                Organization.objects.select_for_update().get(pk=organization.pk)
+                CompanyLetterhead.objects.select_for_update().filter(
+                    organization=organization
+                ).first()
+                current = CompanyLetterhead.objects.filter(organization=organization).first()
+                old_name = current.image.name if current and current.image else None
+                if current is None:
+                    current = CompanyLetterhead(organization=organization)
+                current.image_format = image_format.lower()
+                current.image_width = width
+                current.image_height = height
+                current.scale_mode = values['scale_mode']
+                current.default_page_mode = values['default_page_mode']
+                current.margin_top_mm = values['top']
+                current.margin_bottom_mm = values['bottom']
+                current.margin_left_mm = values['left']
+                current.margin_right_mm = values['right']
+                import uuid
+                current.image.save(f"{uuid.uuid4().hex}.{extension}", ContentFile(data), save=False)
+                current.save()
+                if old_name and old_name != current.image.name:
+                    storage = current.image.storage
+                    transaction.on_commit(lambda: storage.delete(old_name))
+                write_audit_log(
+                    request, organization=organization, area='organization',
+                    action='branding.letterhead_uploaded',
+                    summary=f'Updated company letterhead for {organization.name}',
+                    target=current,
+                    metadata={'format': image_format, 'width': width, 'height': height},
+                )
+            messages.success(request, 'Letterhead uploaded and safely processed.')
+        elif action == 'letterhead_save_settings':
+            if not asset:
+                raise ValidationError('Upload a letterhead before saving its page settings.')
+            for field, attr in (
+                ('top', 'margin_top_mm'), ('bottom', 'margin_bottom_mm'),
+                ('left', 'margin_left_mm'), ('right', 'margin_right_mm'),
+                ('scale_mode', 'scale_mode'), ('default_page_mode', 'default_page_mode'),
+            ):
+                setattr(asset, attr, values[field])
+            asset.save(update_fields=[
+                'margin_top_mm', 'margin_bottom_mm', 'margin_left_mm', 'margin_right_mm',
+                'scale_mode', 'default_page_mode', 'updated_at',
+            ])
+            write_audit_log(
+                request, organization=organization, area='organization',
+                action='branding.letterhead_settings_updated',
+                summary=f'Updated company letterhead page settings for {organization.name}',
+                target=asset,
+                metadata={'scale_mode': asset.scale_mode, 'page_mode': asset.default_page_mode},
+            )
+            messages.success(request, 'Letterhead page settings saved.')
+        elif action == 'letterhead_remove':
+            if asset:
+                old_name = asset.image.name
+                storage = asset.image.storage
+                asset.delete()
+                transaction.on_commit(lambda: storage.delete(old_name))
+                write_audit_log(
+                    request, organization=organization, area='organization',
+                    action='branding.letterhead_removed',
+                    summary=f'Removed company letterhead for {organization.name}',
+                )
+            messages.success(request, 'Company letterhead removed.')
+        else:
+            raise ValidationError('Unknown letterhead action.')
+    except ValidationError as exc:
+        for error in exc.messages:
+            messages.error(request, error)
+    except Exception:
+        messages.error(request, 'The letterhead could not be processed. Please try another PNG or JPEG.')
+    return redirect('organization_branding')
+
+
+@login_required
+def company_letterhead_image(request):
+    """Serve only the active company's private, re-encoded letterhead image."""
+    organization = get_active_organization(request)
+    if not organization:
+        return HttpResponse(status=404)
+    asset = CompanyLetterhead.objects.filter(organization=organization).first()
+    if not asset or not asset.image:
+        return HttpResponse(status=404)
+    response = FileResponse(asset.image.open('rb'), content_type=(
+        'image/png' if asset.image_format == 'png' else 'image/jpeg'
+    ))
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@login_required
+def company_letterhead_sample_pdf(request):
+    organization = get_active_organization(request)
+    if not organization:
+        return HttpResponse(status=404)
+    asset = CompanyLetterhead.objects.filter(organization=organization).first()
+    if not asset:
+        return HttpResponse(status=404)
+    mode = request.GET.get('mode', asset.default_page_mode)
+    if mode not in {'every', 'first'}:
+        return HttpResponse('Unknown page mode.', status=400)
+    cutoff = timezone.now() - timedelta(minutes=1)
+    recent_downloads = AuditLog.objects.filter(
+        actor=request.user, action='branding.letterhead_sample_downloaded', created_at__gte=cutoff,
+    ).count()
+    if recent_downloads >= 10:
+        return HttpResponse('Download limit reached. Try again shortly.', status=429)
+
+    slot_key = None
+    slot_token = get_random_string(32)
+    for slot_number in (0, 1):
+        candidate = f'digidoc:letterhead-sample:slot:{slot_number}'
+        if cache.add(candidate, slot_token, timeout=30):
+            slot_key = candidate
+            break
+    if slot_key is None:
+        return HttpResponse('PDF generation is busy. Try again shortly.', status=429)
+    from .letterhead import render_sample_pdf_isolated
+    try:
+        pdf_data = render_sample_pdf_isolated(asset, mode)
+    finally:
+        if cache.get(slot_key) == slot_token:
+            cache.delete(slot_key)
+    response = HttpResponse(pdf_data, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="digidoc-letterhead-sample.pdf"'
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    write_audit_log(
+        request, organization=organization, area='organization',
+        action='branding.letterhead_sample_downloaded',
+        summary=f'Downloaded company letterhead sample PDF for {organization.name}',
+        target=asset, metadata={'format': 'pdf', 'page_mode': mode},
+    )
+    return response
+
+
+def open_source_notices(request):
+    """Publish the pinned licenses added for the DigiDoc letterhead pipeline."""
+    return render(request, 'attendance/open_source_notices.html', {
+        'page_title': 'Open-source notices',
+    })
 
 
 @login_required

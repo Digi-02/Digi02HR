@@ -9,6 +9,14 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 
+def private_letterhead_path(instance, filename):
+    """Ignore the client filename and store with a random, detected extension."""
+    import uuid
+
+    extension = 'jpg' if instance.image_format == 'jpeg' else 'png'
+    return f"letterheads/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
+
+
 def local_date_range_filter(field_name, target_date):
     current_tz = timezone.get_current_timezone()
     start_at = timezone.make_aware(datetime.combine(target_date, time.min), current_tz)
@@ -183,6 +191,40 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CompanyLetterhead(models.Model):
+    """Private, re-encoded page artwork and its print layout settings."""
+
+    FIT_CHOICES = [('fit', 'Fit to page'), ('fill', 'Fill page')]
+    PAGE_MODE_CHOICES = [('every', 'Every page'), ('first', 'First page only')]
+
+    organization = models.OneToOneField(
+        Organization, on_delete=models.CASCADE, related_name='letterhead'
+    )
+    from .storage import PrivateLetterheadStorage
+    image = models.FileField(upload_to=private_letterhead_path, storage=PrivateLetterheadStorage())
+    image_format = models.CharField(max_length=4, choices=[('png', 'PNG'), ('jpeg', 'JPEG')])
+    image_width = models.PositiveIntegerField()
+    image_height = models.PositiveIntegerField()
+    scale_mode = models.CharField(max_length=4, choices=FIT_CHOICES, default='fit')
+    default_page_mode = models.CharField(max_length=8, choices=PAGE_MODE_CHOICES, default='every')
+    margin_top_mm = models.PositiveSmallIntegerField(default=40)
+    margin_bottom_mm = models.PositiveSmallIntegerField(default=30)
+    margin_left_mm = models.PositiveSmallIntegerField(default=20)
+    margin_right_mm = models.PositiveSmallIntegerField(default=20)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.organization.name} letterhead"
+
+
+class CompanyLetterheadUpload(models.Model):
+    """Upload attempts for per-user rate limiting."""
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 
 class OrganizationMembership(models.Model):
