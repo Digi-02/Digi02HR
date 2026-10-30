@@ -68,6 +68,11 @@ ICON_PATHS = {
         "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z",
         "M14 2v6h6M8 13h8M8 17h8M8 9h2",
     ],
+    "bi-journal-pen": [
+        "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8",
+        "M14 2v6h6M8 13h5M8 17h4",
+        "m16 19 4-4 2 2-4 4-3 1z",
+    ],
     "bi-graph-up": [
         "M3 3v18h18",
         "m7 14 4-4 3 3 5-6",
@@ -143,6 +148,7 @@ ICON_NAMES = {
     "bi-calendar2-range": "date_range",
     "bi-envelope-paper": "mail",
     "bi-journal-text": "article",
+    "bi-journal-pen": "edit_document",
     "bi-graph-up": "monitoring",
     "bi-cash-stack": "payments",
     "bi-receipt": "receipt_long",
@@ -168,9 +174,17 @@ def icon_name(name):
     return ICON_NAMES.get(key, ICON_NAMES[FALLBACK_ICON])
 
 
-@register.simple_tag
-def nav_icon(name):
-    glyph = icon_name(str(name or ""))
+@register.simple_tag(takes_context=True)
+def nav_icon(context, name):
+    key = str(name or "")
+    match = getattr(context.get("request"), "resolver_match", None)
+    if getattr(match, "url_name", None) == "digidoc_editor":
+        rendered = "".join('<path d="%s"/>' % path for path in icon_paths(key))
+        return mark_safe(
+            '<span class="app-nav__icon" aria-hidden="true">'
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">%s</svg></span>' % rendered
+        )
+    glyph = icon_name(key)
     return mark_safe(
         '<span class="app-nav__icon" aria-hidden="true">'
         '<span class="material-symbols-rounded">%s</span></span>' % glyph

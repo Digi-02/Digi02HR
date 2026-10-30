@@ -8,6 +8,7 @@ from django.views.static import serve as static_serve
 from attendance import views
 from attendance import shell as shell_views
 from attendance import wizard as wizard_views
+from attendance import digidoc as digidoc_views
 from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
 
 from django.contrib.auth import views as auth_views
@@ -160,6 +161,16 @@ urlpatterns = [
     path('employees/<int:pk>/edit/', views.employee_edit, name='employee_edit'),
     path('employees/<int:pk>/delete/', views.employee_delete, name='employee_delete'),
     path('documents/', views.employee_documents, name='employee_documents'),
+    path('digidoc/', digidoc_views.digidoc_list, name='digidoc_list'),
+    path('digidoc/create/', digidoc_views.digidoc_create, name='digidoc_create'),
+    path('digidoc/images/upload/', digidoc_views.digidoc_image_upload, name='digidoc_image_upload'),
+    path('digidoc/images/<uuid:asset_id>/', digidoc_views.digidoc_image, name='digidoc_image'),
+    path('digidoc/<uuid:document_id>/', digidoc_views.digidoc_editor, name='digidoc_editor'),
+    path('digidoc/<uuid:document_id>/save/', digidoc_views.digidoc_save, name='digidoc_save'),
+    path('digidoc/<uuid:document_id>/preview/', digidoc_views.digidoc_preview, name='digidoc_preview'),
+    path('digidoc/<uuid:document_id>/duplicate/', digidoc_views.digidoc_duplicate, name='digidoc_duplicate'),
+    path('digidoc/<uuid:document_id>/delete/', digidoc_views.digidoc_delete, name='digidoc_delete'),
+    path('digidoc/<uuid:document_id>/download.pdf', digidoc_views.digidoc_pdf, name='digidoc_pdf'),
     path('documents/upload/', views.employee_document_upload, name='employee_document_upload'),
     path('employees/<int:employee_pk>/documents/upload/', views.employee_document_upload, name='employee_document_upload_for_employee'),
     path('documents/<int:pk>/edit/', views.employee_document_edit, name='employee_document_edit'),

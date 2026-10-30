@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+import uuid
 
 
 def private_letterhead_path(instance, filename):
@@ -15,6 +16,11 @@ def private_letterhead_path(instance, filename):
 
     extension = 'jpg' if instance.image_format == 'jpeg' else 'png'
     return f"letterheads/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
+
+
+def private_digidoc_image_path(instance, filename):
+    extension = 'jpg' if instance.image_format == 'jpeg' else 'png'
+    return f"digidoc_assets/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
 
 
 def local_date_range_filter(field_name, target_date):
@@ -224,6 +230,44 @@ class CompanyLetterheadUpload(models.Model):
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class DigiDocDocument(models.Model):
+    """A company-scoped DigiDoc document stored as validated editor JSON."""
+
+    PAGE_MODE_CHOICES = [('every', 'Every page'), ('first', 'First page only')]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_documents')
+    title = models.CharField(max_length=200, default='Untitled document')
+    content_json = models.JSONField(default=dict, blank=True)
+    letterhead_enabled = models.BooleanField(default=False)
+    letterhead_page_mode = models.CharField(max_length=8, choices=PAGE_MODE_CHOICES, default='every')
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='digidoc_documents')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+    version = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [models.Index(fields=['organization', '-updated_at'])]
+
+    def __str__(self):
+        return self.title
+
+
+class DigiDocImageAsset(models.Model):
+    """Re-encoded, private company image used by DigiDoc image nodes."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_image_assets')
+    uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='digidoc_image_assets')
+    from .storage import PrivateLetterheadStorage
+    image = models.FileField(upload_to=private_digidoc_image_path, storage=PrivateLetterheadStorage())
+    image_format = models.CharField(max_length=4, choices=[('png', 'PNG'), ('jpeg', 'JPEG')])
+    image_width = models.PositiveIntegerField()
+    image_height = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 

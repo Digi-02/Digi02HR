@@ -199,7 +199,7 @@ def render_sample_pdf(letterhead, page_mode="every"):
     return result
 
 
-def _assign_windows_job_limit(process, memory_limit=512 * 1024 * 1024):
+def _assign_windows_job_limit(process, memory_limit=512 * 1024 * 1024, cpu_limit_seconds=None):
     """Put the worker in a Windows Job Object with a hard per-process cap."""
     if os.name != "nt":
         return None
@@ -254,6 +254,9 @@ def _assign_windows_job_limit(process, memory_limit=512 * 1024 * 1024):
     try:
         limits = ExtendedLimitInformation()
         limits.BasicLimitInformation.LimitFlags = 0x00000100  # JOB_OBJECT_LIMIT_PROCESS_MEMORY
+        if cpu_limit_seconds is not None:
+            limits.BasicLimitInformation.LimitFlags |= 0x00000002  # JOB_OBJECT_LIMIT_PROCESS_TIME
+            limits.BasicLimitInformation.PerProcessUserTimeLimit = int(cpu_limit_seconds * 10_000_000)
         limits.ProcessMemoryLimit = memory_limit
         if not kernel32.SetInformationJobObject(
             job, 9, ctypes.byref(limits), ctypes.sizeof(limits)

@@ -136,6 +136,15 @@ NAV_SECTIONS = (
                 keywords="files records uploads",
             ),
             NavItem(
+                key="digidoc",
+                label="DigiDoc",
+                icon="bi-journal-pen",
+                url_name="digidoc_list",
+                match=("digidoc_list", "digidoc_editor"),
+                access=("hr",),
+                keywords="documents editor letters reports",
+            ),
+            NavItem(
                 key="onboarding",
                 label="Onboarding",
                 icon="bi-list-check",
