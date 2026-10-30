@@ -238,6 +238,15 @@
                 {% endwith %}
               </div>
               {{ form.nav_style.errors }}
+              <div class="nav-custom-background mt-3">
+                <label class="form-label" for="{{ form.nav_bg_color.id_for_label }}">Custom navigation background</label>
+                <div class="brand-colour-row">
+                  <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_bg_color.id_for_label }}" value="{{ form.nav_bg_color.value|default:'#0A0A0A' }}" aria-label="Choose a custom navigation background colour">
+                  {{ form.nav_bg_color }}
+                </div>
+                <small class="field-help">Choose any colour here; it is saved separately from your logo and brand colour. Custom appearance will be selected automatically.</small>
+                {{ form.nav_bg_color.errors }}
+              </div>
             </section>
 
             <section class="nav-section-card" aria-labelledby="navActiveStyleLabel">
@@ -299,6 +308,9 @@
                   {{ form.nav_highlight_color }}
                 </div>
                 <small class="field-help">Used when “Custom Colour” is selected. Inactive colours fall back to the closest readable option.</small>
+                <label class="brand-intensity-label" for="navHighlightIntensity"><span>Colour intensity</span><output id="navHighlightIntensityValue" for="navHighlightIntensity">100%</output></label>
+                <input type="range" id="navHighlightIntensity" class="brand-intensity-slider" min="0" max="100" step="1" value="100" aria-label="Custom highlight colour intensity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <small class="field-help brand-intensity-help">0% is grayscale; 100% keeps the selected colour's original intensity.</small>
                 {{ form.nav_highlight_color.errors }}
               </div>
             </section>
@@ -315,15 +327,6 @@
               </summary>
               <div class="nav-fine-tune__body">
                 <div class="nav-color-grid">
-                  <div class="nav-color-field">
-                    <label class="form-label" for="{{ form.nav_bg_color.id_for_label }}">Custom background</label>
-                    <div class="brand-colour-row">
-                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_bg_color.id_for_label }}" value="{{ form.nav_bg_color.value|default:'#0A0A0A' }}" aria-label="Pick custom sidebar background">
-                      {{ form.nav_bg_color }}
-                    </div>
-                    <small class="field-help">Used by the Custom appearance.</small>
-                    {{ form.nav_bg_color.errors }}
-                  </div>
                   <div class="nav-color-field">
                     <label class="form-label" for="{{ form.nav_text_color.id_for_label }}">Sidebar text</label>
                     <div class="brand-colour-row">
@@ -1078,6 +1081,10 @@
 
   function handleThemeInput(event) {
     if (event.target && event.target.type === 'file') { return; }
+    if (event.target && (event.target.name === 'nav_bg_color' || event.target.dataset.colorPickerFor === 'id_nav_bg_color')) {
+      var customAppearance = form.querySelector('input[name="nav_style"][value="custom"]');
+      if (customAppearance) { customAppearance.checked = true; }
+    }
     if (event.target && ['nav_style', 'nav_highlight_style', 'nav_highlight_source'].indexOf(event.target.name) !== -1) {
       setPreviewState('active');
     }

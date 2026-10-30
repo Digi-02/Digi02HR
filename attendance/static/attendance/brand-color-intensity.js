@@ -1,13 +1,5 @@
 (() => {
   'use strict';
-  const picker = document.getElementById('brandPicker');
-  const hexInput = document.getElementById('id_brand_color');
-  const slider = document.getElementById('brandIntensity');
-  const output = document.getElementById('brandIntensityValue');
-  if (!picker || !hexInput || !slider || !output) return;
-
-  let sourceHex = picker.value.toUpperCase();
-  let applying = false;
 
   function withSaturation(hex, intensity) {
     const match = /^#([\da-f]{6})$/i.exec(hex || '');
@@ -31,45 +23,69 @@
     return '#' + triplet.map(channel => Math.round((channel + offset) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
   }
 
-  function apply() {
-    const value = Number(slider.value);
-    const adjusted = withSaturation(sourceHex, value);
-    slider.setAttribute('aria-valuenow', String(value));
-    output.value = `${value}%`;
-    output.textContent = `${value}%`;
-    picker.value = adjusted;
-    hexInput.value = adjusted;
-    applying = true;
-    hexInput.dispatchEvent(new Event('input', { bubbles: true }));
-    applying = false;
-  }
-
-  picker.addEventListener('input', () => {
-    if (applying) return;
-    sourceHex = picker.value.toUpperCase();
-    apply();
-  });
-  hexInput.addEventListener('input', () => {
-    if (applying || !/^#[\da-f]{6}$/i.test(hexInput.value)) return;
-    sourceHex = hexInput.value.toUpperCase();
-    apply();
-  });
-  slider.addEventListener('input', apply);
-  const suggested = document.getElementById('suggestedColour');
-  if (suggested) suggested.addEventListener('click', () => {
-    if (/^#[\da-f]{6}$/i.test(picker.value)) {
+  function attachIntensity(picker, hexInput, slider, output) {
+    if (!picker || !hexInput || !slider || !output) return null;
+    let sourceHex = picker.value.toUpperCase();
+    let applying = false;
+    function apply() {
+      const value = Number(slider.value);
+      const adjusted = withSaturation(sourceHex, value);
+      slider.setAttribute('aria-valuenow', String(value));
+      output.value = `${value}%`;
+      output.textContent = `${value}%`;
+      picker.value = adjusted;
+      hexInput.value = adjusted;
+      applying = true;
+      hexInput.dispatchEvent(new Event('input', { bubbles: true }));
+      applying = false;
+    }
+    picker.addEventListener('input', () => {
+      if (applying) return;
       sourceHex = picker.value.toUpperCase();
       apply();
+    });
+    hexInput.addEventListener('input', () => {
+      if (applying || !/^#[\da-f]{6}$/i.test(hexInput.value)) return;
+      sourceHex = hexInput.value.toUpperCase();
+      apply();
+    });
+    slider.addEventListener('input', apply);
+    apply();
+    return {
+      get sourceHex() { return sourceHex; },
+      set sourceHex(value) { sourceHex = value; },
+      apply
+    };
+  }
+
+  const brandPicker = document.getElementById('brandPicker');
+  const brand = attachIntensity(
+    brandPicker,
+    document.getElementById('id_brand_color'),
+    document.getElementById('brandIntensity'),
+    document.getElementById('brandIntensityValue')
+  );
+  const highlight = attachIntensity(
+    document.querySelector('[data-color-picker-for="id_nav_highlight_color"]'),
+    document.getElementById('id_nav_highlight_color'),
+    document.getElementById('navHighlightIntensity'),
+    document.getElementById('navHighlightIntensityValue')
+  );
+
+  const suggested = document.getElementById('suggestedColour');
+  if (suggested) suggested.addEventListener('click', () => {
+    if (brand && brandPicker && /^#[\da-f]{6}$/i.test(brandPicker.value)) {
+      brand.sourceHex = brandPicker.value.toUpperCase();
+      brand.apply();
     }
   });
   const eyedropper = document.getElementById('eyeBtn');
   if (eyedropper) eyedropper.addEventListener('click', () => {
     window.setTimeout(() => {
-      if (/^#[\da-f]{6}$/i.test(picker.value)) {
-        sourceHex = picker.value.toUpperCase();
-        apply();
+      if (brand && brandPicker && /^#[\da-f]{6}$/i.test(brandPicker.value)) {
+        brand.sourceHex = brandPicker.value.toUpperCase();
+        brand.apply();
       }
     }, 0);
   });
-  apply();
 })();
