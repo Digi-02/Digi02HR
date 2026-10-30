@@ -33,7 +33,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Team Members</small>
                         <h3 class="mt-2 mb-0">{{ team_count }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.hires trend_label="New hires / week - 8 weeks" only %}
                 </div>
             </div>
         </div>
@@ -44,7 +43,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Checked In</small>
                         <h3 class="mt-2 mb-0 text-success">{{ checked_in_count }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.present trend_label="Employees present - 7 days" only %}
                 </div>
             </div>
         </div>
@@ -55,7 +53,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Completed</small>
                         <h3 class="mt-2 mb-0 text-primary">{{ completed_count }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.completed trend_label="Completed check-outs - 7 days" only %}
                 </div>
             </div>
         </div>
@@ -66,7 +63,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Not In</small>
                         <h3 class="mt-2 mb-0 text-secondary">{{ not_in_count }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.not_in trend_label="Historical absence" only %}
                 </div>
             </div>
         </div>

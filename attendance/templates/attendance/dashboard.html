@@ -44,21 +44,9 @@
 
   <section class="overview-kpis" aria-label="Key workforce metrics">
     {% for kpi in dashboard_kpis %}
-    <a class="overview-kpi overview-kpi--{{ kpi.style }}" href="{{ kpi.href }}" aria-label="{{ kpi.label }}: {{ kpi.value }}. {{ kpi.context }}">
-      <span class="overview-kpi__copy"><span class="overview-kpi__label">{{ kpi.label }}</span><strong class="overview-kpi__value">{{ kpi.value }}</strong><span class="overview-kpi__context">{{ kpi.context }}</span></span>
+    <a class="overview-kpi overview-kpi--{{ kpi.style }}" href="{{ kpi.href }}" aria-label="{{ kpi.label }}: {{ kpi.value }}">
+      <span class="overview-kpi__copy"><span class="overview-kpi__label">{{ kpi.label }}</span><strong class="overview-kpi__value">{{ kpi.value }}</strong></span>
       <span class="overview-kpi__icon"><span class="material-symbols-rounded" aria-hidden="true">{{ kpi.icon }}</span></span>
-      {% if kpi.trend %}
-      <span class="overview-kpi__trend">
-        <span class="overview-kpi__trend-title"><span>{{ kpi.trend_label }}</span><strong>{{ kpi.trend.summary }}</strong></span>
-        <svg class="overview-kpi__spark" viewBox="0 0 140 42" role="img" aria-label="{{ kpi.trend_label }}. {{ kpi.trend.summary }}">
-          <path class="overview-kpi__spark-grid" d="M 4 10 H 136 M 4 22 H 136 M 4 34 H 136"></path>
-          <path class="overview-kpi__spark-area" d="{{ kpi.trend.area_path }}"></path>
-          <path class="overview-kpi__spark-line" d="{{ kpi.trend.line_path }}"></path>
-          {% for point in kpi.trend.points %}<circle class="overview-kpi__spark-point" cx="{{ point.x }}" cy="{{ point.y }}" r="2.5" data-chart-point data-label="{{ point.label }}" data-value="{{ point.value }}" tabindex="0" role="img" aria-label="{{ point.label }}: {{ point.value }}"><title>{{ point.label }}: {{ point.value }}</title></circle>{% endfor %}
-        </svg>
-        <span class="overview-kpi__spark-labels"><span>{{ kpi.trend.first_label }}</span><span>{{ kpi.trend.last_label }}</span></span>
-      </span>
-      {% else %}<span class="overview-kpi__spark-empty">No events recorded in this period</span>{% endif %}
     </a>
     {% endfor %}
   </section>

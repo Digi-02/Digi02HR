@@ -13,7 +13,6 @@
                         <small class="text-muted text-uppercase fw-semibold">All Emails</small>
                         <h3 class="mt-2 mb-0">{{ invitation_counts.total }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.total trend_label="Invitations created / week - 8 weeks" only %}
                 </div>
             </div>
         </div>
@@ -24,7 +23,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Sent</small>
                         <h3 class="mt-2 mb-0 text-info">{{ invitation_counts.sent }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.sent trend_label="Currently sent · created / week" only %}
                 </div>
             </div>
         </div>
@@ -35,7 +33,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Opened</small>
                         <h3 class="mt-2 mb-0 text-warning">{{ invitation_counts.opened }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.opened trend_label="Currently opened · created / week" only %}
                 </div>
             </div>
         </div>
@@ -46,7 +43,6 @@
                         <small class="text-muted text-uppercase fw-semibold">Responded</small>
                         <h3 class="mt-2 mb-0 text-success">{{ invitation_counts.responded }}</h3>
                     </div>
-                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.responded trend_label="Currently responded · created / week" only %}
                 </div>
             </div>
         </div>

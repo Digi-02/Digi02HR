@@ -317,9 +317,9 @@ body[data-dashboard-theme="white"] .overview-eyebrow { color: var(--muted); }
 .overview-kpi {
   position: relative;
   min-width: 0;
-  min-height: 132px;
+  min-height: 92px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(104px, .86fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 10px;
   padding: 16px;
@@ -428,7 +428,7 @@ a.overview-kpi:hover { color: inherit; transform: translateY(-2px); border-color
 }
 @media (max-width: 480px) {
   .overview-kpis { gap: 9px; }
-  .overview-kpi { grid-template-columns: 1fr 30px; grid-template-rows: auto auto; min-height: 160px; gap: 8px 4px; padding: 12px; }
+  .overview-kpi { grid-template-columns: 1fr 30px; grid-template-rows: auto; min-height: 88px; gap: 0 4px; padding: 12px; }
   .overview-kpi__copy { grid-column: 1; grid-row: 1; }
   .overview-kpi__trend, .overview-kpi__spark-empty { grid-column: 1 / -1; grid-row: 2; padding-top: 0; }
   .overview-kpi__trend-title { grid-template-columns: 1fr auto; align-items: baseline; }

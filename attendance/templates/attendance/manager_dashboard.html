@@ -38,7 +38,6 @@
                 <small class="text-muted text-uppercase fw-semibold">Team Members</small>
                 <h3 class="mt-2 mb-0">{{ team_count }}</h3>
                 </div>
-                {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.hires trend_label="New hires / week - 8 weeks" only %}
               </div>
             </div>
         </div>
@@ -49,7 +48,6 @@
                 <small class="text-muted text-uppercase fw-semibold">Present Today</small>
                 <h3 class="mt-2 mb-0 text-success">{{ present_today }}</h3>
                 </div>
-                {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.present trend_label="Employees present - 7 days" only %}
               </div>
             </div>
         </div>
@@ -60,7 +58,6 @@
                 <small class="text-muted text-uppercase fw-semibold">Late Today</small>
                 <h3 class="mt-2 mb-0 text-warning">{{ late_today }}</h3>
                 </div>
-                {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.late trend_label="Late employees - 7 days" only %}
               </div>
             </div>
         </div>
@@ -71,7 +68,6 @@
                 <small class="text-muted text-uppercase fw-semibold">Pending Leave</small>
                 <h3 class="mt-2 mb-0 text-primary">{{ pending_leave_count }}</h3>
                 </div>
-                {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.leave_requests trend_label="Requests submitted - 7 days" only %}
               </div>
             </div>
         </div>
