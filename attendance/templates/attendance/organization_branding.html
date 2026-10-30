@@ -280,7 +280,16 @@
             <section class="nav-section-card" aria-labelledby="navHighlightLabel">
               <div class="nav-section-head">
                 <h6 id="navHighlightLabel">Highlight colour</h6>
-                <p>Choose the colour used for the active navigation item.</p>
+                <p>Set the active item colour independently for its normal and hovered states.</p>
+              </div>
+              <div class="nav-custom-highlight mb-3">
+                <label class="form-label" for="{{ form.nav_unhovered_highlight_color.id_for_label }}">Unhovered highlight colour</label>
+                <div class="brand-colour-row">
+                  <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_unhovered_highlight_color.id_for_label }}" value="{{ form.nav_unhovered_highlight_color.value|default:nav_preview.nav_active_indicator|default:'#111111' }}" aria-label="Choose the active navigation highlight colour when not hovered">
+                  {{ form.nav_unhovered_highlight_color }}
+                </div>
+                <small class="field-help">Used for the active navigation item when the pointer is elsewhere. Hover background remains controlled separately.</small>
+                {{ form.nav_unhovered_highlight_color.errors }}
               </div>
               <div class="nav-choice-grid nav-choice-grid--source">
                 {% with selected=form.nav_highlight_source.value|default:organization.nav_highlight_source %}
@@ -840,7 +849,7 @@
 
   var NAV_FIELDS = [
     'nav_style', 'nav_bg_color', 'nav_highlight_style', 'nav_highlight_source',
-    'nav_highlight_color', 'nav_text_color', 'nav_muted_color', 'nav_hover_bg',
+    'nav_highlight_color', 'nav_unhovered_highlight_color', 'nav_text_color', 'nav_muted_color', 'nav_hover_bg',
     'nav_hover_fg', 'nav_active_icon_bg', 'nav_active_icon_fg', 'brand_color'
   ];
   var CSS_VARS = {
@@ -941,6 +950,7 @@
     var hoverIconBg = darkBg ? '#333333' : '#ECECEC';
     var highlight = source === 'accent' ? accent :
       (source === 'custom' ? normalizeHex(config.nav_highlight_color, '#111111') : (darkBg ? '#FFFFFF' : '#111111'));
+    highlight = normalizeHex(config.nav_unhovered_highlight_color, highlight);
     var activeBg = 'transparent';
     var activeFg = fg;
     var activeBorder = 'transparent';

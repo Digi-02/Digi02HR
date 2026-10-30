@@ -163,6 +163,9 @@ class Organization(models.Model):
     nav_highlight_color = models.CharField(
         max_length=7, default='#111111', validators=[BRAND_COLOR_VALIDATOR]
     )
+    nav_unhovered_highlight_color = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
     nav_text_color = models.CharField(
         max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
     )

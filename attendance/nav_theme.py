@@ -45,6 +45,7 @@ NAV_DEFAULTS = {
     "nav_highlight_style": "rounded_pill",
     "nav_highlight_source": "auto",
     "nav_highlight_color": "#111111",
+    "nav_unhovered_highlight_color": "",
     "nav_text_color": "",
     "nav_muted_color": "",
     "nav_hover_bg": "",
@@ -143,6 +144,7 @@ def resolve_nav_theme(
     nav_highlight_style="rounded_pill",
     nav_highlight_source="auto",
     nav_highlight_color="#111111",
+    nav_unhovered_highlight_color="",
     nav_text_color="",
     nav_muted_color="",
     nav_hover_bg="",
@@ -211,6 +213,8 @@ def resolve_nav_theme(
         highlight = normalize_hex(nav_highlight_color, "#111111")
     else:
         highlight = "#111111" if not dark_bg else "#FFFFFF"
+    if nav_unhovered_highlight_color and HEX_RE.match(str(nav_unhovered_highlight_color).strip()):
+        highlight = normalize_hex(nav_unhovered_highlight_color, highlight)
 
     active_bg = TRANSPARENT
     active_fg = fg
@@ -300,6 +304,7 @@ def nav_inputs_from_organization(organization):
         "nav_highlight_style": getattr(organization, "nav_highlight_style", "rounded_pill"),
         "nav_highlight_source": getattr(organization, "nav_highlight_source", "auto"),
         "nav_highlight_color": getattr(organization, "nav_highlight_color", "#111111"),
+        "nav_unhovered_highlight_color": getattr(organization, "nav_unhovered_highlight_color", ""),
         "nav_text_color": getattr(organization, "nav_text_color", ""),
         "nav_muted_color": getattr(organization, "nav_muted_color", ""),
         "nav_hover_bg": getattr(organization, "nav_hover_bg", ""),
@@ -322,6 +327,6 @@ def nav_inputs_from_mapping(data, organization=None):
         value = data.get(key, default) if hasattr(data, "get") else default
         inputs[key] = value if value not in (None, "") else (default if key not in {
             "nav_text_color", "nav_muted_color", "nav_hover_bg", "nav_hover_fg",
-            "nav_active_icon_bg", "nav_active_icon_fg",
+            "nav_active_icon_bg", "nav_active_icon_fg", "nav_unhovered_highlight_color",
         } else "")
     return inputs

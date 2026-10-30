@@ -480,3 +480,4 @@ body[data-dashboard-theme="white"] .overview-category-list__stats i { color: var
   .overview-category-list > li { grid-template-columns: 1fr; gap: 8px; }
   .overview-category-list__stats { justify-content: flex-start; }
 }
+button, input[type="button"], input[type="submit"], input[type="reset"], .btn, .dd-button { border-radius:5px !important; }

@@ -1452,6 +1452,11 @@ class OrganizationBrandingForm(forms.ModelForm):
         error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#111111', 'maxlength': 7}),
     )
+    nav_unhovered_highlight_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #B92D5D.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Use selected highlight source', 'maxlength': 7}),
+    )
     nav_text_color = forms.RegexField(
         regex=r'^#[0-9A-Fa-f]{6}$', required=False,
         error_messages={'invalid': 'Enter a valid hex color like #1C1C1C.'},
@@ -1487,7 +1492,7 @@ class OrganizationBrandingForm(forms.ModelForm):
         model = Organization
         fields = ['name', 'logo', 'brand_color', 'dashboard_appearance', 'timezone',
                   'nav_style', 'nav_bg_color', 'nav_highlight_style',
-                  'nav_highlight_source', 'nav_highlight_color',
+                  'nav_highlight_source', 'nav_highlight_color', 'nav_unhovered_highlight_color',
                   'nav_text_color', 'nav_muted_color', 'nav_hover_bg',
                   'nav_hover_fg', 'nav_active_icon_bg', 'nav_active_icon_fg']
         widgets = {
@@ -1552,6 +1557,9 @@ class OrganizationBrandingForm(forms.ModelForm):
         fallback = self.instance.nav_highlight_color or '#111111'
         return normalize_hex(self.cleaned_data.get('nav_highlight_color', ''), fallback)
 
+    def clean_nav_unhovered_highlight_color(self):
+        return self._clean_optional_hex('nav_unhovered_highlight_color')
+
     def clean_nav_style(self):
         value = self.cleaned_data.get('nav_style') or self.instance.nav_style or 'clean'
         return NAV_LEGACY_APPEARANCE.get(value, value)
@@ -1597,6 +1605,7 @@ class OrganizationBrandingForm(forms.ModelForm):
             nav_highlight_style=cleaned.get('nav_highlight_style', 'rounded_pill'),
             nav_highlight_source=cleaned.get('nav_highlight_source', 'auto'),
             nav_highlight_color=cleaned.get('nav_highlight_color', '#111111'),
+            nav_unhovered_highlight_color=cleaned.get('nav_unhovered_highlight_color', ''),
             nav_text_color=cleaned.get('nav_text_color', ''),
             nav_muted_color=cleaned.get('nav_muted_color', ''),
             nav_hover_bg=cleaned.get('nav_hover_bg', ''),
