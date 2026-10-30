@@ -251,6 +251,7 @@
     } catch(e) { dirty=true; status.textContent=e.message || 'Save failed'; }
     finally { saving=false; if(dirty) schedule(); }
   }
+  root.addEventListener('digidoc:save',()=>{dirty=true;save();});
   function getCookie(name) { const found=document.cookie.split('; ').find(row=>row.startsWith(name+'=')); return found?decodeURIComponent(found.split('=').slice(1).join('=')):''; }
   function schedule() { paginate(); dirty=true; status.textContent='Unsaved changes'; clearTimeout(timer); timer=setTimeout(save,800); }
   sheet.addEventListener('input',schedule); title.addEventListener('input',schedule);
@@ -289,7 +290,6 @@
   if(lh.checked)sheet.classList.add('dd-letterhead');
   lh.addEventListener('change',()=>{sheet.classList.toggle('dd-letterhead',lh.checked);schedule();});
   letterheadMode.addEventListener('change',()=>{sheet.dataset.letterheadMode=letterheadMode.value;});
-  document.getElementById('dd-letterhead-menu').addEventListener('click',()=>{if(lh.disabled){window.location.href='/settings/branding/';return;}lh.checked=!lh.checked;lh.dispatchEvent(new Event('change'));});
   document.getElementById('dd-rename').addEventListener('click',()=>{title.focus();title.select();});
   document.getElementById('dd-select-all').addEventListener('click',()=>{sheet.focus();document.execCommand('selectAll');});
   function clearFormatting(){sheet.focus();document.execCommand('removeFormat');document.execCommand('formatBlock',false,'p');schedule();}
@@ -305,7 +305,7 @@
       catch(err){status.textContent=err.message||'Image upload failed';}
     });picker.click();
   });
-  function wordCount(){const words=(sheet.innerText||'').trim().split(/\s+/).filter(Boolean).length;document.getElementById('dd-word-count').textContent=words+' words';}
+  function wordCount(){const text=(sheet.innerText||'').trim();const words=text?text.split(/\s+/).filter(Boolean).length:0;document.getElementById('dd-word-count').textContent=words+' '+(words===1?'word':'words');const statusCount=document.getElementById('dd-status-word-count');if(statusCount)statusCount.textContent=words+' '+(words===1?'word':'words');const total=sheet.querySelectorAll(':scope > .dd-page').length||1;const totalNode=document.getElementById('dd-page-total');if(totalNode)totalNode.textContent=String(total);const selection=window.getSelection();const anchor=selection&&selection.anchorNode;const element=anchor&&(anchor.nodeType===Node.ELEMENT_NODE?anchor:anchor.parentElement);const page=element&&element.closest('.dd-page');const current=document.getElementById('dd-current-page');if(current)current.textContent=page?.dataset.pageNumber||'1';}
   sheet.addEventListener('input',wordCount);wordCount();
   document.querySelectorAll('a[href*="/digidoc/"]').forEach(link=>link.addEventListener('click',async event=>{
     const href=link.href;

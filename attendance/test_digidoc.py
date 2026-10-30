@@ -242,7 +242,7 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertEqual(image["Content-Type"], "image/png")
         self.assertNotIn(b"never stored", image.content)
 
-    def test_editor_navigation_screenshots_desktop_mobile_and_collapsed(self):
+    def test_editor_ribbon_screenshots_and_responsive_layout(self):
         from playwright.sync_api import sync_playwright
 
         document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
@@ -250,7 +250,8 @@ class DigiDocPhaseTwoTests(TestCase):
         css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
         shell_js = Path("attendance/static/attendance/digidoc-shell.js").read_text(encoding="utf-8")
         editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
-        output = Path("screenshots/digidoc-phase2")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        output = Path("screenshots/digidoc-phase1")
         output.mkdir(parents=True, exist_ok=True)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
@@ -261,23 +262,29 @@ class DigiDocPhaseTwoTests(TestCase):
             page.add_style_tag(content=css)
             page.add_script_tag(content=shell_js)
             page.add_script_tag(content=editor_js)
+            page.add_script_tag(content=ribbon_js)
             self.assertEqual(page.locator("#dd-font-family option").count(), 3)
             self.assertEqual(page.locator("#dd-font-size option").count(), 11)
             self.assertTrue(page.locator('.app-nav__link[data-label="DigiDoc"]').is_visible())
             self.assertEqual(page.locator('.app-nav__link[data-label="DigiDoc"]').get_attribute("aria-current"), "page")
-            page.screenshot(path=str(output / "editor-1440.png"), full_page=True)
-            page.locator("#dd-collapse-toggle").click()
-            self.assertTrue(page.locator("body").evaluate("el => el.classList.contains('dd-collapsed')"))
-            mobile = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
-            mobile.on("pageerror", lambda error: page_errors.append(str(error)))
-            mobile.set_content(markup, wait_until="domcontentloaded")
-            mobile.add_style_tag(content=css)
-            mobile.add_script_tag(content=shell_js)
-            mobile.add_script_tag(content=editor_js)
-            self.assertLessEqual(mobile.evaluate("document.documentElement.scrollWidth"), 390)
-            mobile.locator("#dd-nav-toggle").click()
-            self.assertTrue(mobile.locator("body").evaluate("el => el.classList.contains('dd-nav-open')"))
-            mobile.locator("#sidebarClose").click()
-            mobile.screenshot(path=str(output / "editor-390.png"), full_page=True)
+            for width in (1440, 1280, 390):
+                page.set_viewport_size({"width": width, "height": 900 if width > 700 else 844})
+                for tab_name in ("home", "insert", "layout", "view", "file"):
+                    page.locator(f'[data-tab="{tab_name}"]').click()
+                    page.wait_for_timeout(80)
+                    self.assertEqual(page.locator(f'[data-tab="{tab_name}"]').get_attribute("aria-selected"), "true")
+                    self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), width)
+                    if tab_name != "file":
+                        self.assertEqual(page.locator(".dd-ribbon-panel:visible").evaluate("el => Math.round(el.getBoundingClientRect().height)"), 92)
+                    page.screenshot(path=str(output / f"ribbon-{tab_name}-{width}.png"), full_page=True)
+                page.locator('[data-tab="home"]').click()
+                page.locator("#dd-ribbon-toggle").click()
+                self.assertTrue(page.locator("#dd-ribbon").evaluate("el => el.classList.contains('is-collapsed')"))
+                page.screenshot(path=str(output / f"ribbon-collapsed-{width}.png"), full_page=True)
+                page.locator("#dd-ribbon-toggle").click()
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.locator("#dd-nav-toggle").click()
+            self.assertTrue(page.locator("body").evaluate("el => el.classList.contains('dd-nav-open')"))
+            page.locator("#sidebarClose").click()
             self.assertEqual(page_errors, [])
             browser.close()

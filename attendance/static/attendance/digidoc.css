@@ -45,3 +45,69 @@
 @media(max-width:700px) { .dd-main { margin-left:0; padding:10px; }.dd-mobile-head { display:flex; align-items:center; gap:12px; padding:4px 0 12px; }.dd-mobile-head button { border:0; background:transparent; font-size:22px; }.dd-mobile-head a { color:#202124; font-weight:700; text-decoration:none; }.dd-app .app-sidebar { transform:translateX(-100%); transition:transform .2s ease; z-index:1300; }.dd-nav-open .app-sidebar { transform:translateX(0); }.dd-nav-open .dd-backdrop { display:block; position:fixed; inset:0; z-index:1200; border:0; background:#10182766; }.dd-app .app-sidebar__close { display:block; }.dd-collapse-toggle { display:none; }.dd-workspace { padding:10px 0; overflow-x:auto; }.dd-page { width:calc(100vw - 20px); height:calc((100vw - 20px) * 1.4142857); padding:36px 24px; }.dd-page:after { right:14px; bottom:8px; }.dd-toolbar { flex-wrap:nowrap; overflow-x:auto; }.dd-page-hint { margin-left:0; }.dd-title { max-width:unset; } }
 @page { size:A4; margin:0; }
 @media print { .app-sidebar,.dd-collapse-toggle,.dd-mobile-head,.dd-topbar,.dd-menu-bar,.dd-toolbar,.dd-settings { display:none!important; }.dd-main { margin:0;padding:0; }.dd-workspace { background:white;padding:0;overflow:visible; }.dd-sheet { gap:0; }.dd-page { width:210mm;height:297mm;margin:0;padding:25mm 20mm;box-shadow:none;overflow:hidden;break-after:page;page-break-after:always; }.dd-page:last-child { break-after:auto;page-break-after:auto; }.dd-page:after { display:none; } }
+
+/* DigiDoc desktop ribbon */
+.dd-app { --dd-accent:var(--nav-active-indicator,#a91d56); --dd-line:#d9dde3; --dd-muted:#616b78; --dd-toolbar-bg:#f8f9fb; background:#f0f1f3; }
+.dd-main { padding:0; margin-left:248px; min-width:0; display:flex; flex-direction:column; height:100vh; min-height:100vh; overflow:hidden; }
+.dd-mobile-head { display:none; }
+.dd-editor { display:flex; flex-direction:column; position:relative; min-height:0; height:100%; gap:0; background:#fff; }
+.dd-topbar { box-sizing:border-box; min-height:56px; padding:6px 18px 5px 12px; gap:10px; flex-wrap:nowrap; border-bottom:1px solid var(--dd-line); background:#fff; }
+.dd-back { color:var(--dd-accent)!important; }
+.dd-icon-button { width:34px; height:34px; padding:6px!important; display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent!important; background:transparent; color:#3f4752; border-radius:6px; cursor:pointer; }
+.dd-icon-button svg,.dd-group-controls button svg,.dd-download summary svg,.dd-ribbon-toggle svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.dd-icon-button:hover,.dd-group-controls button:hover:not(:disabled),.dd-ribbon-toggle:hover { background:#f1f2f4; border-color:#dce0e5!important; }
+.dd-icon-button:focus-visible,.dd-group-controls button:focus-visible,.dd-tabs button:focus-visible,.dd-file-panel button:focus-visible { outline:2px solid var(--dd-accent); outline-offset:1px; }
+.dd-title { min-width:80px; max-width:480px; flex:1; font-size:16px; font-weight:600; padding:6px 8px; }
+.dd-status { min-width:64px; white-space:nowrap; font-size:12px; }
+.dd-quick-access,.dd-top-actions { display:flex; align-items:center; gap:6px; }
+.dd-button,.dd-download summary { border-color:#d5d9df; padding:7px 12px; border-radius:7px; background:#fff; }
+.dd-download summary { display:flex; align-items:center; gap:5px; list-style:none; white-space:nowrap; }.dd-download summary::-webkit-details-marker { display:none; }
+.dd-download-menu { top:calc(100% + 6px); width:260px; border-color:#d5d9df; box-shadow:0 8px 24px #17202d24; }
+.dd-menu-bar,.dd-toolbar,.dd-settings { display:none!important; }
+.dd-tabs { height:38px; flex:none; display:flex; align-items:stretch; padding:0 12px; gap:2px; border-bottom:1px solid var(--dd-line); background:#fff; overflow-x:auto; scrollbar-width:thin; }
+.dd-tabs [role=tab] { position:relative; flex:none; padding:0 16px; border:0; background:transparent; color:#46505c; cursor:pointer; font:500 14px/1 Arial,sans-serif; }
+.dd-tabs [role=tab][aria-selected=true] { color:var(--dd-accent); font-weight:700; }
+.dd-tabs [role=tab][aria-selected=true]:after { content:""; position:absolute; left:10px; right:10px; bottom:0; height:3px; border-radius:3px 3px 0 0; background:var(--dd-accent); }
+.dd-tabs [data-tab=file][aria-selected=true] { background:#f7f7f8; }
+.dd-ribbon-toggle { margin-left:auto; align-self:center; width:30px; height:28px; border:1px solid transparent; border-radius:5px; color:#596270; background:transparent; cursor:pointer; }
+.dd-ribbon-toggle svg { width:16px;height:16px; }.dd-ribbon-collapsed .dd-ribbon-toggle svg { transform:rotate(180deg); }
+.dd-ribbon { flex:none; min-height:92px; background:var(--dd-toolbar-bg); border-bottom:1px solid var(--dd-line); overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+.dd-ribbon.is-collapsed { display:none; }
+.dd-ribbon-panel { box-sizing:border-box; display:flex; min-width:max-content; height:92px; align-items:stretch; padding:4px 12px 0; }
+.dd-ribbon-panel[hidden],.dd-file-panel[hidden] { display:none!important; }
+.dd-group { flex:none; min-width:max-content; display:flex; flex-direction:column; justify-content:space-between; position:relative; padding:3px 10px 2px; border-right:1px solid #daddE2; }
+.dd-group:first-child { padding-left:3px; }.dd-group:last-child { border-right:0; }
+.dd-group-controls { min-height:60px; display:flex; align-items:center; gap:3px; white-space:nowrap; }
+.dd-group-controls button { min-width:32px; height:34px; padding:5px 7px; display:inline-flex; align-items:center; justify-content:center; gap:5px; border:1px solid transparent; border-radius:5px; color:#293341; background:transparent; cursor:pointer; font:13px Arial,sans-serif; }
+.dd-group-controls button:disabled { color:#9299a2; cursor:not-allowed; }
+.dd-group-controls button.is-active { background:#e7eaf0; border-color:#c8ced8; box-shadow:inset 0 0 0 1px #c8ced8; color:#202b3a; }
+.dd-group-controls button:disabled:hover { background:transparent; border-color:transparent!important; }
+.dd-group-controls button span { font-size:12px; }
+.dd-group-controls select,.dd-select-label select { max-width:145px; height:32px; padding:4px 7px; border:1px solid #cfd4dc; border-radius:5px; background:white; color:#303844; font-size:12px; }
+.dd-font-tools select:first-child { width:120px; }.dd-font-tools select:nth-child(2) { width:56px; }
+.dd-group-label { align-self:center; padding:1px 4px 0; color:#606b78; font-size:10px; line-height:14px; }
+.dd-color-control { width:34px; height:34px; position:relative; display:inline-flex; align-items:center; justify-content:center; margin:0; color:#293341; font-size:14px; font-weight:700; border-radius:5px; }
+.dd-color-control:hover { background:#f1f2f4; }.dd-color-control input { position:absolute; opacity:0; inset:0; width:100%; height:100%; cursor:pointer; }.dd-color-control:after { content:""; position:absolute; left:9px; right:8px; bottom:3px; height:3px; background:#38424f; pointer-events:none; }.dd-highlight-control:after { background:#e0c02e; }
+.dd-select-label { display:flex; flex-direction:column; gap:3px; color:#5e6876; font-size:10px; white-space:nowrap; }.dd-select-label input[type=number] { width:68px; height:26px; border:1px solid #cfd4dc; border-radius:4px; padding:2px 4px; }
+.dd-toggle { display:flex; align-items:center; gap:5px; padding:5px 6px; color:#303844; font-size:12px; white-space:nowrap; }.dd-toggle input { accent-color:var(--dd-accent); }.dd-toggle small { color:#75808e; }
+.dd-group-letterhead { min-width:210px; }.dd-group-letterhead .dd-group-controls { gap:10px; }
+.dd-feature-button { min-width:104px!important; height:40px!important; color:#fff!important; background:var(--dd-accent)!important; font-weight:700!important; }.dd-feature-button:hover { filter:brightness(.94); }
+.dd-ribbon-help { max-width:145px; white-space:normal; font-size:11px; color:#46505c; }
+.dd-ruler-wrap { position:relative; flex:none; display:flex; align-items:center; height:22px; margin:4px auto 0; width:min(100%,794px); padding:0 48px; box-sizing:border-box; color:#737d89; background:#f3f4f6; border:1px solid #d9dde3; border-bottom:0; overflow:hidden; }
+.dd-ruler { display:flex; justify-content:space-between; align-items:flex-end; width:100%; height:16px; background:repeating-linear-gradient(90deg,transparent 0,transparent calc(100% / 17 - 1px),#aeb5bf calc(100% / 17 - 1px),#aeb5bf calc(100% / 17)); font-size:8px; }
+.dd-ruler span { height:10px; padding:0 1px; background:#f3f4f6; }.dd-ruler span:nth-child(odd) { height:14px; }
+.dd-ruler-units { position:absolute; right:4px; bottom:0; font-size:8px; }
+.dd-workspace { flex:1; min-height:0; overflow:auto; padding:20px 20px 42px; border-radius:0; background:#eceef1; }
+.dd-sheet { min-height:100%; }
+.dd-statusbar { position:fixed; z-index:1000; left:248px; right:0; bottom:0; height:32px; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; padding:0 14px; background:#fff; border-top:1px solid var(--dd-line); color:#596371; font-size:11px; }
+.dd-statusbar>div { display:flex; align-items:center; gap:10px; }.dd-status-divider { height:14px; border-left:1px solid #d8dce2; }
+.dd-statusbar-zoom { gap:6px!important; }.dd-statusbar button { padding:2px 7px; border:1px solid transparent; border-radius:4px; background:transparent; color:#4d5764; cursor:pointer; }.dd-statusbar button:hover { background:#f1f2f4; border-color:#d9dde3; }
+.dd-statusbar input[type=range],.dd-zoom-controls input[type=range] { width:104px; accent-color:var(--dd-accent); }
+.dd-statusbar output,.dd-zoom-controls output { min-width:38px; text-align:center; }
+.dd-file-panel { position:absolute; z-index:50; inset:94px 0 32px; display:grid; grid-template-columns:205px minmax(260px,1fr); background:#fff; box-shadow:0 8px 22px #18202d20; }
+.dd-file-menu { display:flex; flex-direction:column; gap:2px; padding:20px 12px; background:#f4f5f7; border-right:1px solid var(--dd-line); overflow:auto; }.dd-file-menu button,.dd-file-menu summary { box-sizing:border-box; width:100%; min-height:38px; display:flex; align-items:center; padding:8px 12px; border:0; border-radius:5px; background:transparent; color:#303945; text-align:left; text-decoration:none; font:13px Arial,sans-serif; cursor:pointer; }.dd-file-menu button:hover,.dd-file-menu summary:hover,.dd-file-menu button.is-active { background:#e7e9ed; }.dd-file-menu form { margin:0; }.dd-file-menu details>a { display:block; padding:7px 18px; color:#303945; text-decoration:none; font-size:12px; }.dd-file-menu details>a:hover { background:#e7e9ed; }.dd-file-back { color:var(--dd-accent)!important; font-weight:700!important; margin-bottom:10px; }.dd-delete-action { color:#a22!important; }
+.dd-file-info { max-width:560px; padding:30px 42px; }.dd-file-info h1 { margin:0 0 24px; font-size:22px; font-weight:500; }.dd-file-info label { display:grid; gap:6px; color:#65707e; font-size:12px; }.dd-file-info input { padding:9px; border:1px solid var(--dd-line); border-radius:5px; color:#293341; background:#fafbfc; }.dd-file-info p { margin:18px 0; color:#4a5562; }.dd-file-info #dd-file-return { color:var(--dd-accent); font-weight:700; border:1px solid var(--dd-line); border-radius:5px; padding:8px 12px; background:white; cursor:pointer; }
+.dd-visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
+@media(max-width:1000px) { .dd-main { margin-left:0; }.dd-statusbar { left:0; }.dd-app .app-sidebar { transform:translateX(-100%); transition:transform .2s ease; z-index:1300; }.dd-nav-open .app-sidebar { transform:translateX(0); }.dd-nav-open .dd-backdrop { display:block; position:fixed; inset:0; z-index:1200; border:0; background:#10182766; }.dd-app .app-sidebar__close { display:block; }.dd-collapse-toggle { display:none; } }
+@media(max-width:700px) { .dd-mobile-head { display:flex; align-items:center; gap:12px; padding:4px 10px 8px; border-bottom:1px solid var(--dd-line); background:#fff; }.dd-mobile-head button { border:0; background:transparent; font-size:22px; cursor:pointer; }.dd-mobile-head a { color:#202124; font-weight:700; text-decoration:none; }.dd-topbar { min-height:50px; padding:5px 7px; gap:5px; }.dd-title { font-size:13px; max-width:none; }.dd-status { min-width:0; max-width:72px; overflow:hidden; text-overflow:ellipsis; }.dd-quick-access { gap:0; }.dd-quick-access .dd-icon-button { width:29px; }.dd-top-actions { gap:4px; }.dd-button,.dd-download summary { padding:6px 8px; font-size:12px; }.dd-tabs { height:36px; padding:0 5px; }.dd-tabs [role=tab] { padding:0 13px; }.dd-ribbon-panel { padding-left:8px; }.dd-ruler-wrap { width:calc(100% - 20px); }.dd-workspace { padding:10px 0 42px; }.dd-page { width:calc(100vw - 20px); height:calc((100vw - 20px) * 1.4142857); padding:36px 24px; }.dd-page:after { right:14px; bottom:8px; }.dd-statusbar { height:30px; padding:0 7px; font-size:10px; }.dd-statusbar>div { gap:5px; }.dd-statusbar-zoom input { width:62px!important; }.dd-statusbar-zoom output { min-width:32px; }.dd-statusbar #dd-status-fit { display:none; }.dd-file-panel { inset:86px 0 30px; grid-template-columns:140px minmax(0,1fr); }.dd-file-menu { padding:12px 7px; }.dd-file-menu button,.dd-file-menu summary { padding:7px 8px; font-size:12px; }.dd-file-info { padding:22px 16px; overflow:auto; }.dd-file-info h1 { font-size:18px; } }
+@media print { .dd-tabs,.dd-ribbon,.dd-ruler-wrap,.dd-file-panel,.dd-statusbar { display:none!important; }.dd-main { height:auto; overflow:visible; }.dd-editor { height:auto; }.dd-workspace { padding:0; }.dd-page { width:210mm; height:297mm; margin:0; padding:25mm; box-shadow:none; } }
