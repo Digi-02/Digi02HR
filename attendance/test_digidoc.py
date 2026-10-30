@@ -12,6 +12,9 @@ from PIL import Image
 from io import BytesIO
 import json
 from pathlib import Path
+import re
+from zipfile import ZipFile
+from xml.etree import ElementTree
 
 
 class DigiDocPhaseTwoTests(TestCase):
@@ -121,6 +124,62 @@ class DigiDocPhaseTwoTests(TestCase):
         preview = self.client.get(reverse("digidoc_preview", args=[document.pk]))
         self.assertEqual(preview.status_code, 200, preview.content[:200])
         self.assertContains(preview, "data:image/png;base64,")
+
+    def test_editor_download_formats_are_clickable_and_return_valid_files(self):
+        content = {"type": "doc", "content": [
+            {"type": "heading", "level": 1, "content": [{"type": "text", "text": "Export heading"}]},
+            {"type": "paragraph", "attrs": {"align": "center"}, "content": [{"type": "text", "text": "Exported bold text", "marks": [{"type": "bold"}]}]},
+            {"type": "table", "content": [{"type": "tableRow", "content": [{"type": "tableCell", "content": [{"type": "text", "text": "Table cell"}]}]}]},
+        ]}
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Export check", content_json=content)
+        editor = self.client.get(reverse("digidoc_editor", args=[document.pk]))
+        self.assertEqual(editor.status_code, 200)
+        for file_format in ("docx", "odt", "rtf", "txt"):
+            with self.subTest(file_format=file_format):
+                download = self.client.get(reverse("digidoc_export", args=[document.pk, file_format]))
+                self.assertEqual(download.status_code, 200, download.content[:200])
+                self.assertIn(f"filename=\"Export_check.{file_format}\"", download["Content-Disposition"])
+                self.assertIn(reverse("digidoc_export", args=[document.pk, file_format]).encode(), editor.content)
+                if file_format in {"docx", "odt"}:
+                    archive = ZipFile(BytesIO(download.content))
+                    self.assertIsNone(archive.testzip())
+                    xml_name = "word/document.xml" if file_format == "docx" else "content.xml"
+                    xml = ElementTree.fromstring(archive.read(xml_name))
+                    self.assertIn("Exported bold text", "".join(xml.itertext()))
+                    self.assertIn("Table cell", "".join(xml.itertext()))
+                elif file_format == "rtf":
+                    self.assertTrue(download.content.startswith(b"{\\rtf1"))
+                    self.assertIn(b"Exported bold text", download.content)
+                else:
+                    self.assertIn("Exported bold text", download.content.decode("utf-8"))
+
+    def test_editor_flows_an_oversized_paragraph_onto_a_second_a4_page(self):
+        from playwright.sync_api import sync_playwright
+
+        long_text = "w" * 14000
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Pagination check",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": long_text}]}]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.wait_for_function("document.querySelectorAll('#dd-sheet > .dd-page').length > 1")
+            pages = page.locator("#dd-sheet > .dd-page")
+            self.assertGreater(pages.count(), 1)
+            self.assertEqual(page.locator("#dd-sheet").text_content(), long_text)
+            first_height = pages.nth(0).evaluate("node => node.getBoundingClientRect().height")
+            self.assertAlmostEqual(first_height, 1123, delta=2)
+            browser.close()
 
     def test_three_page_pdf_table_image_and_letterhead_modes_render_to_png(self):
         from pathlib import Path

@@ -38,6 +38,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .digidoc_exports import docx as export_docx, odt as export_odt, plain_text as export_text, rtf_text as export_rtf
 from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset
 from .organization import get_active_organization, user_has_hr_access
 from .shell import shell_context
@@ -244,7 +245,15 @@ def digidoc_list(request):
 @require_POST
 def digidoc_create(request):
     organization = _scope(request)
-    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title="Untitled document", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+    letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
+    doc = DigiDocDocument.objects.create(
+        organization=organization,
+        created_by=request.user,
+        title="Untitled document",
+        content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        letterhead_enabled=bool(letterhead and letterhead.image),
+        letterhead_page_mode=letterhead.default_page_mode if letterhead else "every",
+    )
     return redirect("digidoc_editor", document_id=doc.pk)
 
 
@@ -687,6 +696,47 @@ def digidoc_pdf(request, document_id):
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, no-store"
     AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.download", target_model="DigiDocDocument", target_id=str(doc.pk), summary="Downloaded a DigiDoc PDF.", metadata={"format": "pdf"})
+    return response
+
+
+@login_required
+def digidoc_export(request, document_id, file_format):
+    organization = _scope(request)
+    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    exporters = {
+        "docx": (export_docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        "odt": (export_odt, "application/vnd.oasis.opendocument.text"),
+        "rtf": (export_rtf, "application/rtf"),
+        "txt": (export_text, "text/plain; charset=utf-8"),
+    }
+    if file_format not in exporters:
+        return HttpResponse("Unsupported document format.", status=404)
+    cutoff = timezone.now() - timedelta(minutes=1)
+    recent = AuditLog.objects.filter(actor=request.user, action="digidoc.download", created_at__gte=cutoff).count()
+    if recent >= 10:
+        return HttpResponse("Download limit reached. Try again shortly.", status=429)
+    try:
+        content = validate_document_json(doc.content_json)
+        exporter, content_type = exporters[file_format]
+        data = exporter(content)
+    except ValidationError as exc:
+        return HttpResponse(exc.messages[0], status=400)
+    except Exception:
+        return HttpResponse("The document could not be exported.", status=400)
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    if not data or len(data) > 25 * 1024 * 1024:
+        return HttpResponse("The generated document is too large to download.", status=400)
+    clean_name = _clean_title(doc.title).replace("\\", "_").replace("/", "_").replace('"', "").replace("'", "")
+    clean_name = re.sub(r"[. ]+$", "", re.sub(r"[^\w .-]+", "_", clean_name, flags=re.UNICODE))[:80].strip(" .") or "document"
+    if clean_name.upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
+        clean_name = "document"
+    filename = re.sub(r"[^A-Za-z0-9_-]+", "_", unicodedata.normalize("NFKD", clean_name).encode("ascii", "ignore").decode())[:80].strip("_") or "document"
+    response = HttpResponse(data, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}.{file_format}"; filename*=UTF-8\'\'{quote(clean_name)}.{file_format}'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.download", target_model="DigiDocDocument", target_id=str(doc.pk), summary=f"Downloaded a DigiDoc {file_format.upper()}.", metadata={"format": file_format})
     return response
 
 

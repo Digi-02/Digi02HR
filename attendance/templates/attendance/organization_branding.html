@@ -111,6 +111,7 @@
                     {% if has_letterhead %}
                     <img id="letterheadPreviewImage" src="{{ letterhead_image_url }}" alt="Preview of the current company letterhead" style="object-fit:{% if letterhead.scale_mode == 'fill' %}cover{% else %}contain{% endif %}">
                     {% else %}<img id="letterheadPreviewImage" alt="Preview of the selected company letterhead" hidden>{% endif %}
+                    <span id="letterheadPreviewError" class="letterhead-preview-error" role="alert" hidden>Saved letterhead preview could not load. Please upload the image again.</span>
                     <span class="letterhead-guide letterhead-guide--top" data-margin="top" role="slider" tabindex="0" aria-label="Top page margin" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ letterhead.margin_top_mm }}"></span>
                     <span class="letterhead-guide letterhead-guide--right" data-margin="right" role="slider" tabindex="0" aria-label="Right page margin" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ letterhead.margin_right_mm }}"></span>
                     <span class="letterhead-guide letterhead-guide--bottom" data-margin="bottom" role="slider" tabindex="0" aria-label="Bottom page margin" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ letterhead.margin_bottom_mm }}"></span>
@@ -147,7 +148,7 @@
                 </div>
               </div>
               <div class="letterhead-upload-row">
-                <label class="form-label" for="letterheadFile">{% if letterhead %}Replace letterhead{% else %}Choose letterhead{% endif %}</label>
+                <label class="form-label" for="letterheadFile">{% if has_letterhead %}Replace letterhead{% else %}Choose letterhead{% endif %}</label>
                 <input class="form-control" type="file" id="letterheadFile" name="letterhead_file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
                 <div class="letterhead-ratio-notice" id="letterheadRatioNotice" hidden>
                   This image is not close to A4 proportions. Choose Fit to page or Fill page; neither option distorts it.
@@ -421,6 +422,7 @@
   .letterhead-preview-column { min-width:0; }
   .letterhead-page { position:relative; width:min(100%, 280px); aspect-ratio:210 / 297; margin:0 auto 8px; overflow:hidden; background:#fff; border:1px solid var(--border-strong); box-shadow:0 8px 20px rgba(17,17,17,.10); --margin-top:13.47%; --margin-bottom:10.10%; --margin-left:9.52%; --margin-right:9.52%; }
   .letterhead-page > img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+  .letterhead-preview-error { position:absolute; z-index:1; inset:35% 8% auto; padding:8px; border-radius:6px; background:#fff1f2; color:#9f1239; font-size:12px; text-align:center; }
   .letterhead-guide { z-index:2; position:absolute; display:block; touch-action:none; outline:none; }
   .letterhead-guide:after { content:""; position:absolute; display:block; border-color:var(--accent,#0A0A0A); border-style:dashed; }
   .letterhead-guide:before { content:""; position:absolute; width:14px; height:14px; border:2px solid var(--accent,#0A0A0A); border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.2); }
@@ -615,6 +617,7 @@
   var letterheadPage = document.getElementById('letterheadPage');
   var letterheadFile = document.getElementById('letterheadFile');
   var letterheadImage = document.getElementById('letterheadPreviewImage');
+  var letterheadPreviewError = document.getElementById('letterheadPreviewError');
   var ratioNotice = document.getElementById('letterheadRatioNotice');
   var uploadPreview = document.getElementById('letterheadUploadPreview');
   var uploadPreviewImage = document.getElementById('letterheadUploadPreviewImage');
@@ -651,6 +654,15 @@
     if (pvLink) { pvLink.style.color = readableOnWhite(hex); }
     if (pvBadge) { pvBadge.style.background = hex; pvBadge.style.color = contrastText(hex); }
     if (pvMenu) { pvMenu.style.borderLeftColor = hex; }
+  }
+
+  if (letterheadImage && letterheadPreviewError) {
+    letterheadImage.addEventListener('error', function () {
+      letterheadPreviewError.hidden = false;
+    });
+    letterheadImage.addEventListener('load', function () {
+      letterheadPreviewError.hidden = true;
+    });
   }
 
   function marginInput(side) { return document.querySelector('[data-margin-input="' + side + '"]'); }
@@ -722,6 +734,14 @@
   if (form && uploadButton && uploadProgress) {
     form.addEventListener('submit', function (event) {
       if (!event.submitter || event.submitter.value !== 'letterhead_upload') { return; }
+      // The submit button carries the server-side action. Once disabled it is
+      // excluded from the browser's form payload, so preserve its value in a
+      // hidden field before disabling it to prevent duplicate uploads.
+      var uploadAction = document.createElement('input');
+      uploadAction.type = 'hidden';
+      uploadAction.name = 'action';
+      uploadAction.value = 'letterhead_upload';
+      form.appendChild(uploadAction);
       uploadProgress.hidden = false;
       uploadButton.disabled = true;
       uploadButton.textContent = 'Processing…';

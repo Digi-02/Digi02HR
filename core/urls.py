@@ -171,6 +171,7 @@ urlpatterns = [
     path('digidoc/<uuid:document_id>/duplicate/', digidoc_views.digidoc_duplicate, name='digidoc_duplicate'),
     path('digidoc/<uuid:document_id>/delete/', digidoc_views.digidoc_delete, name='digidoc_delete'),
     path('digidoc/<uuid:document_id>/download.pdf', digidoc_views.digidoc_pdf, name='digidoc_pdf'),
+    path('digidoc/<uuid:document_id>/download/<str:file_format>/', digidoc_views.digidoc_export, name='digidoc_export'),
     path('documents/upload/', views.employee_document_upload, name='employee_document_upload'),
     path('employees/<int:employee_pk>/documents/upload/', views.employee_document_upload, name='employee_document_upload_for_employee'),
     path('documents/<int:pk>/edit/', views.employee_document_edit, name='employee_document_edit'),
