@@ -1,3 +1,4 @@
+{% load static %}
 {% extends 'attendance/base.html' %}
 {% block title %}Company Branding | HR Management{% endblock %}
 {% block page_title %}Company Branding{% endblock %}
@@ -79,6 +80,9 @@
                   {{ form.brand_color }}
                   <button type="button" id="eyeBtn" class="btn btn-outline-secondary btn-sm" title="Pick a colour from the screen">Eyedropper</button>
                 </div>
+                <label class="brand-intensity-label" for="brandIntensity"><span>Colour intensity</span><output id="brandIntensityValue" for="brandIntensity">100%</output></label>
+                <input type="range" id="brandIntensity" class="brand-intensity-slider" min="0" max="100" step="1" value="100" aria-label="Brand colour intensity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <small class="field-help brand-intensity-help">0% is grayscale; 100% keeps the selected colour's original intensity.</small>
                 <small class="field-help">Buttons, links, badges and focus rings.</small>
                 {{ form.brand_color.errors }}
                 {% if suggested_color %}
@@ -470,6 +474,10 @@
   .brand-colour-row { display:flex; align-items:center; gap:7px; }
   .brand-colour-row input[type="color"] { width:42px; height:38px; padding:3px; flex:0 0 auto; }
   .brand-colour-row input[type="text"] { min-width:0; }
+  .brand-intensity-label { display:flex; justify-content:space-between; max-width:320px; margin:10px 0 2px; color:var(--body); font-size:11px; font-weight:600; }
+  .brand-intensity-label output { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .brand-intensity-slider { display:block; width:min(100%,320px); accent-color:var(--accent); }
+  .brand-intensity-help { margin-top:2px; }
   .suggested-colour { display:inline-flex; align-items:center; gap:7px; margin-top:8px; padding:5px 8px; border:1px solid var(--border); border-radius:7px; background:#fff; color:var(--body); font-size:11px; cursor:pointer; }
   .suggested-colour span { width:13px; height:13px; border-radius:4px; display:inline-block; }
   .suggested-colour code { color:var(--black); font-size:10px; }
@@ -811,6 +819,7 @@
           if (brandHex) { brandHex.value = result.sRGBHex.toUpperCase(); }
           paintBrand(result.sRGBHex);
           schedulePreview();
+          if (brandPicker) { brandPicker.dispatchEvent(new Event('input', {bubbles:true})); }
         }).catch(function () {});
       });
     }
@@ -1099,4 +1108,5 @@
   renderPreview();
 })();
 </script>
+<script src="{% static 'attendance/brand-color-intensity.js' %}" defer></script>
 {% endblock %}

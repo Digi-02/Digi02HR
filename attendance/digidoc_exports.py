@@ -242,7 +242,7 @@ def odt(content):
                         if "textColor" in marks: text_props[f"{{{ns['fo']}}}color"] = marks["textColor"]["color"]
                         if "highlight" in marks: text_props[f"{{{ns['fo']}}}background-color"] = marks["highlight"]["color"]
                         if "fontSize" in marks: text_props[f"{{{ns['fo']}}}font-size"] = f"{marks['fontSize']['value']}pt"
-                        if "fontFamily" in marks: text_props[f"{{{ns['fo']}}}font-family"] = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New"}[marks["fontFamily"]["value"]]
+                        if "fontFamily" in marks: text_props[f"{{{ns['fo']}}}font-family"] = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New"}.get(marks["fontFamily"]["value"], marks["fontFamily"]["value"])
                         ET.SubElement(span_style, f"{{{ns['style']}}}text-properties", text_props)
                         span = ET.SubElement(element, f"{{{ns['text']}}}span", {f"{{{ns['text']}}}style-name": span_name})
                         span.text = child.get("text", "")

@@ -105,6 +105,62 @@ class DigiDocPhaseTwoTests(TestCase):
             with self.subTest(mark=mark), self.assertRaises(ValidationError):
                 validate_document_json(attack)
 
+    def test_image_adjustments_accept_only_safe_dimensions_alignment_and_crop(self):
+        image_id = "8d1b0a3c-b2b2-4bce-9f1e-f299654ea96c"
+        content = {"type": "doc", "content": [{"type": "image", "attrs": {"asset_id": image_id, "alt": "Report chart", "width_percent": 65, "align": "right", "crop": "landscape"}}]}
+        cleaned = validate_document_json(content)
+        self.assertEqual(cleaned["content"][0]["attrs"], {"asset_id": image_id, "alt": "Report chart", "width_percent": 65, "align": "right", "crop": "landscape"})
+        for key, value in (("width_percent", 0), ("width_percent", 101), ("width_percent", 10.5), ("width_percent", True), ("align", "justify"), ("align", []), ("crop", "url(https://bad.test)"), ("crop", {}), ("style", "width:100%")):
+            attrs = {"asset_id": image_id, "alt": "Chart", key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(ValidationError):
+                validate_document_json({"type": "doc", "content": [{"type": "image", "attrs": attrs}]})
+
+    def test_inserted_image_can_be_resized_aligned_cropped_and_dragged(self):
+        from playwright.sync_api import sync_playwright
+
+        source = BytesIO()
+        Image.new("RGB", (160, 90), "orange").save(source, format="PNG")
+        asset = DigiDocImageAsset.objects.create(organization=self.organization, uploaded_by=self.owner, image_format="png", image_width=160, image_height=90)
+        asset.image.save("image-adjust.png", ContentFile(source.getvalue()), save=True)
+        content = {"type": "doc", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Before image"}]},
+            {"type": "image", "attrs": {"asset_id": str(asset.pk), "alt": "Orange sample"}},
+            {"type": "paragraph", "content": [{"type": "text", "text": "After image"}]},
+        ]}
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Image controls", content_json=content)
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.add_init_script("window.fetch = async () => new Response(JSON.stringify({version: 1, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}})")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=editor_js)
+            page.add_script_tag(content=ribbon_js)
+            page.locator('[data-tab="insert"]').click()
+            frame = page.locator(".dd-image-frame")
+            frame.click()
+            self.assertTrue(page.locator("#dd-image-tools").is_visible())
+            page.locator("#dd-image-width").evaluate("el => { el.value = '55'; el.dispatchEvent(new Event('input', {bubbles:true})); }")
+            page.locator("#dd-image-align").select_option("right")
+            page.locator("#dd-image-crop").select_option("square")
+            self.assertEqual(frame.get_attribute("data-width-percent"), "55")
+            self.assertEqual(frame.get_attribute("data-image-align"), "right")
+            self.assertEqual(frame.get_attribute("data-crop"), "square")
+            image_box = frame.bounding_box()
+            target_box = page.locator("#dd-sheet .dd-page > p").nth(1).bounding_box()
+            page.mouse.move(image_box["x"] + image_box["width"] / 2, image_box["y"] + image_box["height"] / 2)
+            page.mouse.down()
+            page.mouse.move(target_box["x"] + 20, target_box["y"] + target_box["height"] - 1, steps=8)
+            page.mouse.up()
+            self.assertEqual(frame.evaluate("el => [...el.parentElement.children].indexOf(el)"), 2)
+            self.assertEqual(page.locator(".dd-inline-image").count(), 1)
+            browser.close()
+
     def test_create_blank_document_redirects_to_editor_and_is_company_scoped(self):
         response = self.client.post(reverse("digidoc_create"))
         document = DigiDocDocument.objects.get(organization=self.organization)
@@ -263,7 +319,7 @@ class DigiDocPhaseTwoTests(TestCase):
             page.add_script_tag(content=shell_js)
             page.add_script_tag(content=editor_js)
             page.add_script_tag(content=ribbon_js)
-            self.assertEqual(page.locator("#dd-font-family option").count(), 3)
+            self.assertGreaterEqual(page.locator("#dd-font-family option").count(), 15)
             self.assertEqual(page.locator("#dd-font-size option").count(), 11)
             self.assertTrue(page.locator('.app-nav__link[data-label="DigiDoc"]').is_visible())
             self.assertEqual(page.locator('.app-nav__link[data-label="DigiDoc"]').get_attribute("aria-current"), "page")

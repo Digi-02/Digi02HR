@@ -35,6 +35,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
@@ -51,7 +53,11 @@ MAX_TITLE = 200
 ALLOWED_TYPES = {"doc", "paragraph", "heading", "text", "hardBreak", "horizontalRule", "bulletList", "orderedList", "listItem", "table", "tableRow", "tableCell", "image"}
 ALLOWED_MARKS = {"bold", "italic", "underline", "strike", "link", "fontFamily", "fontSize", "textColor", "highlight"}
 ALIGNMENTS = {"left", "center", "right", "justify"}
-FONT_FAMILIES = {"Helvetica", "Times-Roman", "Courier"}
+FONT_FAMILIES = {
+    "Helvetica", "Times-Roman", "Courier", "Roboto", "Open Sans", "Lato",
+    "Montserrat", "Merriweather", "Nunito", "Oswald", "Source Sans 3",
+    "Poppins", "Playfair Display", "Roboto Mono", "Inter",
+}
 FONT_SIZE_VALUES = {8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48}
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LINE_SPACING = {"single", "1.15", "1.5", "double"}
@@ -164,7 +170,7 @@ def validate_document_json(value):
             if not isinstance(attrs, dict):
                 raise ValidationError("Unsupported element property.")
             if kind == "image":
-                if set(attrs) != {"asset_id", "alt"}:
+                if not {"asset_id", "alt"} <= set(attrs) or set(attrs) - {"asset_id", "alt", "width_percent", "align", "crop"}:
                     raise ValidationError("Invalid image reference.")
                 try:
                     asset_id = str(uuid.UUID(str(attrs["asset_id"])))
@@ -176,7 +182,22 @@ def validate_document_json(value):
                 image_count[0] += 1
                 if image_count[0] > 30:
                     raise ValidationError("A document can contain up to 30 images.")
-                cleaned["attrs"] = {"asset_id": asset_id, "alt": "".join(ch for ch in alt if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})}
+                width_percent = attrs.get("width_percent", 100)
+                alignment = attrs.get("align", "center")
+                crop = attrs.get("crop", "none")
+                if type(width_percent) is not int or not 10 <= width_percent <= 100:
+                    raise ValidationError("Image width must be between 10 and 100 percent.")
+                if not isinstance(alignment, str) or alignment not in {"left", "center", "right"}:
+                    raise ValidationError("Unsupported image alignment.")
+                if not isinstance(crop, str) or crop not in {"none", "square", "landscape", "portrait"}:
+                    raise ValidationError("Unsupported image crop shape.")
+                cleaned["attrs"] = {
+                    "asset_id": asset_id,
+                    "alt": "".join(ch for ch in alt if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs"}),
+                    "width_percent": width_percent,
+                    "align": alignment,
+                    "crop": crop,
+                }
             else:
                 if set(attrs) - {"align", "indent", "line_spacing"}:
                     raise ValidationError("Unsupported element property.")
@@ -403,6 +424,14 @@ def _paragraph_html(node):
 
 
 def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None, letterhead_meta=None):
+    font_dir = os.path.join(os.path.dirname(__file__), "static", "attendance", "fonts")
+    for family, slug in (("Roboto", "roboto"), ("Open Sans", "open-sans"), ("Lato", "lato"), ("Montserrat", "montserrat"), ("Merriweather", "merriweather"), ("Nunito", "nunito"), ("Oswald", "oswald"), ("Source Sans 3", "source-sans-3"), ("Poppins", "poppins"), ("Playfair Display", "playfair-display"), ("Roboto Mono", "roboto-mono"), ("Inter", "inter")):
+        regular = os.path.join(font_dir, f"{slug}-400.ttf")
+        bold = os.path.join(font_dir, f"{slug}-700.ttf")
+        if os.path.isfile(regular) and os.path.isfile(bold):
+            pdfmetrics.registerFont(TTFont(family, regular))
+            pdfmetrics.registerFont(TTFont(f"{family}-Bold", bold))
+            pdfmetrics.registerFontFamily(family, normal=family, bold=f"{family}-Bold", italic=family, boldItalic=f"{family}-Bold")
     content = validate_document_json(doc.content_json)
     if letterhead_meta is not None:
         letterhead = SimpleNamespace(**letterhead_meta) if doc.letterhead_enabled else None
@@ -435,11 +464,22 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                         image_data = image_file.read(8 * 1024 * 1024 + 1)
                 if len(image_data) > 8 * 1024 * 1024:
                     raise ValidationError("A document image is unavailable.")
+                attrs = node["attrs"]
+                crop_ratio = {"square": 1, "landscape": 16 / 9, "portrait": 3 / 4}.get(attrs.get("crop", "none"))
+                if crop_ratio:
+                    from PIL import Image, ImageOps
+                    with Image.open(BytesIO(image_data)) as source_image:
+                        cropped = ImageOps.fit(source_image.convert("RGB"), (1200, max(1, round(1200 / crop_ratio))), centering=(0.5, 0.5))
+                        image_buffer = BytesIO()
+                        cropped.save(image_buffer, format="JPEG", quality=90, optimize=True)
+                        image_data = image_buffer.getvalue()
                 image_flow = PdfImage(BytesIO(image_data))
                 max_width, max_height = A4[0] - (left + right) * mm, A4[1] - (top + bottom) * mm
+                max_width *= attrs.get("width_percent", 100) / 100
                 scale = min(max_width / image_flow.imageWidth, max_height / image_flow.imageHeight, 1)
                 image_flow.drawWidth = image_flow.imageWidth * scale
                 image_flow.drawHeight = image_flow.imageHeight * scale
+                image_flow.hAlign = {"left": "LEFT", "center": "CENTER", "right": "RIGHT"}.get(attrs.get("align", "center"), "CENTER")
                 flow.extend([image_flow, Spacer(1, 8)])
                 continue
             if kind in {"paragraph", "heading", "tableCell"}:
