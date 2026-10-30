@@ -108,38 +108,66 @@ class Organization(models.Model):
     brand_color = models.CharField(
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
+    DASHBOARD_APPEARANCE_CHOICES = [
+        ('brand', 'DIGI HR brand'),
+        ('white', 'White and neutral'),
+    ]
+    dashboard_appearance = models.CharField(
+        max_length=12, choices=DASHBOARD_APPEARANCE_CHOICES, default='brand'
+    )
     timezone = models.CharField(max_length=50, default='Africa/Lagos', validators=[validate_iana_timezone])
     NAV_STYLE_CHOICES = [
-        ('black', 'Black'),
-        ('white', 'White'),
-        ('light_grey', 'Light grey'),
-        ('brand', 'Brand colour'),
+        ('clean', 'Clean'),
+        ('light', 'Light'),
+        ('dark', 'Dark'),
+        ('teal', 'Evergreen'),
+        ('brand', 'Company Brand'),
         ('custom', 'Custom'),
     ]
     NAV_HIGHLIGHT_STYLE_CHOICES = [
-        ('pill', 'Pill'),
-        ('left_bar', 'Left bar'),
-        ('soft_tint', 'Soft tint'),
+        ('rounded_pill', 'Rounded Pill'),
+        ('soft_pill', 'Soft Pill'),
+        ('minimal', 'Minimal Indicator'),
         ('outline', 'Outline'),
+        ('custom', 'Custom Highlight'),
     ]
     NAV_HIGHLIGHT_SOURCE_CHOICES = [
-        ('auto', 'Auto'),
-        ('accent', 'Accent'),
-        ('custom', 'Custom'),
+        ('auto', 'Default Black'),
+        ('accent', 'Company Brand Colour'),
+        ('custom', 'Custom Colour'),
     ]
-    nav_style = models.CharField(max_length=20, choices=NAV_STYLE_CHOICES, default='black')
+    nav_style = models.CharField(max_length=20, choices=NAV_STYLE_CHOICES, default='clean')
     nav_bg_color = models.CharField(
         max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
     )
     nav_highlight_style = models.CharField(
-        max_length=20, choices=NAV_HIGHLIGHT_STYLE_CHOICES, default='pill'
+        max_length=20, choices=NAV_HIGHLIGHT_STYLE_CHOICES, default='rounded_pill'
     )
     nav_highlight_source = models.CharField(
         max_length=20, choices=NAV_HIGHLIGHT_SOURCE_CHOICES, default='auto'
     )
     nav_highlight_color = models.CharField(
-        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default='#111111', validators=[BRAND_COLOR_VALIDATOR]
     )
+    nav_text_color = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_muted_color = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_hover_bg = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_hover_fg = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_active_icon_bg = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_active_icon_fg = models.CharField(
+        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+    )
+    nav_customized = models.BooleanField(default=False)
     is_suspended = models.BooleanField(default=False)
     suspended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -181,6 +209,34 @@ class OrganizationMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.organization.name}"
+
+
+class FavoritePage(models.Model):
+    """A page a user has starred inside one organisation."""
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='favorite_pages'
+    )
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='favorite_pages'
+    )
+    page_key = models.CharField(max_length=80)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'organization', 'page_key'],
+                name='unique_favorite_page_per_user_org',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'organization']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.organization.name} - {self.page_key}"
 
 
 class AccessRequest(models.Model):

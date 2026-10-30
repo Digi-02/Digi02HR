@@ -34,26 +34,46 @@
     <div class="onboarding-metrics-grid mb-4">
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Active in Flow</small>
-                <h3 class="mt-2 mb-0">{{ active_participant_count }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Active in Flow</small>
+                        <h3 class="mt-2 mb-0">{{ active_participant_count }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.participants trend_label="Currently active · joined / week" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Applicants</small>
-                <h3 class="mt-2 mb-0 text-primary">{{ applicant_count }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Applicants</small>
+                        <h3 class="mt-2 mb-0 text-primary">{{ applicant_count }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.applicants trend_label="Applicants created / week" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Active Invites</small>
-                <h3 class="mt-2 mb-0 text-info">{{ active_invitation_count }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Active Invites</small>
+                        <h3 class="mt-2 mb-0 text-info">{{ active_invitation_count }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.invitations trend_label="Currently active · invited / week" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Task Overdue</small>
-                <h3 class="mt-2 mb-0 text-danger">{{ overdue_count }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Task Overdue</small>
+                        <h3 class="mt-2 mb-0 text-danger">{{ overdue_count }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.overdue trend_label="Open overdue tasks · due / week" only %}
+                </div>
             </div>
         </div>
     </div>

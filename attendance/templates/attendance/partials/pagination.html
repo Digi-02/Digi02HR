@@ -1,36 +1,58 @@
 {% if page_obj and page_obj.paginator.num_pages > 1 %}
+{% with current=page_obj.number total=page_obj.paginator.num_pages param=page_param|default:'page' %}
 <nav class="table-pagination" aria-label="Table pagination">
     <div class="pagination-summary">
-        Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
     </div>
     <ul class="pagination mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
-            <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ page_param }}=1">First</a>
-        </li>
-        <li class="page-item">
-            <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ page_param }}={{ page_obj.previous_page_number }}">Previous</a>
+            <a class="page-link pagination-step" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ param }}={{ page_obj.previous_page_number }}" rel="prev" aria-label="Previous page">Previous</a>
         </li>
         {% else %}
-        <li class="page-item disabled"><span class="page-link">First</span></li>
-        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        <li class="page-item disabled">
+            <span class="page-link pagination-step" aria-disabled="true">Previous</span>
+        </li>
         {% endif %}
 
-        <li class="page-item active">
-            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-        </li>
+        {% for num in page_obj.paginator.page_range %}
+            {% if num == current %}
+            <li class="page-item active">
+                <span class="page-link" aria-current="page">{{ num }}</span>
+            </li>
+            {% elif num == 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ param }}=1" aria-label="Page 1">{{ num }}</a>
+            </li>
+            {% elif num == total %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ param }}={{ total }}" aria-label="Page {{ total }}">{{ num }}</a>
+            </li>
+            {% elif num >= current|add:"-2" and num <= current|add:"2" %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ param }}={{ num }}" aria-label="Page {{ num }}">{{ num }}</a>
+            </li>
+            {% elif num == 2 and current > 4 %}
+            <li class="page-item disabled">
+                <span class="page-link pagination-ellipsis" aria-hidden="true">…</span>
+            </li>
+            {% elif num == total|add:"-1" and current < total|add:"-3" %}
+            <li class="page-item disabled">
+                <span class="page-link pagination-ellipsis" aria-hidden="true">…</span>
+            </li>
+            {% endif %}
+        {% endfor %}
 
         {% if page_obj.has_next %}
         <li class="page-item">
-            <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ page_param }}={{ page_obj.next_page_number }}">Next</a>
-        </li>
-        <li class="page-item">
-            <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ page_param }}={{ page_obj.paginator.num_pages }}">Last</a>
+            <a class="page-link pagination-step" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}{{ param }}={{ page_obj.next_page_number }}" rel="next" aria-label="Next page">Next</a>
         </li>
         {% else %}
-        <li class="page-item disabled"><span class="page-link">Next</span></li>
-        <li class="page-item disabled"><span class="page-link">Last</span></li>
+        <li class="page-item disabled">
+            <span class="page-link pagination-step" aria-disabled="true">Next</span>
+        </li>
         {% endif %}
     </ul>
 </nav>
+{% endwith %}
 {% endif %}

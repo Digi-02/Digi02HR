@@ -18,6 +18,15 @@ from PIL import Image as PILImage
 from .models import Organization, AttendanceSettings, OrganizationMembership
 from .models import BRAND_COLOR_VALIDATOR
 from .branding import normalize_hex, dominant_color
+from .forms import NAV_ACTIVE_STYLE_FORM_CHOICES, NAV_LEGACY_ACTIVE, NAV_LEGACY_APPEARANCE, NAV_STYLE_FORM_CHOICES
+from .nav_theme import (
+    NAV_ACTIVE_STYLE_CHOICES,
+    NAV_APPEARANCE_CHOICES,
+    NAV_HIGHLIGHT_SOURCE_CHOICES,
+    nav_inputs_from_mapping,
+    nav_inputs_from_organization,
+    resolve_nav_theme,
+)
 from .organization import user_has_hr_access, get_active_organization
 
 
@@ -132,18 +141,26 @@ class BrandingForm(forms.Form):
 
 
 class DashboardForm(forms.Form):
-    """Step 3: Customize dashboard — navigation style presets."""
+    """Step 3: Customize dashboard — navigation appearance and active state."""
 
-    nav_style = forms.ChoiceField(choices=Organization.NAV_STYLE_CHOICES, required=False,
-        widget=forms.Select(attrs={'class': 'form-select'}))
+    nav_style = forms.ChoiceField(choices=NAV_STYLE_FORM_CHOICES, required=False,
+        widget=forms.RadioSelect)
     nav_bg_color = forms.CharField(max_length=7, required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A'}))
-    nav_highlight_style = forms.ChoiceField(choices=Organization.NAV_HIGHLIGHT_STYLE_CHOICES,
-        required=False, widget=forms.Select(attrs={'class': 'form-select'}))
-    nav_highlight_source = forms.ChoiceField(choices=Organization.NAV_HIGHLIGHT_SOURCE_CHOICES,
-        required=False, widget=forms.Select(attrs={'class': 'form-select'}))
+    nav_highlight_style = forms.ChoiceField(choices=NAV_ACTIVE_STYLE_FORM_CHOICES,
+        required=False, widget=forms.RadioSelect)
+    nav_highlight_source = forms.ChoiceField(choices=NAV_HIGHLIGHT_SOURCE_CHOICES,
+        required=False, widget=forms.RadioSelect)
     nav_highlight_color = forms.CharField(max_length=7, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A'}))
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#111111'}))
+
+    def clean_nav_style(self):
+        value = self.cleaned_data.get('nav_style') or 'clean'
+        return NAV_LEGACY_APPEARANCE.get(value, value)
+
+    def clean_nav_highlight_style(self):
+        value = self.cleaned_data.get('nav_highlight_style') or 'rounded_pill'
+        return NAV_LEGACY_ACTIVE.get(value, value)
 
     def clean_nav_bg_color(self):
         value = (self.cleaned_data.get('nav_bg_color') or '').strip()
@@ -155,7 +172,7 @@ class DashboardForm(forms.Form):
     def clean_nav_highlight_color(self):
         value = (self.cleaned_data.get('nav_highlight_color') or '').strip()
         if not value:
-            return '#0A0A0A'
+            return '#111111'
         BRAND_COLOR_VALIDATOR(value)
         return normalize_hex(value)
 
@@ -312,6 +329,7 @@ def setup_wizard(request):
                     org.nav_highlight_source = cd['nav_highlight_source']
                 if cd.get('nav_highlight_color'):
                     org.nav_highlight_color = cd['nav_highlight_color']
+                org.nav_customized = True
                 org.save()
 
                 completed_steps.add(current_step)
@@ -393,6 +411,13 @@ def setup_wizard(request):
     completed_count = len(completed_steps)
     pct = int((completed_count / total_steps) * 100) if total_steps else 0
 
+    if request.method == 'POST':
+        preview_inputs = nav_inputs_from_mapping(request.POST, org)
+        preview_inputs['accent'] = request.POST.get('brand_color') or org.brand_color
+    else:
+        preview_inputs = nav_inputs_from_organization(org)
+    nav_preview = resolve_nav_theme(**preview_inputs)
+
     context = {
         'organization': org,
         'step': config,
@@ -404,6 +429,10 @@ def setup_wizard(request):
         'completed_count': completed_count,
         'progress_pct': pct,
         'require_mailbox': _require_mailbox(),
+        'nav_preview': nav_preview,
+        'nav_appearance_choices': NAV_APPEARANCE_CHOICES,
+        'nav_active_style_choices': NAV_ACTIVE_STYLE_CHOICES,
+        'nav_highlight_source_choices': NAV_HIGHLIGHT_SOURCE_CHOICES,
         'page_title': f'Setup — {config["title"]}',
     }
     return render(request, 'attendance/wizard/step.html', context)

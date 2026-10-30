@@ -93,6 +93,136 @@ from .organization import (
 from .platform import platform_admin_required, _send_templated_mail
 
 
+def build_metric_series(values, labels):
+    """Render dated observations, including periods whose measured value is zero."""
+    if not values or len(values) != len(labels):
+        return None
+    peak_value = max(values)
+    maximum = max(peak_value, 1)
+    points = []
+    for index, (value, label) in enumerate(zip(values, labels)):
+        x = 5 + (index * 130 / max(len(values) - 1, 1))
+        y = 34 - (float(value) / float(maximum) * 25)
+        points.append({'x': x, 'y': y, 'label': label, 'value': value})
+    line_path = 'M ' + ' L '.join(f"{point['x']:.1f} {point['y']:.1f}" for point in points)
+    area_path = f"{line_path} L {points[-1]['x']:.1f} 38 L {points[0]['x']:.1f} 38 Z"
+    peak_index = values.index(peak_value)
+    peak = f'{peak_value:g}' if isinstance(peak_value, float) else str(peak_value)
+    return {
+        'points': points,
+        'first_label': points[0]['label'],
+        'last_label': points[-1]['label'],
+        'line_path': line_path,
+        'area_path': area_path,
+        'summary': f"Peak {peak} on {points[peak_index]['label']} - {sum(values):g} total",
+    }
+
+
+def build_metric_trend(event_dates, *, end_date, bucket_count=7, bucket_days=1, start_date=None):
+    """Build dated event counts; zero buckets represent measured quiet periods."""
+    start_date = start_date or end_date - timedelta(days=(bucket_count * bucket_days) - 1)
+    values = [0] * bucket_count
+    for event_date in event_dates:
+        if not event_date or event_date < start_date or event_date > end_date:
+            continue
+        index = min((event_date - start_date).days // bucket_days, bucket_count - 1)
+        values[index] += 1
+    labels = [
+        min(start_date + timedelta(days=((index + 1) * bucket_days) - 1), end_date)
+        .strftime('%a' if bucket_days == 1 else '%d %b')
+        for index in range(bucket_count)
+    ]
+    return build_metric_series(values, labels)
+
+
+def build_queryset_trend(queryset, date_field, *, organization, end_date, bucket_count=8, bucket_days=7, start_date=None):
+    """Group dated model records into actual event-count buckets."""
+    from zoneinfo import ZoneInfo
+    from .models import organization_timezone_name
+
+    company_tz = ZoneInfo(organization_timezone_name(organization))
+    event_dates = []
+    for value in queryset.values_list(date_field, flat=True):
+        if isinstance(value, datetime):
+            event_dates.append(timezone.localtime(value, company_tz).date())
+        elif value:
+            event_dates.append(value)
+    return build_metric_trend(
+        event_dates,
+        end_date=end_date,
+        bucket_count=bucket_count,
+        bucket_days=bucket_days,
+        start_date=start_date,
+    )
+
+
+def build_recent_dashboard_trends(organization, end_date, employee_ids=None):
+    """Summarize actual attendance, hire, and leave-request events for dashboard cards."""
+    from zoneinfo import ZoneInfo
+    from .models import organization_date_range_filter, organization_timezone_name
+
+    company_tz = ZoneInfo(organization_timezone_name(organization))
+    first_day = end_date - timedelta(days=6)
+    attendance_filter = organization_date_range_filter('check_in_time', first_day, organization)
+    attendance_filter['check_in_time__lt'] = timezone.make_aware(
+        datetime.combine(end_date + timedelta(days=1), time.min), company_tz,
+    )
+    records = AttendanceRecord.objects.filter(
+        organization=organization,
+        employee__is_active=True,
+        **attendance_filter,
+    )
+    employees = Employee.objects.filter(organization=organization, is_active=True)
+    if employee_ids is not None:
+        records = records.filter(employee_id__in=employee_ids)
+        employees = employees.filter(pk__in=employee_ids)
+
+    latest_by_day = {}
+    for record in records.only('employee_id', 'check_in_time', 'check_out_time'):
+        local_day = timezone.localtime(record.check_in_time, company_tz).date()
+        key = (local_day, record.employee_id)
+        if key not in latest_by_day or record.check_in_time > latest_by_day[key].check_in_time:
+            latest_by_day[key] = record
+
+    present_days = []
+    late_days = []
+    completed_days = []
+    threshold = get_attendance_settings(organization).late_threshold
+    per_day = {}
+    for (local_day, _employee_id), record in latest_by_day.items():
+        stats = per_day.setdefault(local_day, {'present': 0, 'late': 0, 'completed': 0})
+        stats['present'] += 1
+        is_late = timezone.localtime(record.check_in_time, company_tz).time() >= threshold
+        stats['late'] += int(is_late)
+        stats['completed'] += int(record.check_out_time is not None)
+    for day, stats in per_day.items():
+        present_days.extend([day] * stats['present'])
+        late_days.extend([day] * stats['late'])
+        completed_days.extend([day] * stats['completed'])
+
+    hire_start = end_date - timedelta(days=55)
+    hire_dates = employees.filter(
+        hire_date__gte=hire_start, hire_date__lte=end_date,
+    ).values_list('hire_date', flat=True)
+    window_start = timezone.make_aware(datetime.combine(first_day, time.min), company_tz)
+    window_end = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), company_tz)
+    leave_dates = [
+        timezone.localtime(created_at, company_tz).date()
+        for created_at in LeaveRequest.objects.filter(
+            organization=organization,
+            created_at__gte=window_start,
+            created_at__lt=window_end,
+        ).values_list('created_at', flat=True)
+    ]
+    return {
+        'hires': build_metric_trend(hire_dates, end_date=end_date, bucket_count=8, bucket_days=7),
+        'present': build_metric_trend(present_days, end_date=end_date),
+        'late': build_metric_trend(late_days, end_date=end_date),
+        'completed': build_metric_trend(completed_days, end_date=end_date),
+        'leave_requests': build_metric_trend(leave_dates, end_date=end_date),
+    }
+
+
 # ==================== AUTHENTICATION VIEWS ====================
 
 def write_audit_log(request, *, organization, area, action, summary, target=None, metadata=None):
@@ -973,10 +1103,16 @@ def dashboard_view(request):
     organization = get_active_organization(request)
     ensure_default_categories(organization)
     from .models import organization_today, organization_date_range_filter
+    from zoneinfo import ZoneInfo
     today = organization_today(organization)
+    company_tz = ZoneInfo(organization.timezone or 'Africa/Lagos')
     settings_obj = get_attendance_settings(organization)
     late_threshold = settings_obj.late_threshold
     workday_start = settings_obj.workday_start
+
+    def record_is_late(record):
+        return timezone.localtime(record.check_in_time, company_tz).time() >= late_threshold
+
     attendance_status = request.GET.get('attendance_status', '').strip().lower()
     if attendance_status not in ['present', 'late', 'absent']:
         attendance_status = ''
@@ -990,26 +1126,37 @@ def dashboard_view(request):
     
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
+        employee__is_active=True,
         **organization_date_range_filter('check_in_time', today, organization),
     ).select_related('employee__category', 'employee__department')
 
     present_count = todays_records.values('employee_id').distinct().count()
     checked_in_count = todays_records.filter(check_out_time__isnull=True).count()
     checked_out_count = todays_records.filter(check_out_time__isnull=False).count()
-    late_count = count_distinct_late_employees(todays_records)
-    absent_count = max(total_employees - present_count, 0)
+    today_record_rows = list(todays_records.order_by('-check_in_time'))
+    latest_records_by_employee = {}
+    for record in today_record_rows:
+        latest_records_by_employee.setdefault(record.employee_id, record)
+    late_employee_ids = {
+        employee_id for employee_id, record in latest_records_by_employee.items()
+        if record_is_late(record)
+    }
+    late_count = len(late_employee_ids)
+
+    excused_employee_ids = set(AttendanceException.objects.filter(
+        organization=organization,
+        start_date__lte=today,
+        end_date__gte=today,
+        employee__is_active=True,
+    ).values_list('employee_id', flat=True)) - set(latest_records_by_employee)
+    approved_exception_count = len(excused_employee_ids)
+    no_checkin_count = max(total_employees - present_count - approved_exception_count, 0)
+    absent_count = no_checkin_count
 
     # Recent activity
-    recent_attendance = todays_records.order_by('-check_in_time')[:5]
+    recent_attendance = today_record_rows[:5]
 
     attendance_people = []
-    latest_records_by_employee = {}
-    late_employee_ids = set()
-    for record in todays_records.order_by('-check_in_time'):
-        latest_records_by_employee.setdefault(record.employee_id, record)
-        if record.is_late:
-            late_employee_ids.add(record.employee_id)
-
     if attendance_status in ['present', 'late']:
         selected_employee_ids = set(latest_records_by_employee.keys())
         if attendance_status == 'late':
@@ -1023,13 +1170,13 @@ def dashboard_view(request):
                 'status_color': 'warning' if employee.pk in late_employee_ids else 'success',
             })
     elif attendance_status == 'absent':
-        present_employee_ids = set(latest_records_by_employee.keys())
-        for employee in active_employees.exclude(pk__in=present_employee_ids).order_by('first_name', 'last_name'):
+        accounted_employee_ids = set(latest_records_by_employee) | excused_employee_ids
+        for employee in active_employees.exclude(pk__in=accounted_employee_ids).order_by('first_name', 'last_name'):
             attendance_people.append({
                 'employee': employee,
                 'record': None,
-                'status_label': 'Absent',
-                'status_color': 'danger',
+                'status_label': 'No check-in',
+                'status_color': 'neutral',
             })
 
     # Birthdays this week
@@ -1053,14 +1200,157 @@ def dashboard_view(request):
     for category in Category.objects.filter(organization=organization).order_by('name'):
         total_in_category = active_employees.filter(category=category).count()
         present_in_category = todays_records.filter(employee__category=category).values('employee_id').distinct().count()
-        late_in_category = count_distinct_late_employees(todays_records.filter(employee__category=category))
+        late_in_category = len({employee_id for employee_id in late_employee_ids if latest_records_by_employee[employee_id].employee.category_id == category.pk})
+        excused_in_category = AttendanceException.objects.filter(
+            organization=organization, employee__category=category,
+            employee__is_active=True, start_date__lte=today, end_date__gte=today,
+        ).exclude(employee_id__in=latest_records_by_employee).values('employee_id').distinct().count()
         category_stats.append({
             'category': category,
             'total': total_in_category,
             'present': present_in_category,
             'late': late_in_category,
-            'absent': max(total_in_category - present_in_category, 0),
+            'absent': max(total_in_category - present_in_category - excused_in_category, 0),
         })
+
+    # Use actual records for the recent check-in trend. No absence is inferred
+    # from weekends or from schedules the application does not store.
+    trend_dates = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    start_range = organization_date_range_filter('check_in_time', trend_dates[0], organization)
+    end_range = organization_date_range_filter('check_in_time', today + timedelta(days=1), organization)
+    trend_records = AttendanceRecord.objects.filter(
+        organization=organization,
+        employee__is_active=True,
+        check_in_time__gte=start_range['check_in_time__gte'],
+        check_in_time__lt=end_range['check_in_time__lt'],
+    ).select_related('employee')
+    daily_latest_records = {day: {} for day in trend_dates}
+    for record in trend_records:
+        local_day = timezone.localtime(record.check_in_time, company_tz).date()
+        if local_day not in daily_latest_records:
+            continue
+        daily_latest_records[local_day].setdefault(record.employee_id, record)
+
+    daily_people = {day: set(records) for day, records in daily_latest_records.items()}
+    daily_late = {
+        day: {employee_id for employee_id, record in records.items() if record_is_late(record)}
+        for day, records in daily_latest_records.items()
+    }
+
+    max_checkins = max((len(ids) for ids in daily_people.values()), default=0)
+    weekly_attendance = []
+    for day in trend_dates:
+        late_total = len(daily_late[day])
+        ontime_total = max(len(daily_people[day]) - late_total, 0)
+        daily_total = ontime_total + late_total
+        scale = max_checkins or 1
+        weekly_attendance.append({
+            'date': day,
+            'label': day.strftime('%a'),
+            'on_time': ontime_total,
+            'late': late_total,
+            'total': daily_total,
+            'on_time_width': round(ontime_total / scale * 100, 1),
+            'late_width': round(late_total / scale * 100, 1),
+            'on_time_height': round(ontime_total / scale * 100, 1),
+            'late_height': round(late_total / scale * 100, 1),
+        })
+
+    on_time_count = max(present_count - late_count, 0)
+    total_for_donut = total_employees
+    donut_pct_1 = on_time_count / total_for_donut * 100 if total_for_donut else 0
+    donut_pct_2 = donut_pct_1 + (late_count / total_for_donut * 100 if total_for_donut else 0)
+    donut_pct_3 = donut_pct_2 + (approved_exception_count / total_for_donut * 100 if total_for_donut else 0)
+
+    department_members = {}
+    for employee in active_employees.select_related('department'):
+        if employee.department_id:
+            department_members.setdefault(employee.department_id, {'department': employee.department, 'ids': set()})['ids'].add(employee.pk)
+    department_attendance = []
+    for item in department_members.values():
+        employee_ids = item['ids']
+        excused_ids = employee_ids & excused_employee_ids
+        checked_ids = employee_ids & set(latest_records_by_employee)
+        eligible = max(len(employee_ids) - len(excused_ids), 0)
+        rate = round(len(checked_ids) / eligible * 100) if eligible else None
+        department_attendance.append({
+            'name': item['department'].name,
+            'present': len(checked_ids),
+            'eligible': eligible,
+            'rate': rate,
+        })
+    department_attendance.sort(key=lambda row: (row['rate'] is None, -(row['rate'] or 0), row['name']))
+    department_attendance = department_attendance[:6]
+
+    pending_leave_requests = list(LeaveRequest.objects.filter(
+        organization=organization, status='pending'
+    ).select_related('employee', 'leave_type').order_by('-created_at')[:5])
+    pending_leave_total = LeaveRequest.objects.filter(organization=organization, status='pending').count()
+    pending_window_start = timezone.make_aware(
+        datetime.combine(trend_dates[0], time.min), company_tz,
+    )
+    pending_window_end = timezone.make_aware(
+        datetime.combine(today + timedelta(days=1), time.min), company_tz,
+    )
+    leave_events = [
+        timezone.localtime(created_at, company_tz).date()
+        for created_at in LeaveRequest.objects.filter(
+        organization=organization,
+        created_at__gte=pending_window_start, created_at__lt=pending_window_end,
+    ).values_list('created_at', flat=True)
+    ]
+    joined_recently = Employee.objects.filter(
+        organization=organization, is_active=True,
+        hire_date__gte=trend_dates[0], hire_date__lte=today,
+    ).count()
+    hire_start = today - timedelta(days=55)
+    hire_dates = Employee.objects.filter(
+        organization=organization,
+        is_active=True,
+        hire_date__gte=hire_start,
+        hire_date__lte=today,
+    ).values_list('hire_date', flat=True)
+    hires_trend = build_metric_trend(
+        hire_dates, end_date=today, bucket_count=8, bucket_days=7,
+    )
+    checkin_trend = build_metric_trend(
+        [day for day in trend_dates for _ in daily_people[day]], end_date=today,
+    )
+    late_trend = build_metric_trend(
+        [day for day in trend_dates for _ in daily_late[day]], end_date=today,
+    )
+    leave_trend = build_metric_trend(leave_events, end_date=today)
+
+    dashboard_kpis = [
+        {
+            'label': 'Active employees', 'value': total_employees,
+            'context': f'{joined_recently} joined in the last 7 days',
+            'icon': 'groups', 'style': 'pink', 'href': reverse('employee_list'),
+            'trend': hires_trend,
+            'trend_label': 'New hires · weekly · 8 weeks',
+        },
+        {
+            'label': 'Checked in today', 'value': present_count,
+            'context': f'{on_time_count} on time · {late_count} late',
+            'icon': 'how_to_reg', 'style': 'teal', 'href': reverse('dashboard') + '?attendance_status=present',
+            'trend': checkin_trend,
+            'trend_label': 'Employees present · 7 days',
+        },
+        {
+            'label': 'Late arrivals', 'value': late_count,
+            'context': f'After {late_threshold.strftime("%H:%M")}',
+            'icon': 'schedule', 'style': 'amber', 'href': reverse('dashboard') + '?attendance_status=late',
+            'trend': late_trend,
+            'trend_label': 'Late employees · 7 days',
+        },
+        {
+            'label': 'Pending leave', 'value': pending_leave_total,
+            'context': 'Requests awaiting review',
+            'icon': 'event_busy', 'style': 'violet', 'href': reverse('leave_requests'),
+            'trend': leave_trend,
+            'trend_label': 'Requests submitted · 7 days',
+        },
+    ]
     
     show_checklist = (total_employees == 0)
     late_today = []
@@ -1099,6 +1389,20 @@ def dashboard_view(request):
         'show_checklist': show_checklist,
         'checklist': checklist,
         'late_today': late_today,
+        'dashboard_kpis': dashboard_kpis,
+        'weekly_attendance': weekly_attendance,
+        'weekly_attendance_has_data': bool(max_checkins),
+        'weekly_attendance_axis_top': max_checkins,
+        'weekly_attendance_axis_mid': max_checkins // 2,
+        'on_time_count': on_time_count,
+        'approved_exception_count': approved_exception_count,
+        'no_checkin_count': no_checkin_count,
+        'donut_pct_1': f'{donut_pct_1:.2f}',
+        'donut_pct_2': f'{donut_pct_2:.2f}',
+        'donut_pct_3': f'{donut_pct_3:.2f}',
+        'department_attendance': department_attendance,
+        'pending_leave_requests': pending_leave_requests,
+        'dashboard_greeting_name': request.user.first_name or request.user.get_username(),
         'page_title': 'Dashboard',
     }
     
@@ -1111,7 +1415,8 @@ def category_dashboard(request, code):
     """Dashboard view scoped to a single employee category."""
 
     organization = get_active_organization(request)
-    today = timezone.localdate()
+    from .models import organization_today
+    today = organization_today(organization)
     category = get_object_or_404(Category, organization=organization, code=code.upper())
 
     category_employees = Employee.objects.filter(
@@ -1154,6 +1459,11 @@ def category_dashboard(request, code):
     checked_out_count = todays_records.filter(check_out_time__isnull=False).count()
     late_count = count_distinct_late_employees(todays_records)
     absent_count = max(total_employees - present_count, 0)
+    metric_trends = build_recent_dashboard_trends(
+        organization,
+        today,
+        employee_ids=active_category_employees.values_list('id', flat=True),
+    )
     recent_attendance = todays_records.order_by('-check_in_time')[:8]
     employees_page, employees_pagination_query = paginate_queryset(
         request,
@@ -1172,6 +1482,7 @@ def category_dashboard(request, code):
         'checked_out_count': checked_out_count,
         'late_count': late_count,
         'absent_count': absent_count,
+        'metric_trends': metric_trends,
         'employees': employees_page,
         'employees_page_obj': employees_page,
         'employees_pagination_query': employees_pagination_query,
@@ -1716,11 +2027,19 @@ def mail_dashboard(request):
         invitations = invitations.filter(invitation_type=selected_type)
 
     organization_invitations = OnboardingInvitation.objects.filter(organization=organization)
+    from .models import organization_today
+    trend_end = organization_today(organization)
     invitation_counts = {
         'total': organization_invitations.count(),
         'sent': organization_invitations.filter(status='sent').count(),
         'opened': organization_invitations.filter(status='opened').count(),
         'responded': organization_invitations.filter(status__in=['submitted', 'accepted']).count(),
+    }
+    metric_trends = {
+        'total': build_queryset_trend(organization_invitations, 'created_at', organization=organization, end_date=trend_end),
+        'sent': build_queryset_trend(organization_invitations.filter(status='sent'), 'created_at', organization=organization, end_date=trend_end),
+        'opened': build_queryset_trend(organization_invitations.filter(status='opened'), 'created_at', organization=organization, end_date=trend_end),
+        'responded': build_queryset_trend(organization_invitations.filter(status__in=['submitted', 'accepted']), 'created_at', organization=organization, end_date=trend_end),
     }
     mail_page, mail_pagination_query = paginate_queryset(
         request,
@@ -1738,6 +2057,7 @@ def mail_dashboard(request):
         'inbox_messages': inbox_messages,
         'inbox_error': inbox_error,
         'invitation_counts': invitation_counts,
+        'metric_trends': metric_trends,
         'status_choices': OnboardingInvitation.STATUS_CHOICES,
         'type_choices': OnboardingInvitation.INVITATION_TYPE_CHOICES,
         'search_query': search_query,
@@ -1887,6 +2207,15 @@ def onboarding_tasks(request):
     applicant_base = Applicant.objects.filter(organization=organization)
     invitation_base = OnboardingInvitation.objects.filter(organization=organization)
     participant_base = OnboardingParticipant.objects.filter(organization=organization)
+    metric_trends = {
+        'participants': build_queryset_trend(participant_base.filter(status='active'), 'created_at', organization=organization, end_date=today),
+        'applicants': build_queryset_trend(applicant_base, 'created_at', organization=organization, end_date=today),
+        'invitations': build_queryset_trend(invitation_base.filter(status__in=['sent', 'opened']), 'created_at', organization=organization, end_date=today),
+        'overdue': build_queryset_trend(
+            base_tasks.filter(due_date__lt=today).exclude(status__in=['completed', 'waived']),
+            'due_date', organization=organization, end_date=today,
+        ),
+    }
     context = {
         'organization': organization,
         'tasks': tasks_page,
@@ -1909,6 +2238,7 @@ def onboarding_tasks(request):
         'overdue_count': base_tasks.filter(
             due_date__lt=today,
         ).exclude(status__in=['completed', 'waived']).count(),
+        'metric_trends': metric_trends,
         'applicant_count': applicant_base.count(),
         'submitted_applicant_count': applicant_base.filter(status='submitted').count(),
         'converted_applicant_count': applicant_base.filter(status='converted').count(),
@@ -2781,7 +3111,8 @@ def employee_leave_request_create(request):
 def manager_dashboard(request):
     manager = getattr(request.user, 'employee_profile', None)
     organization = manager.organization if manager else get_active_organization(request)
-    today = timezone.localdate()
+    from .models import organization_today
+    today = organization_today(organization)
 
     if manager and not user_has_hr_access(request.user):
         team_members = Employee.objects.filter(
@@ -2796,6 +3127,9 @@ def manager_dashboard(request):
         ).select_related('department', 'category')
 
     team_member_ids = list(team_members.values_list('id', flat=True))
+    metric_trends = build_recent_dashboard_trends(
+        organization, today, employee_ids=team_member_ids,
+    )
     pending_leave_requests = LeaveRequest.objects.filter(
         organization=organization,
         employee_id__in=team_member_ids,
@@ -2823,6 +3157,7 @@ def manager_dashboard(request):
         'manager': manager,
         'team_members': team_members.order_by('first_name', 'last_name')[:10],
         'team_count': len(team_member_ids),
+        'metric_trends': metric_trends,
         'present_today': present_today,
         'late_today': late_today,
         'absent_today': max(len(team_member_ids) - present_today, 0),
@@ -2843,7 +3178,8 @@ def manager_dashboard(request):
 def manager_team(request):
     manager = getattr(request.user, 'employee_profile', None)
     organization = manager.organization if manager else get_active_organization(request)
-    today = timezone.localdate()
+    from .models import organization_today
+    today = organization_today(organization)
 
     if manager and not user_has_hr_access(request.user):
         team_members = Employee.objects.filter(
@@ -2859,6 +3195,9 @@ def manager_team(request):
 
     team_members = team_members.select_related('department', 'category', 'line_manager').order_by('first_name', 'last_name')
     team_member_ids = list(team_members.values_list('id', flat=True))
+    metric_trends = build_recent_dashboard_trends(
+        organization, today, employee_ids=team_member_ids,
+    )
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
         employee_id__in=team_member_ids,
@@ -2900,6 +3239,7 @@ def manager_team(request):
         'team_rows_page_obj': team_rows_page,
         'team_rows_pagination_query': team_rows_pagination_query,
         'team_count': len(team_rows),
+        'metric_trends': metric_trends,
         'checked_in_count': sum(1 for row in team_rows if row['status'] == 'Checked In'),
         'completed_count': sum(1 for row in team_rows if row['status'] == 'Completed'),
         'not_in_count': sum(1 for row in team_rows if row['status'] == 'Not In'),
@@ -3993,6 +4333,7 @@ def admin_report_create(request):
         form = AdminReportForm(request.POST, organization=organization)
         if form.is_valid():
             report = form.save(commit=False)
+            report.organization = organization
             report.created_by = request.user
             if report.status in ['reviewed', 'closed']:
                 report.reviewed_by = request.user
@@ -4697,6 +5038,15 @@ def get_upcoming_internship_endings(days=None, organization=None):
 def organization_branding(request):
     from .branding import accent_vars, dominant_color
     from .forms import OrganizationBrandingForm
+    from .nav_theme import (
+        NAV_ACTIVE_STYLE_CHOICES,
+        NAV_APPEARANCE_CHOICES,
+        NAV_DEFAULTS,
+        NAV_HIGHLIGHT_SOURCE_CHOICES,
+        nav_inputs_from_mapping,
+        nav_inputs_from_organization,
+        resolve_nav_theme,
+    )
     organization = get_active_organization(request)
     membership = OrganizationMembership.objects.filter(
         user=request.user, organization=organization, is_active=True
@@ -4704,6 +5054,21 @@ def organization_branding(request):
     role = membership.role if membership else ''
     if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
         raise PermissionDenied
+
+    if request.method == 'POST' and request.POST.get('action') == 'restore_default':
+        for field, value in NAV_DEFAULTS.items():
+            setattr(organization, field, value)
+        organization.nav_customized = False
+        organization.save(update_fields=list(NAV_DEFAULTS.keys()) + ['nav_customized'])
+        write_audit_log(
+            request, organization=organization, area='organization',
+            action='branding.nav_reset',
+            summary=f'Restored default navigation for {organization.name}',
+            target=organization,
+        )
+        messages.success(request, 'Navigation restored to the default Clean style.')
+        return redirect('organization_branding')
+
     suggested = None
     if request.method == 'POST':
         form = OrganizationBrandingForm(request.POST, request.FILES, instance=organization)
@@ -4720,6 +5085,15 @@ def organization_branding(request):
             return redirect('organization_branding')
     else:
         form = OrganizationBrandingForm(instance=organization)
+
+    # Keep the preview honest while an invalid form is being corrected.
+    if request.method == 'POST':
+        preview_inputs = nav_inputs_from_mapping(request.POST, organization)
+        preview_inputs['accent'] = request.POST.get('brand_color') or organization.brand_color
+    else:
+        preview_inputs = nav_inputs_from_organization(organization)
+    nav_preview = resolve_nav_theme(**preview_inputs)
+
     # Dominant-color suggestion from current logo
     try:
         if organization.logo:
@@ -4731,10 +5105,37 @@ def organization_branding(request):
         'organization': organization,
         'form': form,
         'suggested_color': suggested,
-        'preview_vars': accent_vars(form.initial.get('brand_color') or organization.brand_color),
+        'preview_vars': accent_vars(
+            (request.POST.get('brand_color') if request.method == 'POST' else None)
+            or form.initial.get('brand_color') or organization.brand_color
+        ),
+        'nav_preview': nav_preview,
+        'nav_appearance_choices': NAV_APPEARANCE_CHOICES,
+        'nav_active_style_choices': NAV_ACTIVE_STYLE_CHOICES,
+        'nav_highlight_source_choices': NAV_HIGHLIGHT_SOURCE_CHOICES,
         'page_title': 'Company Branding',
     }
     return render(request, 'attendance/organization_branding.html', context)
+
+
+@login_required
+def organization_nav_preview(request):
+    """Return resolved sidebar tokens for the settings/wizard live preview."""
+    from .nav_theme import nav_inputs_from_mapping, resolve_nav_theme
+
+    organization = get_active_organization(request)
+    membership = OrganizationMembership.objects.filter(
+        user=request.user, organization=organization, is_active=True
+    ).first()
+    role = membership.role if membership else ''
+    if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
+        raise PermissionDenied
+
+    data = request.GET.copy()
+    if 'brand_color' in data and 'accent' not in data:
+        data['accent'] = data['brand_color']
+    theme = resolve_nav_theme(**nav_inputs_from_mapping(data, organization))
+    return JsonResponse({'styles': theme, 'contrast': theme.get('nav_contrast', {})})
 
 
 def welcome_view(request):

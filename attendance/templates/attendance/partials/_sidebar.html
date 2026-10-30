@@ -1,0 +1,78 @@
+{% load nav_icons %}
+<aside class="app-sidebar" id="sidebar" aria-label="Main navigation"
+       data-nav-appearance="{{ nav_styles.nav_appearance|default:'clean' }}"
+       data-nav-active="{{ nav_styles.nav_active_style|default:'rounded_pill' }}">
+    <div class="app-sidebar__brand">
+        <a class="app-brand" href="{{ shell_home_url|default:'/' }}"
+           aria-label="{{ active_organization.name|default:'DIGI HR' }} home">
+            {% if active_organization and active_organization.logo %}
+            <span class="brand-logo-full{% if active_organization.logo_is_light %} dark-tile{% endif %}"><img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo"></span>
+            <span class="brand-initials brand-initials--rail" aria-hidden="true">{{ active_organization.name|slice:":1"|upper }}</span>
+            {% elif active_organization %}
+            <span class="brand-initials">{{ active_organization.name|slice:":2"|upper }}</span>
+            {% else %}
+            <span class="brand-initials">HR</span>
+            {% endif %}
+        </a>
+        <button class="app-sidebar__close" id="sidebarClose" type="button" aria-label="Close navigation">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="app-sidebar__workspace">
+        <span class="app-workspace__name">{% if active_organization %}{{ active_organization.name }}{% else %}DIGI HR{% endif %}</span>
+        <span class="app-workspace__meta">HR workspace</span>
+    </div>
+
+    <div class="app-sidebar__scroll">
+        <section class="app-nav__section app-nav__section--favorites" data-favorites-section
+                 aria-labelledby="favoritesHeading"{% if not shell_favorites %} hidden{% endif %}>
+            <h2 class="app-nav__heading" id="favoritesHeading">Favorites</h2>
+            <div data-favorites-list data-empty-text="Star a page to keep it here.">
+                {% for favorite in shell_favorites %}
+                <a class="app-nav__link{% if shell_active_page.key == favorite.key %} is-active{% endif %}"
+                   href="{{ favorite.url }}" data-label="{{ favorite.label }}" data-favorite-key="{{ favorite.key }}"
+                   aria-label="{{ favorite.label }}"
+                   {% if shell_active_page.key == favorite.key %}aria-current="page"{% endif %}>
+                    {% nav_icon favorite.icon %}
+                    <span class="app-nav__label">{{ favorite.label }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+
+        <nav class="app-nav" aria-label="Pages">
+            {% for section in shell_sections %}
+            <section class="app-nav__section">
+                <h2 class="app-nav__heading">{{ section.label }}</h2>
+                {% for item in section.items %}
+                <a class="app-nav__link{% if shell_active_page.key == item.key %} is-active{% endif %}"
+                   href="{{ item.url }}"
+                   data-label="{{ item.label }}"
+                   aria-label="{{ item.label }}"
+                   {% if shell_active_page.key == item.key %}aria-current="page"{% endif %}
+                   {% if item.external %}target="_blank" rel="noopener"{% endif %}>
+                    {% nav_icon item.icon %}
+                    <span class="app-nav__label">{{ item.label }}</span>
+                    {% if item.external %}<i class="bi bi-box-arrow-up-right app-nav__ext" aria-hidden="true"></i>{% endif %}
+                </a>
+                {% endfor %}
+            </section>
+            {% endfor %}
+        </nav>
+    </div>
+
+    <div class="app-sidebar__footer">
+        {% if shell_profile_url %}
+        <a class="app-user" href="{{ shell_profile_url }}" aria-label="Open {{ shell_user_name|default:user.username }} profile">
+        {% else %}
+        <div class="app-user">
+        {% endif %}
+            <span class="app-user__avatar" aria-hidden="true">{{ shell_user_initials|default:user.username|slice:":2"|upper }}</span>
+            <span class="app-user__meta">
+                <strong class="app-user__name">{{ shell_user_name|default:user.username }}</strong>
+                <span class="app-user__org">{% if active_organization %}{{ active_organization.name }}{% else %}DIGI HR{% endif %}</span>
+            </span>
+        {% if shell_profile_url %}</a>{% else %}</div>{% endif %}
+    </div>
+</aside>

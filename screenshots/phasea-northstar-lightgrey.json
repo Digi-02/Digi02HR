@@ -1,0 +1,93 @@
+{
+  "label": "northstar-lightgrey",
+  "org": "northstar-demo",
+  "sizes": {
+    "320": {
+      "overflow": false,
+      "scrollWidth": 320,
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navActiveBg": "#E6ECF2",
+      "navActiveFg": "#0A0A0A",
+      "navPillBg": "#E6ECF2",
+      "navIndicator": "#003c78",
+      "sidebar": {
+        "w": 275,
+        "h": 640
+      },
+      "topbar": {
+        "w": 320,
+        "h": 64
+      },
+      "workspace": {
+        "w": 274,
+        "h": 61
+      },
+      "errors": {
+        "console": [],
+        "page": [],
+        "failed": []
+      }
+    },
+    "390": {
+      "overflow": false,
+      "scrollWidth": 390,
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navActiveBg": "#E6ECF2",
+      "navActiveFg": "#0A0A0A",
+      "navPillBg": "#E6ECF2",
+      "navIndicator": "#003c78",
+      "sidebar": {
+        "w": 276,
+        "h": 844
+      },
+      "topbar": {
+        "w": 390,
+        "h": 64
+      },
+      "workspace": {
+        "w": 275,
+        "h": 61
+      },
+      "errors": {
+        "console": [],
+        "page": [],
+        "failed": []
+      }
+    },
+    "1440": {
+      "overflow": false,
+      "scrollWidth": 1440,
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navActiveBg": "#E6ECF2",
+      "navActiveFg": "#0A0A0A",
+      "navPillBg": "#E6ECF2",
+      "navIndicator": "#003c78",
+      "sidebar": {
+        "w": 212,
+        "h": 900
+      },
+      "topbar": {
+        "w": 1228,
+        "h": 64
+      },
+      "workspace": {
+        "w": 211,
+        "h": 61
+      },
+      "errors": {
+        "console": [],
+        "page": [],
+        "failed": []
+      }
+    }
+  }
+}

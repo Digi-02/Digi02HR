@@ -23,6 +23,26 @@ from .models import (
     OnboardingTask,
     PayrollRun,
 )
+from .nav_theme import (
+    NAV_ACTIVE_STYLE_CHOICES,
+    NAV_APPEARANCE_CHOICES,
+    NAV_HIGHLIGHT_SOURCE_CHOICES,
+    resolve_nav_theme,
+)
+
+
+NAV_STYLE_FORM_CHOICES = NAV_APPEARANCE_CHOICES + [
+    ('black', 'Black (legacy)'),
+    ('white', 'White (legacy)'),
+    ('light_grey', 'Light grey (legacy)'),
+]
+NAV_ACTIVE_STYLE_FORM_CHOICES = NAV_ACTIVE_STYLE_CHOICES + [
+    ('pill', 'Pill (legacy)'),
+    ('left_bar', 'Left bar (legacy)'),
+    ('soft_tint', 'Soft tint (legacy)'),
+]
+NAV_LEGACY_APPEARANCE = {'black': 'dark', 'white': 'clean', 'light_grey': 'light'}
+NAV_LEGACY_ACTIVE = {'pill': 'rounded_pill', 'left_bar': 'minimal', 'soft_tint': 'soft_pill'}
 
 
 EMPLOYEE_SEARCH_PLACEHOLDER = 'Search employee name, ID, email, department'
@@ -1391,6 +1411,11 @@ EmployeeDocumentFormSet = inlineformset_factory(
 
 class OrganizationBrandingForm(forms.ModelForm):
     remove_logo = forms.BooleanField(required=False)
+    dashboard_appearance = forms.ChoiceField(
+        choices=Organization.DASHBOARD_APPEARANCE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     brand_color = forms.RegexField(
         regex=r'^#[0-9A-Fa-f]{6}$',
         error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
@@ -1401,33 +1426,70 @@ class OrganizationBrandingForm(forms.ModelForm):
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Africa/Lagos', 'list': 'tz-list'}),
     )
     nav_style = forms.ChoiceField(
-        choices=Organization.NAV_STYLE_CHOICES,
+        choices=NAV_STYLE_FORM_CHOICES,
+        required=False,
         widget=forms.RadioSelect,
     )
     nav_bg_color = forms.RegexField(
         regex=r'^#[0-9A-Fa-f]{6}$',
+        required=False,
         error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A', 'maxlength': 7}),
     )
     nav_highlight_style = forms.ChoiceField(
-        choices=Organization.NAV_HIGHLIGHT_STYLE_CHOICES,
+        choices=NAV_ACTIVE_STYLE_FORM_CHOICES,
+        required=False,
         widget=forms.RadioSelect,
     )
     nav_highlight_source = forms.ChoiceField(
-        choices=Organization.NAV_HIGHLIGHT_SOURCE_CHOICES,
+        choices=NAV_HIGHLIGHT_SOURCE_CHOICES,
+        required=False,
         widget=forms.RadioSelect,
     )
     nav_highlight_color = forms.RegexField(
         regex=r'^#[0-9A-Fa-f]{6}$',
+        required=False,
         error_messages={'invalid': 'Enter a valid hex color like #0A0A0A.'},
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A', 'maxlength': 7}),
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#111111', 'maxlength': 7}),
+    )
+    nav_text_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #1C1C1C.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
+    )
+    nav_muted_color = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #6B6B6B.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
+    )
+    nav_hover_bg = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #F6F6F6.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
+    )
+    nav_hover_fg = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #111111.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
+    )
+    nav_active_icon_bg = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #FFFFFF.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
+    )
+    nav_active_icon_fg = forms.RegexField(
+        regex=r'^#[0-9A-Fa-f]{6}$', required=False,
+        error_messages={'invalid': 'Enter a valid hex color like #111111.'},
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Auto', 'maxlength': 7}),
     )
 
     class Meta:
         model = Organization
-        fields = ['name', 'logo', 'brand_color', 'timezone',
+        fields = ['name', 'logo', 'brand_color', 'dashboard_appearance', 'timezone',
                   'nav_style', 'nav_bg_color', 'nav_highlight_style',
-                  'nav_highlight_source', 'nav_highlight_color']
+                  'nav_highlight_source', 'nav_highlight_color',
+                  'nav_text_color', 'nav_muted_color', 'nav_hover_bg',
+                  'nav_hover_fg', 'nav_active_icon_bg', 'nav_active_icon_fg']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'logo': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
@@ -1438,6 +1500,9 @@ class OrganizationBrandingForm(forms.ModelForm):
         value = (self.cleaned_data.get('timezone') or '').strip()
         validate_iana_timezone(value)
         return value
+
+    def clean_dashboard_appearance(self):
+        return self.cleaned_data.get('dashboard_appearance') or self.instance.dashboard_appearance or 'brand'
 
     def clean_logo(self):
         from PIL import Image
@@ -1479,14 +1544,104 @@ class OrganizationBrandingForm(forms.ModelForm):
 
     def clean_nav_bg_color(self):
         from .branding import normalize_hex
-        return normalize_hex(self.cleaned_data.get('nav_bg_color', ''), '#0A0A0A')
+        fallback = self.instance.nav_bg_color or '#0A0A0A'
+        return normalize_hex(self.cleaned_data.get('nav_bg_color', ''), fallback)
 
     def clean_nav_highlight_color(self):
         from .branding import normalize_hex
-        return normalize_hex(self.cleaned_data.get('nav_highlight_color', ''), '#0A0A0A')
+        fallback = self.instance.nav_highlight_color or '#111111'
+        return normalize_hex(self.cleaned_data.get('nav_highlight_color', ''), fallback)
+
+    def clean_nav_style(self):
+        value = self.cleaned_data.get('nav_style') or self.instance.nav_style or 'clean'
+        return NAV_LEGACY_APPEARANCE.get(value, value)
+
+    def clean_nav_highlight_style(self):
+        value = self.cleaned_data.get('nav_highlight_style') or self.instance.nav_highlight_style or 'rounded_pill'
+        return NAV_LEGACY_ACTIVE.get(value, value)
+
+    def clean_nav_highlight_source(self):
+        return self.cleaned_data.get('nav_highlight_source') or self.instance.nav_highlight_source or 'auto'
+
+    def _clean_optional_hex(self, name):
+        if self.add_prefix(name) not in self.data and self.instance.pk:
+            return getattr(self.instance, name, '') or ''
+        value = (self.cleaned_data.get(name) or '').strip()
+        return value.upper() if value else ''
+
+    def clean_nav_text_color(self):
+        return self._clean_optional_hex('nav_text_color')
+
+    def clean_nav_muted_color(self):
+        return self._clean_optional_hex('nav_muted_color')
+
+    def clean_nav_hover_bg(self):
+        return self._clean_optional_hex('nav_hover_bg')
+
+    def clean_nav_hover_fg(self):
+        return self._clean_optional_hex('nav_hover_fg')
+
+    def clean_nav_active_icon_bg(self):
+        return self._clean_optional_hex('nav_active_icon_bg')
+
+    def clean_nav_active_icon_fg(self):
+        return self._clean_optional_hex('nav_active_icon_fg')
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.errors:
+            return cleaned
+        theme = resolve_nav_theme(
+            nav_style=cleaned.get('nav_style', 'clean'),
+            nav_bg_color=cleaned.get('nav_bg_color', '#0A0A0A'),
+            nav_highlight_style=cleaned.get('nav_highlight_style', 'rounded_pill'),
+            nav_highlight_source=cleaned.get('nav_highlight_source', 'auto'),
+            nav_highlight_color=cleaned.get('nav_highlight_color', '#111111'),
+            nav_text_color=cleaned.get('nav_text_color', ''),
+            nav_muted_color=cleaned.get('nav_muted_color', ''),
+            nav_hover_bg=cleaned.get('nav_hover_bg', ''),
+            nav_hover_fg=cleaned.get('nav_hover_fg', ''),
+            nav_active_icon_bg=cleaned.get('nav_active_icon_bg', ''),
+            nav_active_icon_fg=cleaned.get('nav_active_icon_fg', ''),
+            accent=cleaned.get('brand_color', '#0A0A0A'),
+        )
+        from .branding import contrast_ratio
+
+        checks = [
+            ('nav_text_color', cleaned.get('nav_text_color'), theme['nav_bg'],
+             'Sidebar text colour needs at least 4.5:1 against the sidebar background.'),
+            ('nav_muted_color', cleaned.get('nav_muted_color'), theme['nav_bg'],
+             'Muted text colour needs at least 4.5:1 against the sidebar background.'),
+            ('nav_hover_fg', cleaned.get('nav_hover_fg'), theme['nav_hover_bg'],
+             'Hover text colour needs at least 4.5:1 against the hover background.'),
+            ('nav_active_icon_fg', cleaned.get('nav_active_icon_fg'), theme['nav_active_icon_bg'],
+             'Active icon colour needs at least 4.5:1 against the active icon background.'),
+            ('nav_active_icon_bg', cleaned.get('nav_active_icon_bg'), theme['nav_active_icon_fg'],
+             'Active icon background needs at least 4.5:1 against the icon colour.'),
+        ]
+        for field, value, background, message in checks:
+            if value and contrast_ratio(value, background) < 4.5:
+                self.add_error(field, message)
+        return cleaned
 
     def save(self, commit=True):
+        old_nav = {}
+        if self.instance and self.instance.pk:
+            try:
+                old = Organization.objects.get(pk=self.instance.pk)
+                old_nav = {
+                    field: getattr(old, field, '') for field in self.Meta.fields
+                    if field.startswith('nav_')
+                }
+            except Organization.DoesNotExist:
+                old_nav = {}
         instance = super().save(commit=False)
+        nav_fields = [field for field in self.Meta.fields if field.startswith('nav_')]
+        changed = not old_nav or any(
+            getattr(instance, field, '') != old_nav.get(field, '') for field in nav_fields
+        )
+        if changed:
+            instance.nav_customized = True
         logo = self.cleaned_data.get('logo')
         old_logo = None
         if instance.pk:

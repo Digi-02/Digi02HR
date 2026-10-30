@@ -6,6 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
 from attendance import views
+from attendance import shell as shell_views
 from attendance import wizard as wizard_views
 from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
 
@@ -127,6 +128,10 @@ urlpatterns = [
     # Dashboard
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('dashboard/category/<str:code>/', views.category_dashboard, name='category_dashboard'),
+
+    # App shell
+    path('search/', shell_views.global_search, name='global_search'),
+    path('favorites/toggle/', shell_views.toggle_favorite, name='toggle_favorite'),
     
     # Organizations
     path('organizations/', views.organization_list, name='organization_list'),
@@ -135,6 +140,7 @@ urlpatterns = [
     path('organizations/<int:pk>/switch/', views.organization_switch, name='organization_switch'),
     path('settings/', views.organization_settings, name='organization_settings'),
     path('settings/branding/', views.organization_branding, name='organization_branding'),
+    path('settings/branding/nav-preview/', views.organization_nav_preview, name='organization_nav_preview'),
     path('settings/departments/', views.organization_departments, name='organization_departments'),
     path('settings/categories/', views.organization_categories, name='organization_categories'),
     path('settings/attendance/', views.organization_attendance_settings, name='organization_attendance_settings'),

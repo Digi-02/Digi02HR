@@ -8,26 +8,46 @@
     <div class="mail-metrics-grid mb-4">
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">All Emails</small>
-                <h3 class="mt-2 mb-0">{{ invitation_counts.total }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">All Emails</small>
+                        <h3 class="mt-2 mb-0">{{ invitation_counts.total }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.total trend_label="Invitations created / week - 8 weeks" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Sent</small>
-                <h3 class="mt-2 mb-0 text-info">{{ invitation_counts.sent }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Sent</small>
+                        <h3 class="mt-2 mb-0 text-info">{{ invitation_counts.sent }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.sent trend_label="Currently sent · created / week" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Opened</small>
-                <h3 class="mt-2 mb-0 text-warning">{{ invitation_counts.opened }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Opened</small>
+                        <h3 class="mt-2 mb-0 text-warning">{{ invitation_counts.opened }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.opened trend_label="Currently opened · created / week" only %}
+                </div>
             </div>
         </div>
         <div class="card border-0 h-100">
             <div class="card-body">
-                <small class="text-muted text-uppercase fw-semibold">Responded</small>
-                <h3 class="mt-2 mb-0 text-success">{{ invitation_counts.responded }}</h3>
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Responded</small>
+                        <h3 class="mt-2 mb-0 text-success">{{ invitation_counts.responded }}</h3>
+                    </div>
+                    {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.responded trend_label="Currently responded · created / week" only %}
+                </div>
             </div>
         </div>
     </div>
@@ -106,7 +126,7 @@
                             </td>
                             <td>{{ invitation.get_invitation_type_display }}</td>
                             <td>
-                                <span class="badge mail-status-{{ invitation.status }} px-3 py-2">
+                                <span class="badge mail-status-pill mail-status-{{ invitation.status }}">
                                     {{ invitation.get_status_display }}
                                 </span>
                             </td>
@@ -189,27 +209,51 @@
         align-items: center;
     }
 
-    .mail-status-draft,
-    .mail-status-cancelled {
-        background: rgba(var(--bs-secondary-rgb), 0.1);
-        color: var(--bs-secondary);
+    .mail-status-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 24px;
+        padding: 5px 11px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        vertical-align: middle;
     }
 
-    .mail-status-sent,
+    .mail-status-draft,
+    .mail-status-cancelled {
+        background: #F4F4F5;
+        border-color: #E5E5E5;
+        color: #525252;
+    }
+
+    .mail-status-sent {
+        background: #EFF6FF;
+        border-color: #DBEAFE;
+        color: #1D4ED8;
+    }
+
     .mail-status-opened {
-        background: rgba(var(--bs-info-rgb), 0.1);
-        color: var(--bs-info);
+        background: #FFFBEB;
+        border-color: #FDE68A;
+        color: #B45309;
     }
 
     .mail-status-submitted,
     .mail-status-accepted {
-        background: rgba(var(--bs-success-rgb), 0.1);
-        color: var(--bs-success);
+        background: #F0FDF4;
+        border-color: #BBF7D0;
+        color: #16A34A;
     }
 
     .mail-status-expired {
-        background: rgba(var(--bs-danger-rgb), 0.1);
-        color: var(--bs-danger);
+        background: #FEF2F2;
+        border-color: #FECACA;
+        color: #DC2626;
     }
 
     .inbox-message {

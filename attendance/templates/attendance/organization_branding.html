@@ -2,257 +2,890 @@
 {% block title %}Company Branding | HR Management{% endblock %}
 {% block page_title %}Company Branding{% endblock %}
 {% block content %}
-<div class="container-fluid p-0">
-  <div class="page-head">
+<div class="container-fluid p-0 branding-page">
+  <div class="branding-head">
     <div>
       <h5>Company branding</h5>
-      <p>Logo, brand colour, timezone and navigation style for {{ organization.name }}. Status colours never change.</p>
+      <p>Shape the workspace your team sees every day. Logo, brand colour, timezone and sidebar navigation for {{ organization.name }}.</p>
     </div>
+    <span class="branding-head__badge"><span class="branding-head__dot"></span>Light workspace</span>
   </div>
-  <form method="post" enctype="multipart/form-data" id="brandForm">
+
+  <form method="post" enctype="multipart/form-data" id="brandForm"
+        data-nav-preview-url="{% url 'organization_nav_preview' %}">
     {% csrf_token %}
-    <div class="row g-4">
-      <div class="col-lg-7">
-        <div class="card"><div class="card-body p-4">
-          <h6>Company &amp; brand colour</h6>
-          <div class="mb-3"><label class="form-label">Company name</label>{{ form.name }}</div>
-          <div class="mb-3"><label class="form-label">Logo (PNG/JPG/WebP, max 2MB)</label>{{ form.logo }}
-            {% if organization.logo %}<div class="mt-2"><img src="{{ organization.logo.url }}" alt="Company logo" height="64"></div>
-            <div class="form-check mt-2">{{ form.remove_logo }} <label class="form-check-label">Remove logo</label></div>{% endif %}
-            {% if suggested_color %}<small class="text-muted">Suggested from logo: <code>{{ suggested_color }}</code></small>{% endif %}
-          </div>
-          <div class="mb-3"><label class="form-label">Brand colour (buttons, links)</label>
-            <div class="d-flex gap-2 align-items-center">
-              <input type="color" id="brandPicker" value="{{ organization.brand_color }}" class="form-control form-control-color">
-              {{ form.brand_color }}
-              <button type="button" id="eyeBtn" class="btn btn-outline-secondary btn-sm">Eyedropper</button>
+    {% if form.errors %}
+    <div class="alert alert-danger" role="alert">Please check the highlighted fields and try again.</div>
+    {% endif %}
+
+    <div class="row g-4 align-items-stretch">
+      <div class="col-xl-7">
+        <div class="card branding-card h-100">
+          <div class="card-body p-4">
+            <div class="branding-section-head">
+              <div>
+                <h6>Company &amp; brand colour</h6>
+                <p>These details appear on sign-in, the sidebar and shared pages.</p>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-7">
+                <label class="form-label" for="{{ form.name.id_for_label }}">Company name</label>
+                {{ form.name }}
+                {{ form.name.errors }}
+              </div>
+              <div class="col-md-5">
+                <label class="form-label" for="{{ form.timezone.id_for_label }}">Company timezone</label>
+                {{ form.timezone }}
+                <datalist id="tz-list">
+                  <option value="Africa/Lagos"></option>
+                  <option value="Africa/Accra"></option>
+                  <option value="Africa/Nairobi"></option>
+                  <option value="Africa/Johannesburg"></option>
+                  <option value="Europe/London"></option>
+                  <option value="Europe/Berlin"></option>
+                  <option value="America/New_York"></option>
+                  <option value="America/Chicago"></option>
+                  <option value="Asia/Dubai"></option>
+                  <option value="Asia/Kolkata"></option>
+                  <option value="UTC"></option>
+                </datalist>
+                <small class="field-help">Late arrivals and dates use this timezone.</small>
+                {{ form.timezone.errors }}
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+              <div class="col-md-7">
+                <label class="form-label" for="{{ form.logo.id_for_label }}">Logo</label>
+                {{ form.logo }}
+                <small class="field-help">PNG, JPG or WebP, up to 2MB.</small>
+                {{ form.logo.errors }}
+                {% if organization.logo %}
+                <div class="brand-logo-preview">
+                  <span class="brand-logo-preview__tile{% if organization.logo_is_light %} is-dark{% endif %}">
+                    <img src="{{ organization.logo.url }}" alt="{{ organization.name }} logo">
+                  </span>
+                  <label class="form-check remove-logo-check">
+                    {{ form.remove_logo }}<span>Remove current logo</span>
+                  </label>
+                </div>
+                {% endif %}
+              </div>
+              <div class="col-md-5">
+                <label class="form-label" for="{{ form.brand_color.id_for_label }}">Brand colour</label>
+                <div class="brand-colour-row">
+                  <input type="color" id="brandPicker" value="{{ organization.brand_color }}" class="form-control form-control-color" aria-label="Pick brand colour">
+                  {{ form.brand_color }}
+                  <button type="button" id="eyeBtn" class="btn btn-outline-secondary btn-sm" title="Pick a colour from the screen">Eyedropper</button>
+                </div>
+                <small class="field-help">Buttons, links, badges and focus rings.</small>
+                {{ form.brand_color.errors }}
+                {% if suggested_color %}
+                <button type="button" class="suggested-colour" id="suggestedColour" data-colour="{{ suggested_color }}">
+                  <span style="background: {{ suggested_color }}"></span>Use logo colour <code>{{ suggested_color }}</code>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+            <div class="row g-3 mt-1">
+              <div class="col-md-7">
+                <label class="form-label" for="{{ form.dashboard_appearance.id_for_label }}">Workspace appearance</label>
+                {{ form.dashboard_appearance }}
+                <small class="field-help">Choose the DIGI HR pale-pink workspace or a white neutral surface. This setting applies only to {{ organization.name }}.</small>
+                {{ form.dashboard_appearance.errors }}
+              </div>
             </div>
           </div>
-          <div class="mb-3"><label class="form-label" for="id_timezone">Company timezone</label>{{ form.timezone }}
-            <datalist id="tz-list">
-              <option value="Africa/Lagos"></option>
-              <option value="Africa/Accra"></option>
-              <option value="Africa/Nairobi"></option>
-              <option value="Africa/Johannesburg"></option>
-              <option value="Europe/London"></option>
-              <option value="Europe/Berlin"></option>
-              <option value="America/New_York"></option>
-              <option value="America/Chicago"></option>
-              <option value="Asia/Dubai"></option>
-              <option value="Asia/Kolkata"></option>
-              <option value="UTC"></option>
-            </datalist>
-            <small class="text-muted">Late arrivals and dates use this timezone, not the server's.</small>
-          </div>
-        </div></div>
+        </div>
       </div>
-      <div class="col-lg-5">
-        <div class="card"><div class="card-body p-4" id="preview">
-          <h6>Live preview: brand</h6>
-          <button class="btn btn-primary mb-2" id="pvBtn" type="button">Primary button</button><br>
-          <a href="#" id="pvLink" onclick="return false;">Sample link</a><br><br>
-          <span class="badge" id="pvBadge">Active</span>
-          <div class="mt-2 p-2" id="pvMenu" style="border-left:3px solid;">Active menu item</div>
-        </div></div>
+
+      <div class="col-xl-5">
+        <div class="card branding-card h-100">
+          <div class="card-body p-4">
+            <div class="branding-section-head">
+              <div>
+                <h6>Brand preview</h6>
+                <p>See how the accent reads on common controls.</p>
+              </div>
+            </div>
+            <div class="brand-preview" id="preview">
+              <div class="brand-preview__row">
+                <button class="btn btn-primary" id="pvBtn" type="button">Primary button</button>
+                <span class="badge" id="pvBadge">Active</span>
+              </div>
+              <a href="#" id="pvLink" onclick="return false;">Sample link</a>
+              <div class="brand-preview__menu" id="pvMenu">
+                <span class="brand-preview__dot"></span>Active menu item
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="card mt-4"><div class="card-body p-4">
-      <h6>Navigation style</h6>
-      <p class="text-muted small">Sidebar only. Buttons, links, badges and focus rings keep using the brand colour above.</p>
-      <div class="mb-2 fw-semibold small">Presets</div>
-      <div class="preset-grid mb-4" id="presetGrid">
-        <button type="button" class="preset" data-preset="black">
-          <span class="mini-side" style="background:#0A0A0A"><i style="background:#fff"></i><i></i><i></i></span>
-          Classic Black</button>
-        <button type="button" class="preset" data-preset="white">
-          <span class="mini-side" style="background:#fff;border:1px solid #E5E5E5"><i style="background:#0A0A0A"></i><i></i><i></i></span>
-          Clean White</button>
-        <button type="button" class="preset" data-preset="grey">
-          <span class="mini-side" style="background:#F5F5F5;border:1px solid #E5E5E5"><i style="background:#0A0A0A"></i><i></i><i></i></span>
-          Soft Grey</button>
-        <button type="button" class="preset" data-preset="brand">
-          <span class="mini-side" id="presetBrandSwatch"><i></i><i></i><i></i></span>
-          Brand Colour</button>
-        <button type="button" class="preset" data-preset="midnight">
-          <span class="mini-side" style="background:#0B1226"><i style="background:#fff"></i><i></i><i></i></span>
-          Midnight</button>
-      </div>
-      <div class="row g-4">
-        <div class="col-md-6">
-          <div class="mb-2 fw-semibold small">Sidebar background</div>
-          <div class="nav-choices">
-            {% for r in form.nav_style %}
-            <label class="choice">{{ r.tag }} {{ r.choice_label }}</label>
-            {% endfor %}
+    <div class="card branding-card mt-4 nav-settings-card">
+      <div class="card-body p-4">
+        <div class="branding-section-head branding-section-head--split nav-settings-head">
+          <div>
+            <h5>Sidebar navigation</h5>
+            <p>Choose an appearance, then tune the active state. Every colour is checked for readable contrast.</p>
           </div>
-          <div class="d-flex gap-2 align-items-center mt-2" id="navCustomRow">
-            <input type="color" id="navPicker" value="{{ organization.nav_bg_color }}" class="form-control form-control-color">
-            {{ form.nav_bg_color }}
-            <button type="button" id="navEyeBtn" class="btn btn-outline-secondary btn-sm">Eyedropper</button>
-          </div>
+          <span class="branding-head__badge">
+            <span class="branding-head__dot"></span>
+            {% if organization.nav_style == 'clean' and not organization.nav_customized %}Default: Clean{% else %}Saved: {{ organization.get_nav_style_display }}{% endif %}
+          </span>
         </div>
-        <div class="col-md-6">
-          <div class="mb-2 fw-semibold small">Highlight style</div>
-          <div class="nav-choices samples">
-            {% for r in form.nav_highlight_style %}
-            <label class="choice sample-{{ r.data.value }}">{{ r.tag }} <span class="sample"><i></i>Active item</span></label>
-            {% endfor %}
-          </div>
-          <div class="mb-2 fw-semibold small mt-3">Highlight colour</div>
-          <div class="nav-choices">
-            {% for r in form.nav_highlight_source %}
-            <label class="choice">{{ r.tag }} {{ r.choice_label }}</label>
-            {% endfor %}
-          </div>
-          <div class="d-flex gap-2 align-items-center mt-2" id="navHlRow">
-            <input type="color" id="navHlPicker" value="{{ organization.nav_highlight_color }}" class="form-control form-control-color">
-            {{ form.nav_highlight_color }}
-          </div>
-        </div>
-      </div>
-      <div class="mt-4">
-        <div class="mb-2 fw-semibold small">Live preview: sidebar</div>
-        <div class="nav-preview" id="navPreview">
-          <div class="np-brand"><span class="np-logo">D</span><strong>Demo</strong></div>
-          <div class="np-item">Dashboard</div>
-          <div class="np-item np-active">Employees</div>
-          <div class="np-item np-hover">Attendance</div>
-          <div class="np-item">Mail</div>
-          <div class="np-item">Settings</div>
-        </div>
-      </div>
-      <div class="d-flex gap-2 mt-3 flex-wrap">
-        <button type="button" id="navReset" class="btn btn-outline-secondary">Reset to default</button>
-      </div>
-    </div></div>
 
-    {% if form.errors %}<div class="alert alert-danger mt-4">{{ form.errors }}</div>{% endif %}
-    <button class="btn btn-primary mt-4" type="submit">Save branding</button>
+        <div class="row g-3 g-xl-4">
+          <div class="col-xl-8">
+            <section class="nav-section-card" aria-labelledby="navAppearanceLabel">
+              <div class="nav-section-head">
+                <h6 id="navAppearanceLabel">Appearance</h6>
+                <p>Set the overall surface of your workspace navigation.</p>
+              </div>
+              <div class="nav-choice-grid nav-choice-grid--appearance">
+                {% with selected=form.nav_style.value|default:organization.nav_style %}
+                {% for value, label in nav_appearance_choices %}
+                <label class="nav-choice-card{% if selected == value %} is-selected{% endif %}" data-nav-choice>
+                  <input type="radio" name="{{ form.nav_style.html_name }}" value="{{ value }}"{% if selected == value %} checked{% endif %}>
+                  <span class="nav-choice-card__check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                  </span>
+                  <span class="nav-swatch nav-swatch--{{ value }}" aria-hidden="true">
+                    <span class="nav-swatch__brand"></span>
+                    <span class="nav-swatch__bar nav-swatch__bar--normal"></span>
+                    <span class="nav-swatch__bar nav-swatch__bar--active"></span>
+                    <span class="nav-swatch__bar nav-swatch__bar--short"></span>
+                  </span>
+                  <span class="nav-choice-card__copy">
+                    <span class="nav-choice-card__label">{{ label }}</span>
+                    <span class="nav-choice-card__desc">{% if value == 'clean' %}Crisp white shell{% elif value == 'light' %}Soft grey surface{% elif value == 'dark' %}Low-light workspace{% elif value == 'teal' %}Muted teal workspace{% elif value == 'brand' %}Company-colour shell{% else %}Your own palette{% endif %}</span>
+                  </span>
+                </label>
+                {% endfor %}
+                {% endwith %}
+              </div>
+              {{ form.nav_style.errors }}
+            </section>
+
+            <section class="nav-section-card" aria-labelledby="navActiveStyleLabel">
+              <div class="nav-section-head">
+                <h6 id="navActiveStyleLabel">Active style</h6>
+                <p>Define how the current page is highlighted in the sidebar.</p>
+              </div>
+              <div class="nav-choice-grid nav-choice-grid--active">
+                {% with selected=form.nav_highlight_style.value|default:organization.nav_highlight_style %}
+                {% for value, label in nav_active_style_choices %}
+                <label class="nav-choice-card nav-choice-card--compact{% if selected == value %} is-selected{% endif %}" data-nav-choice>
+                  <input type="radio" name="{{ form.nav_highlight_style.html_name }}" value="{{ value }}"{% if selected == value %} checked{% endif %}>
+                  <span class="nav-choice-card__check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                  </span>
+                  <span class="active-swatch active-swatch--{{ value }}" aria-hidden="true">
+                    <span class="active-swatch__dot"></span>
+                    <span class="active-swatch__bar"></span>
+                  </span>
+                  <span class="nav-choice-card__copy">
+                    <span class="nav-choice-card__label">{{ label }}</span>
+                    <span class="nav-choice-card__desc">{% if value == 'rounded_pill' %}Solid rounded row{% elif value == 'soft_pill' %}Tinted rounded row{% elif value == 'minimal' %}Subtle left marker{% elif value == 'outline' %}Defined border{% else %}Your accent{% endif %}</span>
+                  </span>
+                </label>
+                {% endfor %}
+                {% endwith %}
+              </div>
+              {{ form.nav_highlight_style.errors }}
+            </section>
+
+            <section class="nav-section-card" aria-labelledby="navHighlightLabel">
+              <div class="nav-section-head">
+                <h6 id="navHighlightLabel">Highlight colour</h6>
+                <p>Choose the colour used for the active navigation item.</p>
+              </div>
+              <div class="nav-choice-grid nav-choice-grid--source">
+                {% with selected=form.nav_highlight_source.value|default:organization.nav_highlight_source %}
+                {% for value, label in nav_highlight_source_choices %}
+                <label class="nav-choice-card nav-choice-card--source{% if selected == value %} is-selected{% endif %}" data-nav-choice>
+                  <input type="radio" name="{{ form.nav_highlight_source.html_name }}" value="{{ value }}"{% if selected == value %} checked{% endif %}>
+                  <span class="nav-choice-card__check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                  </span>
+                  <span class="source-dot source-dot--{{ value }}" aria-hidden="true"></span>
+                  <span class="nav-choice-card__copy">
+                    <span class="nav-choice-card__label">{{ label }}</span>
+                    <span class="nav-choice-card__desc">{% if value == 'auto' %}Default black{% elif value == 'accent' %}Current brand colour{% else %}Pick your own{% endif %}</span>
+                  </span>
+                </label>
+                {% endfor %}
+                {% endwith %}
+              </div>
+              {{ form.nav_highlight_source.errors }}
+
+              <div class="nav-custom-highlight mt-3" data-highlight-custom>
+                <label class="form-label" for="{{ form.nav_highlight_color.id_for_label }}">Custom highlight colour</label>
+                <div class="brand-colour-row">
+                  <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_highlight_color.id_for_label }}" value="{{ form.nav_highlight_color.value|default:'#111111' }}" aria-label="Pick custom highlight colour">
+                  {{ form.nav_highlight_color }}
+                </div>
+                <small class="field-help">Used when “Custom Colour” is selected. Inactive colours fall back to the closest readable option.</small>
+                {{ form.nav_highlight_color.errors }}
+              </div>
+            </section>
+
+            <details class="nav-fine-tune nav-section-card" {% if form.errors %}open{% endif %}>
+              <summary class="nav-fine-tune__summary">
+                <span class="nav-fine-tune__plus" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></span>
+                <span class="nav-fine-tune__copy">
+                  <strong>Fine-tune colours</strong>
+                  <small>Background, text, icons, hover and active states</small>
+                </span>
+                <span class="nav-fine-tune__optional">Optional</span>
+                <span class="nav-fine-tune__chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span>
+              </summary>
+              <div class="nav-fine-tune__body">
+                <div class="nav-color-grid">
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_bg_color.id_for_label }}">Custom background</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_bg_color.id_for_label }}" value="{{ form.nav_bg_color.value|default:'#0A0A0A' }}" aria-label="Pick custom sidebar background">
+                      {{ form.nav_bg_color }}
+                    </div>
+                    <small class="field-help">Used by the Custom appearance.</small>
+                    {{ form.nav_bg_color.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_text_color.id_for_label }}">Sidebar text</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_text_color.id_for_label }}" value="{{ form.nav_text_color.value|default:nav_preview.nav_fg }}" aria-label="Pick sidebar text colour">
+                      {{ form.nav_text_color }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_text_color.id_for_label }}">Auto</button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-eyedropper-for="{{ form.nav_text_color.id_for_label }}" aria-label="Pick sidebar text colour from screen">Pick</button>
+                    </div>
+                    {{ form.nav_text_color.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_muted_color.id_for_label }}">Muted text</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_muted_color.id_for_label }}" value="{{ form.nav_muted_color.value|default:nav_preview.nav_fg_muted }}" aria-label="Pick muted navigation text colour">
+                      {{ form.nav_muted_color }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_muted_color.id_for_label }}">Auto</button>
+                    </div>
+                    {{ form.nav_muted_color.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_hover_bg.id_for_label }}">Hover background</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_hover_bg.id_for_label }}" value="{{ form.nav_hover_bg.value|default:nav_preview.nav_hover_bg }}" aria-label="Pick navigation hover background">
+                      {{ form.nav_hover_bg }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_hover_bg.id_for_label }}">Auto</button>
+                    </div>
+                    {{ form.nav_hover_bg.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_hover_fg.id_for_label }}">Hover text</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_hover_fg.id_for_label }}" value="{{ form.nav_hover_fg.value|default:nav_preview.nav_hover_fg }}" aria-label="Pick navigation hover text colour">
+                      {{ form.nav_hover_fg }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_hover_fg.id_for_label }}">Auto</button>
+                    </div>
+                    {{ form.nav_hover_fg.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_active_icon_bg.id_for_label }}">Active icon background</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_active_icon_bg.id_for_label }}" value="{{ form.nav_active_icon_bg.value|default:nav_preview.nav_active_icon_bg }}" aria-label="Pick active icon background">
+                      {{ form.nav_active_icon_bg }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_active_icon_bg.id_for_label }}">Auto</button>
+                    </div>
+                    {{ form.nav_active_icon_bg.errors }}
+                  </div>
+                  <div class="nav-color-field">
+                    <label class="form-label" for="{{ form.nav_active_icon_fg.id_for_label }}">Active icon colour</label>
+                    <div class="brand-colour-row">
+                      <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_active_icon_fg.id_for_label }}" value="{{ form.nav_active_icon_fg.value|default:nav_preview.nav_active_icon_fg }}" aria-label="Pick active icon colour">
+                      {{ form.nav_active_icon_fg }}
+                      <button type="button" class="btn btn-outline-secondary btn-sm" data-clear-color="{{ form.nav_active_icon_fg.id_for_label }}">Auto</button>
+                    </div>
+                    {{ form.nav_active_icon_fg.errors }}
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="col-xl-4">
+            <div class="nav-preview-panel">
+              <div class="nav-preview-panel__head">
+                <div>
+                  <h6>Live preview</h6>
+                  <p>Updates instantly as you choose options.</p>
+                </div>
+                <span class="live-dot" aria-hidden="true" title="Live preview"></span>
+              </div>
+              {% include 'attendance/partials/_nav_preview.html' %}
+              <div class="nav-contrast" id="navContrast" aria-live="polite">
+                <span class="nav-contrast__item{% if nav_preview.nav_contrast.text < 4.5 %} is-warning{% endif %}" data-contrast="text">Sidebar text {{ nav_preview.nav_contrast.text }}:1</span>
+                <span class="nav-contrast__item{% if nav_preview.nav_contrast.muted < 4.5 %} is-warning{% endif %}" data-contrast="muted">Muted {{ nav_preview.nav_contrast.muted }}:1</span>
+                <span class="nav-contrast__item{% if nav_preview.nav_contrast.active < 4.5 %} is-warning{% endif %}" data-contrast="active">Active {{ nav_preview.nav_contrast.active }}:1</span>
+                <span class="nav-contrast__item{% if nav_preview.nav_contrast.active_icon < 4.5 %} is-warning{% endif %}" data-contrast="active_icon">Icon {{ nav_preview.nav_contrast.active_icon }}:1</span>
+              </div>
+              <p class="nav-preview-panel__note">Contrast is recalculated as you edit. Warning badges indicate a colour below 4.5:1.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="branding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="save">Save branding</button>
+      <a class="btn btn-outline-secondary" href="{% url 'organization_settings' %}">Cancel</a>
+      <button class="btn btn-link ms-auto" type="submit" name="action" value="restore_default" formnovalidate id="restoreNav">Restore default</button>
+    </div>
   </form>
 </div>
-<style>
-  .preset-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-  .preset{border:1px solid var(--border);border-radius:8px;background:#fff;padding:10px;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;gap:8px;align-items:center;color:var(--black)}
-  .preset:hover{border-color:var(--black)}
-  .preset.picked{border:2px solid var(--black)}
-  .mini-side{width:100%;height:44px;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px}
-  .mini-side i{display:block;height:6px;border-radius:3px;background:rgba(128,128,128,.5)}
-  .mini-side i:first-child{background:currentColor}
-  .nav-choices{display:flex;flex-direction:column;gap:6px}
-  .nav-choices .choice{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:14px}
-  .nav-choices .choice:hover{border-color:var(--black)}
-  .sample{display:inline-flex;align-items:center;gap:8px}
-  .sample i{display:inline-block;width:64px;height:20px;border-radius:6px;background:#0A0A0A;font-style:normal}
-  .sample-left_bar i{border-radius:0 6px 6px 0;border-left:3px solid #0A0A0A;background:#F5F5F5}
-  .sample-soft_tint i{background:#E5E5E5}
-  .sample-outline i{background:transparent;border:1px solid #0A0A0A}
-  .nav-preview{width:230px;border-radius:10px;overflow:hidden;border:1px solid var(--border);font-size:13px}
-  .np-brand{display:flex;align-items:center;gap:8px;padding:12px;font-weight:700}
-  .np-logo{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;background:#fff;color:#000}
-  .np-item{padding:8px 12px;margin:1px 8px;border-radius:0 6px 6px 0}
-  @media(max-width:767px){.preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style>
-<script>
-(function(){
-  /* --- brand preview (existing behaviour, contrast-aware) --- */
-  var picker=document.getElementById('brandPicker');
-  var hex=document.getElementById('id_brand_color');
-  var pvBtn=document.getElementById('pvBtn'),pvLink=document.getElementById('pvLink'),
-      pvBadge=document.getElementById('pvBadge'),pvMenu=document.getElementById('pvMenu');
-  function lum(h){var c=[0,2,4].map(function(i){var v=parseInt(h.substr(1+i,2),16)/255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];}
-  function ratio(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);}
-  function shade(h,f){var r=parseInt(h.substr(1,2),16)*f,g=parseInt(h.substr(3,2),16)*f,b=parseInt(h.substr(5,2),16)*f;
-    function q(v){v=Math.max(0,Math.min(255,Math.round(v))).toString(16);return v.length<2?"0"+v:v;}return "#"+q(r)+q(g)+q(b);}
-  function tintc(h,f){var r=parseInt(h.substr(1,2),16),g=parseInt(h.substr(3,2),16),b=parseInt(h.substr(5,2),16);
-    function q(v){v=Math.max(0,Math.min(255,Math.round(v))).toString(16);return v.length<2?"0"+v:v;}
-    return "#"+q(r+(255-r)*f)+q(g+(255-g)*f)+q(b+(255-b)*f);}
-  function contrastText(c){return ratio(c,"#FFFFFF")>=ratio(c,"#0A0A0A")?"#FFFFFF":"#0A0A0A";}
-  function readableOnWhite(c){var k=0;while(ratio(c,"#FFFFFF")<4.5&&k<20){c=shade(c,0.88);k++;}return ratio(c,"#FFFFFF")>=4.5?c:"#0A0A0A";}
-  function paint(c){ pvBtn.style.background=c;pvBtn.style.borderColor=c;pvBtn.style.color=contrastText(c);
-    pvLink.style.color=readableOnWhite(c);
-    pvBadge.style.background=c;pvBadge.style.color=contrastText(c);pvMenu.style.borderColor=c;pvMenu.style.background='#f7f7f8'; }
-  picker.addEventListener('input',function(){hex.value=picker.value;paint(picker.value);paintNav();presetSwatch();});
-  hex.addEventListener('input',function(){ if(/^#[0-9a-fA-F]{6}$/.test(hex.value)){picker.value=hex.value;paint(hex.value);paintNav();presetSwatch();} });
-  paint(picker.value);
-  var eye=document.getElementById('eyeBtn');
-  if(!window.EyeDropper){eye.style.display='none';}
-  else{eye.addEventListener('click',async function(){ try{ var r=await new EyeDropper().open(); picker.value=r.sRGBHex; hex.value=r.sRGBHex; paint(r.sRGBHex);paintNav();presetSwatch();}catch(e){} });}
 
-  /* --- navigation preview --- */
-  var PRESETS={black:'#0A0A0A',white:'#FFFFFF',light_grey:'#F5F5F5',midnight:'#0B1226'};
-  function val(name){var el=document.querySelector('input[name="'+name+'"]:checked');return el?el.value:'black';}
-  function setRadio(name,v){var el=document.querySelector('input[name="'+name+'"][value="'+v+'"]');if(el){el.checked=true;}}
-  function navBg(){
-    var s=val('nav_style');
-    if(s==='brand'){return /^#[0-9a-fA-F]{6}$/.test(hex.value)?hex.value:'#0A0A0A';}
-    if(s==='custom'){var h=document.getElementById('id_nav_bg_color').value;return /^#[0-9a-fA-F]{6}$/.test(h)?h:'#0A0A0A';}
-    return PRESETS[s]||'#0A0A0A';
+<style>
+  .branding-page { max-width: 1320px; }
+  .branding-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+  .branding-head h5 { margin:0 0 4px; font-weight:600; font-size:18px; }
+  .branding-head p { margin:0; color:var(--muted); max-width:680px; font-size:13px; }
+  .branding-head__badge { display:inline-flex; align-items:center; gap:7px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:11px; font-weight:500; background:var(--white); white-space:nowrap; }
+  .branding-head__dot { width:6px; height:6px; border-radius:50%; background:var(--success); display:inline-block; }
+  .branding-card { border:1px solid var(--border); border-radius:14px; background:var(--white); box-shadow:none; }
+  .branding-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:18px; }
+  .branding-section-head h6 { margin:0 0 3px; font-weight:600; font-size:14px; }
+  .branding-section-head p { margin:0; color:var(--muted); font-size:12px; }
+  .branding-section-head--split { margin-bottom:22px; }
+  .field-help { display:block; margin-top:5px; color:var(--muted); font-size:11px; line-height:16px; }
+  .brand-logo-preview { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+  .brand-logo-preview__tile { display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:44px; padding:5px 9px; border:1px solid var(--border); border-radius:9px; background:#fff; }
+  .brand-logo-preview__tile.is-dark { background:#111; border-color:#111; }
+  .brand-logo-preview__tile img { max-height:32px; max-width:140px; object-fit:contain; }
+  .remove-logo-check { display:flex; align-items:center; gap:6px; margin:0; font-size:12px; }
+  .remove-logo-check input { margin:0; }
+  .brand-colour-row { display:flex; align-items:center; gap:7px; }
+  .brand-colour-row input[type="color"] { width:42px; height:38px; padding:3px; flex:0 0 auto; }
+  .brand-colour-row input[type="text"] { min-width:0; }
+  .suggested-colour { display:inline-flex; align-items:center; gap:7px; margin-top:8px; padding:5px 8px; border:1px solid var(--border); border-radius:7px; background:#fff; color:var(--body); font-size:11px; cursor:pointer; }
+  .suggested-colour span { width:13px; height:13px; border-radius:4px; display:inline-block; }
+  .suggested-colour code { color:var(--black); font-size:10px; }
+  .brand-preview { border:1px solid var(--border); border-radius:12px; background:var(--surface-muted); padding:22px; min-height:174px; display:flex; flex-direction:column; align-items:flex-start; gap:14px; justify-content:center; }
+  .brand-preview__row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .brand-preview .btn { border-radius:9px; font-weight:500; }
+  .brand-preview__menu { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:9px; background:#fff; border-left:3px solid var(--accent); font-size:12px; font-weight:500; color:var(--black); }
+  .brand-preview__dot { width:7px; height:7px; border-radius:50%; background:var(--accent); display:inline-block; }
+  .nav-settings-head { margin-bottom:16px; }
+  .nav-settings-head h5 { margin:0 0 4px; font-size:16px; font-weight:600; line-height:22px; }
+  .nav-section-card { min-width:0; margin:0 0 12px; padding:16px; border:1px solid var(--border); border-radius:13px; background:var(--white); }
+  .nav-section-head { margin-bottom:12px; }
+  .nav-section-head h6 { margin:0 0 2px; color:var(--black); font-size:12px; font-weight:600; line-height:17px; }
+  .nav-section-head p { margin:0; color:var(--muted); font-size:11px; line-height:15px; }
+  .nav-choice-grid { display:grid; gap:8px; }
+  .nav-choice-grid--appearance { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .nav-choice-grid--active { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .nav-choice-grid--source { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .nav-choice-card { position:relative; display:flex; flex-direction:column; gap:8px; min-width:0; padding:8px; border:1px solid var(--border); border-radius:11px; background:#fff; cursor:pointer; transition:border-color .14s ease, box-shadow .14s ease, transform .14s ease; }
+  .nav-choice-card:hover { border-color:var(--border-strong); transform:translateY(-1px); }
+  .nav-choice-card:focus-within { outline:2px solid var(--black); outline-offset:2px; }
+  .nav-choice-card.is-selected { border-color:var(--black); box-shadow:inset 0 0 0 1px var(--black); }
+  .nav-choice-card input { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
+  .nav-choice-card__check { position:absolute; top:6px; right:6px; z-index:1; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--black); color:#fff; opacity:0; transform:scale(.72); transition:opacity .13s ease, transform .13s ease; }
+  .nav-choice-card__check svg { width:10px; height:10px; }
+  .nav-choice-card.is-selected .nav-choice-card__check { opacity:1; transform:scale(1); }
+  .nav-choice-card__copy { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .nav-choice-card__label { color:var(--black); font-size:11px; font-weight:600; line-height:14px; text-align:center; overflow-wrap:anywhere; }
+  .nav-choice-card__desc { color:var(--muted); font-size:9.5px; font-weight:400; line-height:13px; text-align:center; overflow-wrap:anywhere; }
+  .nav-swatch { height:54px; border-radius:7px; background:#fff; border:1px solid #E9E9E9; padding:7px 6px; display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+  .nav-swatch--light { background:#F5F5F5; }
+  .nav-swatch--dark { background:#111111; border-color:#111111; }
+  .nav-swatch--teal { background:#3B5B57; border-color:#3B5B57; }
+  .nav-swatch--brand { background:var(--accent); border-color:var(--accent); }
+  .nav-swatch--custom { background:linear-gradient(135deg,#171717 0 50%,#EFEFEF 50% 100%); border-color:#D4D4D4; }
+  .nav-swatch__brand { width:15px; height:15px; border-radius:5px; background:#111; margin-bottom:1px; }
+  .nav-swatch--dark .nav-swatch__brand, .nav-swatch--teal .nav-swatch__brand, .nav-swatch--custom .nav-swatch__brand { background:#fff; }
+  .nav-swatch--brand .nav-swatch__brand { background:#fff; }
+  .nav-swatch__bar { height:4px; border-radius:99px; background:#E5E5E5; width:78%; }
+  .nav-swatch__bar--active { background:#111; width:90%; height:9px; border-radius:99px; }
+  .nav-swatch__bar--short { width:58%; }
+  .nav-swatch--dark .nav-swatch__bar, .nav-swatch--teal .nav-swatch__bar { background:rgba(255,255,255,.35); }
+  .nav-swatch--dark .nav-swatch__bar--active, .nav-swatch--teal .nav-swatch__bar--active { background:#fff; }
+  .nav-swatch--brand .nav-swatch__bar { background:rgba(255,255,255,.38); }
+  .nav-swatch--brand .nav-swatch__bar--active { background:#fff; }
+  .nav-swatch--custom .nav-swatch__bar { background:rgba(255,255,255,.38); }
+  .nav-swatch--custom .nav-swatch__bar--active { background:#fff; }
+  .active-swatch { height:42px; border-radius:8px; background:#F7F7F7; display:flex; align-items:center; gap:5px; padding:5px 7px; border:1px solid #EFEFEF; }
+  .active-swatch__dot { width:16px; height:16px; border-radius:50%; background:#fff; border:1px solid #E5E5E5; flex:0 0 auto; }
+  .active-swatch__bar { width:62%; height:5px; border-radius:99px; background:#DADADA; }
+  .active-swatch--rounded_pill { background:#111; border-color:#111; }
+  .active-swatch--rounded_pill .active-swatch__dot { background:#fff; border-color:#fff; }
+  .active-swatch--rounded_pill .active-swatch__bar { background:#fff; }
+  .active-swatch--soft_pill { background:#EFEFEF; }
+  .active-swatch--soft_pill .active-swatch__dot { background:#111; border-color:#111; }
+  .active-swatch--soft_pill .active-swatch__bar { background:#111; }
+  .active-swatch--minimal { background:transparent; border-color:transparent; border-left:3px solid #111; border-radius:0 8px 8px 0; }
+  .active-swatch--minimal .active-swatch__dot { background:#EFEFEF; border-color:#EFEFEF; }
+  .active-swatch--outline { background:transparent; border:1.5px solid #111; }
+  .active-swatch--outline .active-swatch__dot { background:#EFEFEF; border-color:#EFEFEF; }
+  .active-swatch--custom { background:linear-gradient(135deg,#111 0 60%,#454545 60% 100%); border-color:#111; }
+  .active-swatch--custom .active-swatch__dot { background:#fff; border-color:#fff; }
+  .active-swatch--custom .active-swatch__bar { background:#fff; }
+  .nav-choice-card--compact { padding:7px; gap:6px; }
+  .nav-choice-card--compact .nav-choice-card__check { top:5px; right:5px; }
+  .nav-choice-card--source { flex-direction:row; align-items:center; padding:10px 28px 10px 10px; gap:9px; }
+  .nav-choice-card--source .nav-choice-card__label, .nav-choice-card--source .nav-choice-card__desc { text-align:left; }
+  .source-dot { width:20px; height:20px; border-radius:50%; flex:0 0 auto; border:1px solid #E5E5E5; background:#111; }
+  .source-dot--accent { background:var(--accent); border-color:var(--accent); }
+  .source-dot--custom { background:linear-gradient(135deg,#111 0 50%,#fff 50% 100%); }
+  .nav-custom-highlight { padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-muted); }
+  .nav-custom-highlight .form-label { font-size:11px; margin-bottom:6px; }
+  .nav-custom-highlight[hidden] { display:none !important; }
+  .nav-fine-tune { padding:0; overflow:hidden; }
+  .nav-fine-tune__summary { cursor:pointer; color:var(--black); list-style:none; display:flex; align-items:center; gap:11px; padding:15px 16px; }
+  .nav-fine-tune__summary::-webkit-details-marker { display:none; }
+  .nav-fine-tune__summary:focus-visible { outline:2px solid var(--black); outline-offset:-2px; }
+  .nav-fine-tune__plus { width:28px; height:28px; border:1px solid var(--border-strong); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; transition:background .14s ease, color .14s ease, transform .14s ease; }
+  .nav-fine-tune__plus svg { width:14px; height:14px; }
+  .nav-fine-tune[open] .nav-fine-tune__plus { background:var(--black); color:#fff; border-color:var(--black); transform:rotate(45deg); }
+  .nav-fine-tune__copy { display:flex; flex-direction:column; gap:1px; flex:1 1 auto; min-width:0; }
+  .nav-fine-tune__copy strong { font-size:12px; font-weight:600; line-height:16px; }
+  .nav-fine-tune__copy small { color:var(--muted); font-size:10.5px; font-weight:400; line-height:14px; }
+  .nav-fine-tune__optional { padding:3px 7px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:9.5px; font-weight:500; white-space:nowrap; }
+  .nav-fine-tune__chevron { color:var(--muted); display:inline-flex; transition:transform .14s ease; }
+  .nav-fine-tune__chevron svg { width:15px; height:15px; }
+  .nav-fine-tune[open] .nav-fine-tune__chevron { transform:rotate(180deg); }
+  .nav-fine-tune__body { padding:16px; border-top:1px solid var(--border); }
+  .nav-color-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 12px; }
+  .nav-color-field { min-width:0; }
+  .nav-color-field .form-label { font-size:11px; margin-bottom:5px; }
+  .nav-color-field .form-control { font-size:12px; }
+  .nav-color-field .brand-colour-row .btn { padding:7px 9px; font-size:10px; }
+  .nav-preview-panel { position:sticky; top:84px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--white); box-shadow:0 8px 24px rgba(17,17,17,.04); }
+  .nav-preview-panel__head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:13px; }
+  .nav-preview-panel__head h6 { margin:0 0 2px; font-size:13px; font-weight:600; }
+  .nav-preview-panel__head p { margin:0; color:var(--muted); font-size:11px; }
+  .nav-preview-panel .nav-preview { max-width:none; box-shadow:none; }
+  .nav-preview-panel .nav-preview__states { margin-top:10px; }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:var(--success); margin-top:4px; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+  .nav-contrast { display:flex; flex-wrap:wrap; gap:5px; margin-top:12px; }
+  .nav-contrast__item { display:inline-flex; align-items:center; padding:4px 7px; border-radius:999px; background:#F5F5F5; color:#525252; font-size:10px; font-weight:500; line-height:14px; }
+  .nav-contrast__item.is-warning { background:#FEF2F2; color:var(--danger); box-shadow:inset 0 0 0 1px #FECACA; }
+  .nav-preview-panel__note { margin:9px 0 0; color:var(--muted); font-size:10px; line-height:15px; }
+  .branding-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:18px; }
+  .branding-actions .btn { border-radius:9px; font-weight:500; }
+  .branding-actions .btn-link { color:var(--muted); text-decoration:none; font-size:12px; }
+  .branding-actions .btn-link:hover { color:var(--danger); }
+  .nav-settings-card .alert { font-size:12px; }
+  @media (max-width:1199.98px) {
+    .nav-preview-panel { position:static; }
   }
-  function navIndicator(bg){
-    var src=val('nav_highlight_source');
-    if(src==='accent'){return /^#[0-9a-fA-F]{6}$/.test(hex.value)?hex.value:'#0A0A0A';}
-    if(src==='custom'){var h=document.getElementById('id_nav_highlight_color').value;return /^#[0-9a-fA-F]{6}$/.test(h)?h:'#0A0A0A';}
-    return ratio('#FFFFFF',bg)>=ratio('#0A0A0A',bg)?'#FFFFFF':'#0A0A0A';
+  @media (max-width:991.98px) {
+    .nav-choice-grid--appearance, .nav-choice-grid--active { grid-template-columns:repeat(3,minmax(0,1fr)); }
   }
-  function paintNav(){
-    var bg=navBg(),ind=navIndicator(bg),hs=val('nav_highlight_style');
-    var dark=ratio('#FFFFFF',bg)>=ratio('#0A0A0A',bg);
-    var fg=dark?'#FFFFFF':'#0A0A0A';
-    var np=document.getElementById('navPreview');
-    np.style.background=bg;np.style.borderColor=dark?'rgba(255,255,255,.14)':'#E5E5E5';
-    np.querySelector('.np-brand').style.color=fg;
-    var items=np.querySelectorAll('.np-item');
-    items.forEach(function(it){it.style.color=fg;it.style.opacity='.75';it.style.background='transparent';it.style.boxShadow='none';it.style.borderLeft='3px solid transparent';});
-    var act=np.querySelector('.np-active'),hov=np.querySelector('.np-hover');
-    hov.style.background=dark?'rgba(255,255,255,.07)':'rgba(10,10,10,.05)';hov.style.opacity='1';
-    if(hs==='pill'){act.style.background=ind;act.style.color=contrastText(ind);}
-    else if(hs==='left_bar'){act.style.background=tintc(ind,.9);act.style.borderLeft='3px solid '+ind;
-      act.style.color=ratio(fg,tintc(ind,.9))>=4.5?fg:contrastText(tintc(ind,.9));}
-    else if(hs==='soft_tint'){act.style.background=tintc(ind,.85);
-      act.style.color=ratio(fg,tintc(ind,.85))>=4.5?fg:contrastText(tintc(ind,.85));}
-    else{act.style.boxShadow='inset 0 0 0 1px '+ind;act.style.color=fg;}
-    act.style.opacity='1';
+  @media (max-width:639.98px) {
+    .branding-page .card-body { padding:16px !important; }
+    .nav-choice-grid--appearance, .nav-choice-grid--active { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .nav-choice-grid--source { grid-template-columns:1fr; }
+    .nav-color-grid { grid-template-columns:1fr; }
+    .branding-head__badge { display:none; }
+    .branding-actions .btn-primary, .branding-actions .btn-outline-secondary { flex:1 1 auto; }
+    .branding-actions .btn-link { width:100%; margin-left:0 !important; text-align:left; padding-left:0; }
   }
-  function presetSwatch(){var el=document.getElementById('presetBrandSwatch');
-    if(el){el.style.background=/^#[0-9a-fA-F]{6}$/.test(hex.value)?hex.value:'#0A0A0A';el.style.color='#fff';}}
-  document.querySelectorAll('#brandForm input').forEach(function(el){el.addEventListener('input',paintNav);el.addEventListener('change',paintNav);});
-  document.querySelectorAll('.preset').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var p=btn.dataset.preset;
-      document.querySelectorAll('.preset').forEach(function(b){b.classList.remove('picked');});
-      btn.classList.add('picked');
-      if(p==='black'){setRadio('nav_style','black');}
-      else if(p==='white'){setRadio('nav_style','white');}
-      else if(p==='grey'){setRadio('nav_style','light_grey');}
-      else if(p==='brand'){setRadio('nav_style','brand');setRadio('nav_highlight_source','accent');}
-      else if(p==='midnight'){setRadio('nav_style','custom');
-        document.getElementById('id_nav_bg_color').value='#0B1226';
-        document.getElementById('navPicker').value='#0B1226';}
-      setRadio('nav_highlight_style','pill');
-      paintNav();
+</style>
+
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('brandForm');
+  if (!form) { return; }
+  var previewUrl = form.dataset.navPreviewUrl;
+  var preview = document.getElementById('navPreview');
+  var contrastBox = document.getElementById('navContrast');
+  var brandPicker = document.getElementById('brandPicker');
+  var brandHex = document.getElementById('id_brand_color');
+  var pvBtn = document.getElementById('pvBtn');
+  var pvLink = document.getElementById('pvLink');
+  var pvBadge = document.getElementById('pvBadge');
+  var pvMenu = document.getElementById('pvMenu');
+
+  function isHex(value) { return /^#[0-9a-fA-F]{6}$/.test(value || ''); }
+  function channel(value) { value /= 255; return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4); }
+  function luminance(hex) {
+    return 0.2126 * channel(parseInt(hex.substr(1, 2), 16)) +
+      0.7152 * channel(parseInt(hex.substr(3, 2), 16)) +
+      0.0722 * channel(parseInt(hex.substr(5, 2), 16));
+  }
+  function ratio(a, b) {
+    var la = luminance(a), lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function contrastText(hex) { return ratio(hex, '#FFFFFF') >= ratio(hex, '#0A0A0B') ? '#FFFFFF' : '#0A0A0B'; }
+  function readableOnWhite(hex) {
+    var result = hex, guard = 0;
+    while (ratio(result, '#FFFFFF') < 4.5 && guard < 20) {
+      result = '#' + [1, 3, 5].map(function (i) {
+        var value = Math.round(parseInt(result.substr(i, 2), 16) * 0.88);
+        return value.toString(16).padStart(2, '0');
+      }).join('');
+      guard += 1;
+    }
+    return ratio(result, '#FFFFFF') >= 4.5 ? result : '#0A0A0A';
+  }
+  function paintBrand(hex) {
+    if (!isHex(hex)) { return; }
+    if (pvBtn) { pvBtn.style.background = hex; pvBtn.style.borderColor = hex; pvBtn.style.color = contrastText(hex); }
+    if (pvLink) { pvLink.style.color = readableOnWhite(hex); }
+    if (pvBadge) { pvBadge.style.background = hex; pvBadge.style.color = contrastText(hex); }
+    if (pvMenu) { pvMenu.style.borderLeftColor = hex; }
+  }
+
+  function syncColorField(picker) {
+    var text = document.getElementById(picker.dataset.colorPickerFor);
+    if (!text) { return; }
+    if (isHex(text.value)) { picker.value = text.value; }
+    picker.addEventListener('input', function () {
+      text.value = picker.value.toUpperCase();
+      schedulePreview();
+    });
+    text.addEventListener('input', function () {
+      if (isHex(text.value)) { picker.value = text.value; }
+      schedulePreview();
+    });
+  }
+
+  document.querySelectorAll('[data-color-picker-for]').forEach(syncColorField);
+  document.querySelectorAll('[data-clear-color]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var text = document.getElementById(button.dataset.clearColor);
+      if (text) { text.value = ''; }
+      schedulePreview();
     });
   });
-  document.getElementById('navReset').addEventListener('click',function(){
-    setRadio('nav_style','black');
-    document.getElementById('id_nav_bg_color').value='#0A0A0A';
-    document.getElementById('navPicker').value='#0A0A0A';
-    setRadio('nav_highlight_style','pill');
-    setRadio('nav_highlight_source','auto');
-    document.getElementById('id_nav_highlight_color').value='#0A0A0A';
-    document.getElementById('navHlPicker').value='#0A0A0A';
-    paintNav();
+  document.querySelectorAll('[data-eyedropper-for]').forEach(function (button) {
+    if (!window.EyeDropper) { button.hidden = true; return; }
+    button.addEventListener('click', function () {
+      new EyeDropper().open().then(function (result) {
+        var text = document.getElementById(button.dataset.eyedropperFor);
+        if (text) {
+          text.value = result.sRGBHex.toUpperCase();
+          var picker = document.querySelector('[data-color-picker-for="' + text.id + '"]');
+          if (picker) { picker.value = result.sRGBHex; }
+          schedulePreview();
+        }
+      }).catch(function () {});
+    });
   });
-  var navPicker=document.getElementById('navPicker'),navHex=document.getElementById('id_nav_bg_color');
-  navPicker.addEventListener('input',function(){navHex.value=navPicker.value;paintNav();});
-  navHex.addEventListener('input',function(){if(/^#[0-9a-fA-F]{6}$/.test(navHex.value)){navPicker.value=navHex.value;}paintNav();});
-  var hlPicker=document.getElementById('navHlPicker'),hlHex=document.getElementById('id_nav_highlight_color');
-  hlPicker.addEventListener('input',function(){hlHex.value=hlPicker.value;paintNav();});
-  hlHex.addEventListener('input',function(){if(/^#[0-9a-fA-F]{6}$/.test(hlHex.value)){hlPicker.value=hlHex.value;}paintNav();});
-  var navEye=document.getElementById('navEyeBtn');
-  if(!window.EyeDropper){navEye.style.display='none';}
-  else{navEye.addEventListener('click',async function(){try{var r=await new EyeDropper().open();navPicker.value=r.sRGBHex;navHex.value=r.sRGBHex;paintNav();}catch(e){}});}
-  paintNav();presetSwatch();
+
+  if (brandPicker && brandHex) {
+    brandPicker.addEventListener('input', function () {
+      brandHex.value = brandPicker.value.toUpperCase();
+      paintBrand(brandPicker.value);
+      schedulePreview();
+    });
+    brandHex.addEventListener('input', function () {
+      if (isHex(brandHex.value)) {
+        brandPicker.value = brandHex.value;
+        paintBrand(brandHex.value);
+      }
+      schedulePreview();
+    });
+    paintBrand(brandPicker.value);
+  }
+  var eyeBtn = document.getElementById('eyeBtn');
+  if (eyeBtn) {
+    if (!window.EyeDropper) { eyeBtn.hidden = true; }
+    else {
+      eyeBtn.addEventListener('click', function () {
+        new EyeDropper().open().then(function (result) {
+          if (brandPicker) { brandPicker.value = result.sRGBHex; }
+          if (brandHex) { brandHex.value = result.sRGBHex.toUpperCase(); }
+          paintBrand(result.sRGBHex);
+          schedulePreview();
+        }).catch(function () {});
+      });
+    }
+  }
+  var suggested = document.getElementById('suggestedColour');
+  if (suggested) {
+    suggested.addEventListener('click', function () {
+      var colour = suggested.dataset.colour;
+      if (brandPicker) { brandPicker.value = colour; }
+      if (brandHex) { brandHex.value = colour.toUpperCase(); }
+      paintBrand(colour);
+      schedulePreview();
+    });
+  }
+
+  var NAV_FIELDS = [
+    'nav_style', 'nav_bg_color', 'nav_highlight_style', 'nav_highlight_source',
+    'nav_highlight_color', 'nav_text_color', 'nav_muted_color', 'nav_hover_bg',
+    'nav_hover_fg', 'nav_active_icon_bg', 'nav_active_icon_fg', 'brand_color'
+  ];
+  var CSS_VARS = {
+    nav_bg: '--nav-bg', nav_fg: '--nav-fg', nav_fg_muted: '--nav-fg-muted',
+    nav_border: '--nav-border', nav_hover_bg: '--nav-hover-bg',
+    nav_hover_fg: '--nav-hover-fg', nav_hover_icon_bg: '--nav-hover-icon-bg',
+    nav_icon_bg: '--nav-icon-bg', nav_icon_fg: '--nav-icon-fg',
+    nav_active_bg: '--nav-active-bg', nav_active_fg: '--nav-active-fg',
+    nav_active_indicator: '--nav-active-indicator',
+    nav_active_icon_bg: '--nav-active-icon-bg',
+    nav_active_icon_fg: '--nav-active-icon-fg',
+    nav_active_border: '--nav-active-border', nav_focus_ring: '--nav-focus-ring'
+  };
+  var APPEARANCES = { clean: 1, light: 1, dark: 1, teal: 1, brand: 1, custom: 1 };
+  var ACTIVE_STYLES = { rounded_pill: 1, soft_pill: 1, minimal: 1, outline: 1, custom: 1 };
+  var SOURCES = { auto: 1, accent: 1, custom: 1 };
+  var LEGACY_APPEARANCE = { black: 'dark', white: 'clean', light_grey: 'light' };
+  var LEGACY_ACTIVE = { pill: 'rounded_pill', left_bar: 'minimal', soft_tint: 'soft_pill' };
+  var PRESETS = { clean: '#FFFFFF', light: '#F5F5F5', dark: '#0A0A0A', teal: '#3B5B57' };
+  var draft = {};
+  var timer = null;
+  var previewSeq = 0;
+
+  function syncDraft() {
+    NAV_FIELDS.forEach(function (name) {
+      var field = form.elements[name];
+      draft[name] = field ? field.value : '';
+    });
+  }
+
+  function normaliseKey(value, allowed, legacy, fallback) {
+    var key = String(value || '').trim().toLowerCase();
+    key = legacy[key] || key;
+    return allowed[key] ? key : fallback;
+  }
+
+  function rgb(hex) {
+    return [parseInt(hex.substr(1, 2), 16), parseInt(hex.substr(3, 2), 16), parseInt(hex.substr(5, 2), 16)];
+  }
+  function hexFromRgb(values) {
+    return '#' + values.map(function (value) {
+      var part = Math.max(0, Math.min(255, Math.round(value))).toString(16).toUpperCase();
+      return part.length === 1 ? '0' + part : part;
+    }).join('');
+  }
+  function normalizeHex(value, fallback) { return isHex(value) ? value : fallback; }
+  function tintColor(hex, amount) {
+    var values = rgb(normalizeHex(hex, '#111111'));
+    return hexFromRgb(values.map(function (value) { return value + (255 - value) * amount; }));
+  }
+  function mixColors(foreground, background, amount) {
+    var fg = rgb(normalizeHex(foreground, '#111111'));
+    var bg = rgb(normalizeHex(background, '#FFFFFF'));
+    return hexFromRgb(fg.map(function (value, index) {
+      return value * amount + bg[index] * (1 - amount);
+    }));
+  }
+  function validOverride(value, background, minimum) {
+    if (!isHex(value) || ratio(value, background) < minimum) { return ''; }
+    return value;
+  }
+  function firstContrasting(background, candidates, minimum) {
+    for (var index = 0; index < candidates.length; index += 1) {
+      if (ratio(candidates[index], background) >= minimum) { return candidates[index]; }
+    }
+    return contrastText(background);
+  }
+  function iconPair(iconBg, iconFg, defaultBg, defaultFg) {
+    var bg = isHex(iconBg) ? iconBg : defaultBg;
+    var fg = isHex(iconFg) ? iconFg : defaultFg;
+    if (ratio(fg, bg) < 4.5) { fg = contrastText(bg); }
+    return [bg, fg];
+  }
+
+  // Mirrors attendance/nav_theme.py so every control paints immediately while
+  // the server remains the authority for saved and shell values.
+  function resolveTheme(config) {
+    var style = normaliseKey(config.nav_style, APPEARANCES, LEGACY_APPEARANCE, 'clean');
+    var activeStyle = normaliseKey(config.nav_highlight_style, ACTIVE_STYLES, LEGACY_ACTIVE, 'rounded_pill');
+    var source = normaliseKey(config.nav_highlight_source, SOURCES, {}, 'auto');
+    var accent = normalizeHex(config.brand_color, '#0A0A0A');
+    var bg = style === 'brand' ? accent : (style === 'custom' ? normalizeHex(config.nav_bg_color, '#0A0A0A') : PRESETS[style]);
+    var darkBg = contrastText(bg) === '#FFFFFF';
+    var cleanLike = style === 'clean' || style === 'light';
+    var fgDefault = cleanLike ? '#1C1C1C' : (darkBg ? '#F5F5F5' : contrastText(bg));
+    var fg = validOverride(config.nav_text_color, bg, 4.5) || fgDefault;
+    var mutedDefault = cleanLike ? '#6B6B6B' : (style === 'teal' ? firstContrasting(bg, ['#C8D5D2', '#E1E7E5'], 4.5) : (darkBg ? '#B3B3B3' : firstContrasting(bg, ['#404040', '#5C5C5C', '#6B6B6B', '#737373'], 4.5)));
+    var fgMuted = validOverride(config.nav_muted_color, bg, 4.5) || mutedDefault;
+    var border = darkBg ? 'rgba(255,255,255,0.16)' : (cleanLike ? '#ECECEC' : '#E5E5E5');
+    var hoverBgDefault = darkBg ? (style === 'teal' ? mixColors('#FFFFFF', bg, 0.10) : '#1C1C1C') : '#F6F6F6';
+    var hoverBg = isHex(config.nav_hover_bg) ? config.nav_hover_bg : hoverBgDefault;
+    var hoverFg = validOverride(config.nav_hover_fg, hoverBg, 4.5) || fg;
+    var iconBg = darkBg ? '#262626' : '#F4F4F5';
+    var iconFg = darkBg ? '#D4D4D4' : '#5C5C5C';
+    if (ratio(iconFg, iconBg) < 4.5) {
+      iconFg = firstContrasting(iconBg, ['#F5F5F5', '#D4D4D4', '#1C1C1C'], 4.5);
+    }
+    var hoverIconBg = darkBg ? '#333333' : '#ECECEC';
+    var highlight = source === 'accent' ? accent :
+      (source === 'custom' ? normalizeHex(config.nav_highlight_color, '#111111') : (darkBg ? '#FFFFFF' : '#111111'));
+    var activeBg = 'transparent';
+    var activeFg = fg;
+    var activeBorder = 'transparent';
+    var activeIconBg = highlight;
+    var activeIconFg = contrastText(highlight);
+    var pair;
+
+    if (activeStyle === 'rounded_pill' || activeStyle === 'custom') {
+      activeBg = highlight;
+      activeFg = contrastText(highlight);
+      pair = iconPair(config.nav_active_icon_bg, config.nav_active_icon_fg, activeFg, highlight);
+      activeIconBg = pair[0]; activeIconFg = pair[1];
+    } else if (activeStyle === 'soft_pill') {
+      activeBg = darkBg ? mixColors(highlight, bg, 0.14) : tintColor(highlight, 0.88);
+      activeFg = ratio(fg, activeBg) >= 4.5 ? fg : contrastText(activeBg);
+      pair = iconPair(config.nav_active_icon_bg, config.nav_active_icon_fg, highlight, contrastText(highlight));
+      activeIconBg = pair[0]; activeIconFg = pair[1];
+    } else if (activeStyle === 'minimal') {
+      pair = iconPair(config.nav_active_icon_bg, config.nav_active_icon_fg,
+        darkBg ? mixColors(highlight, bg, 0.15) : tintColor(highlight, 0.88), highlight);
+      activeIconBg = pair[0]; activeIconFg = pair[1];
+    } else {
+      activeBorder = highlight;
+      pair = iconPair(config.nav_active_icon_bg, config.nav_active_icon_fg,
+        darkBg ? mixColors(highlight, bg, 0.15) : tintColor(highlight, 0.90), highlight);
+      activeIconBg = pair[0]; activeIconFg = pair[1];
+    }
+
+    var activeSurface = activeBg === 'transparent' ? bg : activeBg;
+    return {
+      nav_bg: bg,
+      nav_fg: fg,
+      nav_fg_muted: fgMuted,
+      nav_border: border,
+      nav_hover_bg: hoverBg,
+      nav_hover_fg: hoverFg,
+      nav_icon_bg: iconBg,
+      nav_icon_fg: iconFg,
+      nav_hover_icon_bg: hoverIconBg,
+      nav_active_bg: activeBg,
+      nav_active_fg: activeFg,
+      nav_active_icon_bg: activeIconBg,
+      nav_active_icon_fg: activeIconFg,
+      nav_active_indicator: highlight,
+      nav_active_border: activeBorder,
+      nav_focus_ring: fg,
+      nav_active_style: activeStyle,
+      nav_contrast: {
+        text: Math.round(ratio(fg, bg) * 100) / 100,
+        muted: Math.round(ratio(fgMuted, bg) * 100) / 100,
+        active: Math.round(ratio(activeFg, activeSurface) * 100) / 100,
+        active_icon: Math.round(ratio(activeIconFg, activeIconBg) * 100) / 100,
+        highlight: Math.round(ratio(highlight, bg) * 100) / 100
+      }
+    };
+  }
+
+  function chooseHighlightRow() {
+    var source = form.querySelector('input[name="nav_highlight_source"]:checked');
+    var row = document.querySelector('[data-highlight-custom]');
+    if (row) { row.hidden = !source || source.value !== 'custom'; }
+  }
+
+  function syncSelectedCards() {
+    document.querySelectorAll('[data-nav-choice]').forEach(function (label) {
+      var input = label.querySelector('input');
+      label.classList.toggle('is-selected', !!input && input.checked);
+    });
+    chooseHighlightRow();
+  }
+
+  function renderContrast(contrast) {
+    if (!contrastBox || !contrast) { return; }
+    var labels = { text: 'Sidebar text', muted: 'Muted', active: 'Active', active_icon: 'Icon' };
+    ['text', 'muted', 'active', 'active_icon'].forEach(function (key) {
+      var node = contrastBox.querySelector('[data-contrast="' + key + '"]');
+      if (!node || contrast[key] === undefined) { return; }
+      node.textContent = labels[key] + ' ' + contrast[key] + ':1';
+      node.classList.toggle('is-warning', Number(contrast[key]) < 4.5);
+    });
+    contrastBox.removeAttribute('data-error');
+  }
+
+  function applyTheme(styles) {
+    if (!preview || !styles) { return; }
+    Object.keys(CSS_VARS).forEach(function (key) {
+      if (styles[key] !== undefined) {
+        preview.style.setProperty(CSS_VARS[key], styles[key]);
+      }
+    });
+    preview.dataset.navActive = styles.nav_active_style || 'rounded_pill';
+    renderContrast(styles.nav_contrast);
+  }
+
+  function renderPreview() {
+    if (!preview) { return; }
+    applyTheme(resolveTheme(draft));
+  }
+
+  function setPreviewState(state) {
+    if (!preview) { return; }
+    var item = preview.querySelector('[data-preview-item]');
+    if (item) {
+      item.classList.toggle('is-active', state === 'active');
+      item.classList.toggle('is-preview-hover', state === 'hover');
+    }
+    preview.dataset.previewState = state;
+    document.querySelectorAll('[data-preview-state-btn]').forEach(function (button) {
+      button.setAttribute('aria-pressed', button.dataset.previewStateBtn === state ? 'true' : 'false');
+    });
+  }
+
+  function requestPreview() {
+    if (!previewUrl || !preview) { return; }
+    var params = new URLSearchParams();
+    NAV_FIELDS.forEach(function (name) { params.set(name, draft[name] || ''); });
+    var sequence = ++previewSeq;
+    fetch(previewUrl + '?' + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    }).then(function (response) {
+      if (!response.ok) { throw new Error('preview failed'); }
+      return response.json();
+    }).then(function (payload) {
+      if (sequence === previewSeq) { applyTheme(payload.styles); }
+    }).catch(function () {
+      // The optimistic preview stays usable when the network is unavailable.
+    });
+  }
+
+  function schedulePreview() {
+    syncDraft();
+    syncSelectedCards();
+    renderPreview();
+    window.clearTimeout(timer);
+    timer = window.setTimeout(requestPreview, 160);
+  }
+
+  function handleThemeInput(event) {
+    if (event.target && event.target.type === 'file') { return; }
+    if (event.target && ['nav_style', 'nav_highlight_style', 'nav_highlight_source'].indexOf(event.target.name) !== -1) {
+      setPreviewState('active');
+    }
+    schedulePreview();
+  }
+
+  form.addEventListener('input', handleThemeInput);
+  form.addEventListener('change', handleThemeInput);
+
+  document.querySelectorAll('[data-preview-state-btn]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      setPreviewState(button.dataset.previewStateBtn || 'active');
+    });
+  });
+
+  var restore = document.getElementById('restoreNav');
+  if (restore) {
+    restore.addEventListener('click', function (event) {
+      if (!window.confirm('Restore the Clean navigation and remove all custom sidebar colours for this company?')) {
+        event.preventDefault();
+      }
+    });
+  }
+
+  syncDraft();
+  syncSelectedCards();
+  setPreviewState('active');
+  renderPreview();
 })();
 </script>
 {% endblock %}

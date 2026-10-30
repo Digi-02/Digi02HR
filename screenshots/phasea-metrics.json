@@ -1,0 +1,326 @@
+{
+  "320": {
+    "viewport": [
+      320,
+      640
+    ],
+    "scrollWidth": 320,
+    "horizontalOverflow": false,
+    "bodyClass": "",
+    "tokens": {
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navPillBg": "#E6ECF2",
+      "navActiveBg": "#E6ECF2",
+      "navBorder": "#E5E5E5"
+    },
+    "fontSize": "16px",
+    "sidebar": {
+      "x": -275,
+      "y": 0,
+      "w": 275,
+      "h": 640
+    },
+    "sidebarBrandRow": {
+      "x": -275,
+      "y": 0,
+      "w": 274,
+      "h": 64
+    },
+    "brandRowBorder": "0px",
+    "brandTextInRow": false,
+    "workspace": {
+      "x": -275,
+      "y": 64,
+      "w": 274,
+      "h": 61
+    },
+    "workspaceText": "",
+    "recentInSidebar": false,
+    "topbar": {
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 64
+    },
+    "search": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "breadcrumb": null,
+    "activeNav": "",
+    "navFont": "14px",
+    "navFontWeight": "600",
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "390": {
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollWidth": 390,
+    "horizontalOverflow": false,
+    "bodyClass": "",
+    "tokens": {
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navPillBg": "#E6ECF2",
+      "navActiveBg": "#E6ECF2",
+      "navBorder": "#E5E5E5"
+    },
+    "fontSize": "16px",
+    "sidebar": {
+      "x": -276,
+      "y": 0,
+      "w": 276,
+      "h": 844
+    },
+    "sidebarBrandRow": {
+      "x": -276,
+      "y": 0,
+      "w": 275,
+      "h": 64
+    },
+    "brandRowBorder": "0px",
+    "brandTextInRow": false,
+    "workspace": {
+      "x": -276,
+      "y": 64,
+      "w": 275,
+      "h": 61
+    },
+    "workspaceText": "",
+    "recentInSidebar": false,
+    "topbar": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 64
+    },
+    "search": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "breadcrumb": null,
+    "activeNav": "",
+    "navFont": "14px",
+    "navFontWeight": "600",
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "1024": {
+    "viewport": [
+      1024,
+      768
+    ],
+    "scrollWidth": 1024,
+    "horizontalOverflow": false,
+    "bodyClass": "",
+    "tokens": {
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navPillBg": "#E6ECF2",
+      "navActiveBg": "#E6ECF2",
+      "navBorder": "#E5E5E5"
+    },
+    "fontSize": "16px",
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "w": 212,
+      "h": 768
+    },
+    "sidebarBrandRow": {
+      "x": 0,
+      "y": 0,
+      "w": 211,
+      "h": 64
+    },
+    "brandRowBorder": "0px",
+    "brandTextInRow": false,
+    "workspace": {
+      "x": 0,
+      "y": 64,
+      "w": 211,
+      "h": 61
+    },
+    "workspaceText": "Northstar Foods Ltd\nHR workspace",
+    "recentInSidebar": false,
+    "topbar": {
+      "x": 212,
+      "y": 0,
+      "w": 812,
+      "h": 64
+    },
+    "search": {
+      "x": 662,
+      "y": 21,
+      "w": 176,
+      "h": 22
+    },
+    "breadcrumb": null,
+    "activeNav": "Overview",
+    "navFont": "14px",
+    "navFontWeight": "600",
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "1440": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "scrollWidth": 1440,
+    "horizontalOverflow": false,
+    "bodyClass": "",
+    "tokens": {
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navPillBg": "#E6ECF2",
+      "navActiveBg": "#E6ECF2",
+      "navBorder": "#E5E5E5"
+    },
+    "fontSize": "16px",
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "w": 212,
+      "h": 900
+    },
+    "sidebarBrandRow": {
+      "x": 0,
+      "y": 0,
+      "w": 211,
+      "h": 64
+    },
+    "brandRowBorder": "0px",
+    "brandTextInRow": false,
+    "workspace": {
+      "x": 0,
+      "y": 64,
+      "w": 211,
+      "h": 61
+    },
+    "workspaceText": "Northstar Foods Ltd\nHR workspace",
+    "recentInSidebar": false,
+    "topbar": {
+      "x": 212,
+      "y": 0,
+      "w": 1228,
+      "h": 64
+    },
+    "search": {
+      "x": 884,
+      "y": 21,
+      "w": 230,
+      "h": 22
+    },
+    "breadcrumb": null,
+    "activeNav": "Overview",
+    "navFont": "14px",
+    "navFontWeight": "600",
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "rail": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "scrollWidth": 1440,
+    "horizontalOverflow": false,
+    "bodyClass": "rail",
+    "tokens": {
+      "accent": "#053063",
+      "navBg": "#F5F5F5",
+      "navFg": "#0A0A0A",
+      "navFgMuted": "#404040",
+      "navPillBg": "#E6ECF2",
+      "navActiveBg": "#E6ECF2",
+      "navBorder": "#E5E5E5"
+    },
+    "fontSize": "16px",
+    "sidebar": {
+      "x": 0,
+      "y": 0,
+      "w": 64,
+      "h": 900
+    },
+    "sidebarBrandRow": {
+      "x": 0,
+      "y": 0,
+      "w": 63,
+      "h": 64
+    },
+    "brandRowBorder": "0px",
+    "brandTextInRow": false,
+    "workspace": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "workspaceText": "Northstar Foods Ltd\n            HR workspace",
+    "recentInSidebar": false,
+    "topbar": {
+      "x": 64,
+      "y": 0,
+      "w": 1376,
+      "h": 64
+    },
+    "search": {
+      "x": 884,
+      "y": 21,
+      "w": 230,
+      "h": 22
+    },
+    "breadcrumb": null,
+    "activeNav": "",
+    "navFont": "14px",
+    "navFontWeight": "600"
+  },
+  "searchFocus": {
+    "outline": "rgb(17, 17, 17) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(17, 17, 17)"
+  },
+  "searchResults": {
+    "open": true,
+    "items": 1
+  },
+  "drawer": {
+    "open": false,
+    "sidebar": {
+      "x": 0,
+      "w": 276
+    },
+    "overlay": true,
+    "closeVisible": true,
+    "closed": true
+  }
+}

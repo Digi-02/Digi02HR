@@ -146,6 +146,30 @@ input[type=text]:hover,
 input[type=password]:hover{border-color:#EFA9B5}
 input[type=text]:focus-visible,
 input[type=password]:focus-visible{outline:2px solid var(--coral);outline-offset:2px;border-color:transparent}
+.pw-field{position:relative}
+.pw-field input{padding-right:52px}
+.pw-toggle{
+  position:absolute;
+  top:50%;
+  right:6px;
+  transform:translateY(-50%);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;
+  height:36px;
+  padding:0;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  transition:color .15s ease,background .15s ease;
+}
+.pw-toggle:hover{background:rgba(26,26,26,.06);color:var(--ink)}
+.pw-toggle:focus-visible{outline:2px solid var(--coral);outline-offset:1px}
+.pw-toggle svg{display:block;width:20px;height:20px}
+.pw-toggle svg[hidden]{display:none}
 .forgot{
   display:block;
   width:max-content;
@@ -285,7 +309,13 @@ button:focus-visible{
           </div>
           <div class="field">
             <label for="id_password">Password</label>
-            <input type="password" id="id_password" name="password" required autocomplete="current-password">
+            <div class="pw-field">
+              <input type="password" id="id_password" name="password" required autocomplete="current-password">
+              <button class="pw-toggle" type="button" id="toggle-password" aria-label="Show password" aria-pressed="false" aria-controls="id_password">
+                <svg class="pw-icon-show" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/></svg>
+                <svg class="pw-icon-hide" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false" hidden><path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A6 6 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755q-.247.248-.517.486z"/><path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829"/><path d="M3.35 5.47q-.27.24-.518.487A13 13 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12z"/></svg>
+              </button>
+            </div>
           </div>
           <a class="forgot" href="{% url 'password_reset' %}">Forgot password?</a>
           {% if messages %}
@@ -310,6 +340,20 @@ button:focus-visible{
     button.disabled=true;
     button.textContent='Logging in…';
   });
+  var pw=document.getElementById('id_password');
+  var toggle=document.getElementById('toggle-password');
+  if(pw&&toggle){
+    var showIcon=toggle.querySelector('.pw-icon-show');
+    var hideIcon=toggle.querySelector('.pw-icon-hide');
+    toggle.addEventListener('click',function(){
+      var show=pw.type==='password';
+      pw.type=show?'text':'password';
+      showIcon.hidden=show;
+      hideIcon.hidden=!show;
+      toggle.setAttribute('aria-pressed',show?'true':'false');
+      toggle.setAttribute('aria-label',show?'Hide password':'Show password');
+    });
+  }
 })();
 </script>
 </body>

@@ -1,0 +1,14 @@
+{% if trend %}
+<div class="metric-trend" role="group" aria-label="{{ trend_label }}. {{ trend.summary }}">
+  <div class="metric-trend__head"><span>{{ trend_label }}</span><strong>{{ trend.summary }}</strong></div>
+  <svg viewBox="0 0 140 42" preserveAspectRatio="none" role="group" aria-label="{{ trend_label }}">
+    <path class="metric-trend__grid" d="M 4 10 H 136 M 4 22 H 136 M 4 34 H 136"></path>
+    <path class="metric-trend__area" d="{{ trend.area_path }}"></path>
+    <path class="metric-trend__line" d="{{ trend.line_path }}"></path>
+    {% for point in trend.points %}<circle class="metric-trend__point" cx="{{ point.x }}" cy="{{ point.y }}" r="2.5" data-chart-point data-label="{{ point.label }}" data-value="{{ point.value }}" tabindex="0" role="img" aria-label="{{ point.label }}: {{ point.value }}"><title>{{ point.label }}: {{ point.value }}</title></circle>{% endfor %}
+  </svg>
+  <div class="metric-trend__labels"><span>{{ trend.first_label }}</span><span>{{ trend.last_label }}</span></div>
+</div>
+{% else %}
+<div class="metric-trend metric-trend--empty">No dated history available for this metric</div>
+{% endif %}

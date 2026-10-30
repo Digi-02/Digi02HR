@@ -35,14 +35,19 @@
         <div class="col">
             <div class="card metric-card h-100 metric-accent-primary">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div>
+                    <div class="metric-card-layout">
+                      <div class="metric-card-layout__copy">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                          <div>
                             <div class="metric-label">Active Records</div>
                             <div class="metric-value">{{ total_employees }}</div>
-                        </div>
-                        <div class="metric-icon bg-primary bg-opacity-10 text-primary">
+                          </div>
+                          <div class="metric-icon bg-primary bg-opacity-10 text-primary">
                             <i class="bi bi-people-fill"></i>
+                          </div>
                         </div>
+                      </div>
+                      {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.hires trend_label="New hires / week - 8 weeks" only %}
                     </div>
                 </div>
             </div>
@@ -50,14 +55,19 @@
         <div class="col">
             <div class="card metric-card h-100 metric-accent-success">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div>
+                    <div class="metric-card-layout">
+                      <div class="metric-card-layout__copy">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                          <div>
                             <div class="metric-label">Present Today</div>
                             <div class="metric-value text-success">{{ present_count }}</div>
-                        </div>
-                        <div class="metric-icon bg-success bg-opacity-10 text-success">
+                          </div>
+                          <div class="metric-icon bg-success bg-opacity-10 text-success">
                             <i class="bi bi-box-arrow-in-right"></i>
+                          </div>
                         </div>
+                      </div>
+                      {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.present trend_label="Employees present - 7 days" only %}
                     </div>
                 </div>
             </div>
@@ -65,14 +75,19 @@
         <div class="col">
             <div class="card metric-card h-100 metric-accent-warning">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div>
+                    <div class="metric-card-layout">
+                      <div class="metric-card-layout__copy">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                          <div>
                             <div class="metric-label">Late Today</div>
                             <div class="metric-value text-warning">{{ late_count }}</div>
-                        </div>
-                        <div class="metric-icon bg-warning bg-opacity-10 text-warning">
+                          </div>
+                          <div class="metric-icon bg-warning bg-opacity-10 text-warning">
                             <i class="bi bi-clock-history"></i>
+                          </div>
                         </div>
+                      </div>
+                      {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.late trend_label="Late employees - 7 days" only %}
                     </div>
                 </div>
             </div>
@@ -80,14 +95,19 @@
         <div class="col">
             <div class="card metric-card h-100 metric-accent-danger">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div>
+                    <div class="metric-card-layout">
+                      <div class="metric-card-layout__copy">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                          <div>
                             <div class="metric-label">Absent Today</div>
                             <div class="metric-value text-danger">{{ absent_count }}</div>
-                        </div>
-                        <div class="metric-icon bg-danger bg-opacity-10 text-danger">
+                          </div>
+                          <div class="metric-icon bg-danger bg-opacity-10 text-danger">
                             <i class="bi bi-person-x"></i>
+                          </div>
                         </div>
+                      </div>
+                      {% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.absent trend_label="Historical absence" only %}
                     </div>
                 </div>
             </div>

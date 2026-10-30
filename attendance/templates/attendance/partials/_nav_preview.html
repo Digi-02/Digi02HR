@@ -1,0 +1,67 @@
+{% load nav_icons %}
+<div class="nav-preview"
+     id="navPreview"
+     data-nav-active="{{ nav_preview.nav_active_style|default:'rounded_pill' }}"
+     data-preview-state="active"
+     style="--nav-bg: {{ nav_preview.nav_bg }};
+            --nav-fg: {{ nav_preview.nav_fg }};
+            --nav-fg-muted: {{ nav_preview.nav_fg_muted }};
+            --nav-border: {{ nav_preview.nav_border }};
+            --nav-hover-bg: {{ nav_preview.nav_hover_bg }};
+            --nav-hover-fg: {{ nav_preview.nav_hover_fg }};
+            --nav-hover-icon-bg: {{ nav_preview.nav_hover_icon_bg }};
+            --nav-icon-bg: {{ nav_preview.nav_icon_bg }};
+            --nav-icon-fg: {{ nav_preview.nav_icon_fg }};
+            --nav-active-bg: {{ nav_preview.nav_active_bg }};
+            --nav-active-fg: {{ nav_preview.nav_active_fg }};
+            --nav-active-indicator: {{ nav_preview.nav_active_indicator }};
+            --nav-active-icon-bg: {{ nav_preview.nav_active_icon_bg }};
+            --nav-active-icon-fg: {{ nav_preview.nav_active_icon_fg }};
+            --nav-active-border: {{ nav_preview.nav_active_border }};
+            --nav-focus-ring: {{ nav_preview.nav_focus_ring }};">
+    <div class="nav-preview__brand">
+        <span class="nav-preview__mark{% if organization.logo_is_light %} is-dark{% endif %}">
+            {% if organization.logo %}
+            <img src="{{ organization.logo.url }}" alt="">
+            {% else %}
+            {{ organization.name|default:"DIGI HR"|slice:":1"|upper }}
+            {% endif %}
+        </span>
+        <span class="nav-preview__brand-name">DIGI HR</span>
+        <span class="nav-preview__collapse" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+        </span>
+    </div>
+    <div class="nav-preview__workspace">
+        <strong>{{ organization.name|default:"Your company" }}</strong>
+        <span>HR workspace</span>
+    </div>
+    <div class="nav-preview__scroll">
+        <p class="app-nav__heading">Dashboards</p>
+        <div class="app-nav__link nav-preview__item">
+            {% nav_icon "bi-grid-1x2" %}<span class="app-nav__label">Overview</span>
+        </div>
+        <div class="app-nav__link nav-preview__item">
+            {% nav_icon "bi-people" %}<span class="app-nav__label">Employees</span>
+        </div>
+        <div class="app-nav__link nav-preview__item is-active" data-preview-item>
+            {% nav_icon "bi-calendar-check" %}<span class="app-nav__label">Attendance</span>
+        </div>
+        <p class="app-nav__heading nav-preview__heading">Company</p>
+        <div class="app-nav__link nav-preview__item">
+            {% nav_icon "bi-sliders" %}<span class="app-nav__label">Settings</span>
+        </div>
+        <div class="app-nav__link nav-preview__item">
+            {% nav_icon "bi-folder2-open" %}<span class="app-nav__label">Documents</span>
+        </div>
+        <p class="app-nav__heading nav-preview__heading">Communication</p>
+        <div class="app-nav__link nav-preview__item">
+            {% nav_icon "bi-envelope-paper" %}<span class="app-nav__label">Mail</span>
+        </div>
+    </div>
+</div>
+<div class="nav-preview__states" role="group" aria-label="Preview navigation states">
+    <button type="button" data-preview-state-btn="normal" aria-pressed="false">Normal</button>
+    <button type="button" data-preview-state-btn="hover" aria-pressed="false">Hover</button>
+    <button type="button" data-preview-state-btn="active" aria-pressed="true">Active</button>
+</div>

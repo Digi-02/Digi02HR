@@ -1,0 +1,47 @@
+{
+  "390": {
+    "overflow": false,
+    "checked": "clean",
+    "previewBg": "rgb(255, 255, 255)",
+    "hasRecently": false,
+    "hasWorkspaceBelow": true,
+    "presetClean": true,
+    "presetLabels": [
+      "Clean",
+      "Classic Black",
+      "Clean White",
+      "Soft Grey",
+      "Brand Colour",
+      "Midnight"
+    ],
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "1440": {
+    "overflow": false,
+    "checked": "clean",
+    "previewBg": "rgb(255, 255, 255)",
+    "hasRecently": false,
+    "hasWorkspaceBelow": true,
+    "presetClean": true,
+    "presetLabels": [
+      "Clean",
+      "Classic Black",
+      "Clean White",
+      "Soft Grey",
+      "Brand Colour",
+      "Midnight"
+    ],
+    "errors": {
+      "console": [],
+      "page": [],
+      "failed": []
+    }
+  },
+  "previewBlack": "rgb(10, 10, 10)",
+  "previewClean": "rgb(255, 255, 255)",
+  "checkedAfterClean": "clean"
+}

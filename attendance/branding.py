@@ -85,99 +85,11 @@ def accent_vars(hex_color):
     }
 
 
-# Preset backgrounds for the sidebar picker (name -> hex).
-NAV_PRESET_BACKGROUNDS = {
-    'black': '#0A0A0A',
-    'white': '#FFFFFF',
-    'light_grey': '#F5F5F5',
-    'midnight': '#0B1226',
-}
-
-NAV_DEFAULTS = {
-    'nav_style': 'black',
-    'nav_bg_color': '#0A0A0A',
-    'nav_highlight_style': 'pill',
-    'nav_highlight_source': 'auto',
-    'nav_highlight_color': '#0A0A0A',
-}
-
-
-def _is_dark(hex_color):
-    """True when white text reads better on the color than near-black text."""
-    return contrast_text(normalize_hex(hex_color)) == '#FFFFFF'
-
-
-def nav_vars(nav_style='black', nav_bg_color='#0A0A0A',
-             nav_highlight_style='pill', nav_highlight_source='auto',
-             nav_highlight_color='#0A0A0A', accent='#0A0A0A'):
-    """Server-side sidebar palette. Text is always WCAG-chosen, never stored.
-
-    Returns the eight --nav-* variables. `accent` is only consulted when the
-    company explicitly chose 'brand' (background) or 'accent' (highlight).
-    """
-    style = nav_style if nav_style in dict(
-        [('black', ''), ('white', ''), ('light_grey', ''), ('brand', ''), ('custom', '')]) else 'black'
-    if style == 'brand':
-        bg = normalize_hex(accent)
-    elif style == 'custom':
-        bg = normalize_hex(nav_bg_color, '#0A0A0A')
-    else:
-        bg = NAV_PRESET_BACKGROUNDS.get(style, '#0A0A0A')
-
-    dark_bg = _is_dark(bg)
-    fg = '#FFFFFF' if dark_bg else '#0A0A0A'
-    # Muted inactive text: first candidate that still meets 4.5:1 on bg.
-    fg_muted = fg
-    for candidate in (['#E5E5E5', '#D4D4D4', '#A3A3A3'] if dark_bg
-                      else ['#404040', '#737373']):
-        if contrast_ratio(candidate, bg) >= 4.5:
-            fg_muted = candidate
-            break
-
-    border = 'rgba(255,255,255,0.14)' if dark_bg else '#E5E5E5'
-    hover_bg = 'rgba(255,255,255,0.07)' if dark_bg else 'rgba(10,10,10,0.05)'
-
-    hstyle = nav_highlight_style if nav_highlight_style in (
-        'pill', 'left_bar', 'soft_tint', 'outline') else 'pill'
-    hsource = nav_highlight_source if nav_highlight_source in (
-        'auto', 'accent', 'custom') else 'auto'
-    if hsource == 'accent':
-        indicator = normalize_hex(accent)
-    elif hsource == 'custom':
-        indicator = normalize_hex(nav_highlight_color, '#0A0A0A')
-    else:
-        indicator = '#FFFFFF' if dark_bg else '#0A0A0A'
-
-    # Active-item background per highlight style; text re-checked for 4.5:1.
-    if hstyle == 'pill':
-        active_bg = indicator
-        active_fg = contrast_text(indicator)
-    elif hstyle in ('left_bar', 'soft_tint'):
-        if dark_bg and _luminance(indicator) > 0.5:
-            # Light indicator on a dark sidebar: translucent white keeps the
-            # bar/tint subtle instead of a solid white block.
-            active_bg = 'rgba(255,255,255,0.12)' if hstyle == 'left_bar' else 'rgba(255,255,255,0.08)'
-            active_fg = '#FFFFFF'
-        else:
-            active_bg = tint(indicator, 0.9) if hstyle == 'left_bar' else tint(indicator, 0.85)
-            active_fg = fg
-            if contrast_ratio(active_fg, active_bg) < 4.5:
-                active_fg = '#FFFFFF' if _is_dark(active_bg) else '#0A0A0A'
-    else:  # outline
-        active_bg = 'transparent'
-        active_fg = fg
-
-    return {
-        'nav_bg': bg,
-        'nav_fg': fg,
-        'nav_fg_muted': fg_muted,
-        'nav_border': border,
-        'nav_hover_bg': hover_bg,
-        'nav_active_bg': active_bg,
-        'nav_active_fg': active_fg,
-        'nav_active_indicator': indicator,
-        'nav_highlight_style': hstyle,
-    }
+# Compatibility names for callers that imported the old navigation helpers.
+# New code should use attendance.nav_theme directly.
+def nav_vars(*args, **kwargs):
+    from .nav_theme import resolve_nav_theme
+    return resolve_nav_theme(*args, **kwargs)
 
 
 def dominant_color(image_file):
