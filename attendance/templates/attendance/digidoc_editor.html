@@ -29,7 +29,7 @@
           <button class="dd-icon-button" type="button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg></button>
           <button class="dd-icon-button" type="button" data-command="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5m5 5H10a6 6 0 0 0 0 12h2"/></svg></button>
         </div>
-        <div class="dd-top-actions"><a class="dd-button" target="_blank" href="{% url 'digidoc_preview' document.id %}">Preview</a>
+        <div class="dd-top-actions"><a class="dd-button" id="dd-preview" target="_blank" href="{% url 'digidoc_preview' document.id %}">Preview</a>
           <details class="dd-download"><summary>Download <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></summary><div class="dd-download-menu"><a href="{% url 'digidoc_pdf' document.id %}">PDF</a><a href="{% url 'digidoc_export' document.id 'docx' %}">Word document (.docx)</a><a href="{% url 'digidoc_export' document.id 'odt' %}">OpenDocument (.odt)</a><a href="{% url 'digidoc_export' document.id 'rtf' %}">Rich Text (.rtf)</a><a href="{% url 'digidoc_export' document.id 'txt' %}">Plain text (.txt)</a><small>PDF preserves page layout and image adjustments. Other formats may approximate layout; images are represented by alt-text labels.</small></div></details>
         </div>
       </header>

@@ -259,6 +259,25 @@
     finally { saving=false; if(dirty) schedule(); }
   }
   root.addEventListener('digidoc:save',()=>{dirty=true;save();});
+  async function flushSave() {
+    const deadline=Date.now()+15000;
+    while(Date.now()<deadline){
+      if(!saving&&dirty){clearTimeout(timer);const saved=await save();if(saved===false)return false;}
+      else if(!saving&&!dirty)return true;
+      await new Promise(resolve=>window.setTimeout(resolve,100));
+      if(!saving&&dirty&&status.textContent!=='Unsaved changes'&&status.textContent!=='Saving...'&&!status.textContent.startsWith('Saved '))return false;
+    }
+    return !saving&&!dirty;
+  }
+  document.getElementById('dd-preview').addEventListener('click',async event=>{
+    event.preventDefault();
+    const previewUrl=event.currentTarget.href;
+    const previewWindow=window.open('about:blank','_blank');
+    if(!previewWindow){status.textContent='Allow pop-ups to open the preview.';return;}
+    status.textContent='Saving before preview...';
+    if(!(await flushSave())){previewWindow.close();status.textContent='Save failed. Preview was not opened.';return;}
+    previewWindow.location.href=previewUrl;
+  });
   function getCookie(name) { const found=document.cookie.split('; ').find(row=>row.startsWith(name+'=')); return found?decodeURIComponent(found.split('=').slice(1).join('=')):''; }
   function schedule() { paginate(); dirty=true; status.textContent='Unsaved changes'; clearTimeout(timer); timer=setTimeout(save,800); }
   sheet.addEventListener('input',schedule); title.addEventListener('input',schedule);
