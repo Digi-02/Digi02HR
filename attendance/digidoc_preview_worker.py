@@ -8,6 +8,7 @@ import pypdfium2 as pdfium
 
 
 def main():
+    first_page_only = "--first-page" in sys.argv[1:]
     pdf_bytes = sys.stdin.buffer.read(25 * 1024 * 1024 + 1)
     if not pdf_bytes.startswith(b"%PDF-") or len(pdf_bytes) > 25 * 1024 * 1024:
         return 2
@@ -19,8 +20,9 @@ def main():
         archive = BytesIO()
         total = 0
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as output:
-            for index, page in enumerate(document):
-                image = page.render(scale=1.25).to_pil()
+            pages = [document[0]] if first_page_only else document
+            for index, page in enumerate(pages):
+                image = page.render(scale=0.55 if first_page_only else 1.25).to_pil()
                 buffer = BytesIO()
                 image.save(buffer, format="PNG", optimize=True)
                 data = buffer.getvalue()

@@ -41,6 +41,8 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .brand{display:block;flex:0 0 auto;position:relative;overflow:hidden;width:9.69rem;height:2.125rem}
 .brand img{position:absolute;left:-0.86rem;top:-1.3rem;width:11.24rem;height:4.5rem;max-width:none}
 .nav-cta{display:flex;align-items:center;gap:1rem}
+.nav-feature-link{color:#292929;font-size:.9375rem;font-weight:600;text-decoration:none;transition:color .15s ease}
+.nav-feature-link:hover{color:var(--coral-dark)}
 .menu-btn{display:none;background:transparent;border:0;padding:0;cursor:pointer}
 .mobile-menu{display:none}
 /* ---------- buttons ---------- */
@@ -87,7 +89,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .d3{width:11.875rem;height:11.875rem;left:calc(46% - 1.5rem);top:54%;transform:translate(-50%,-50%);background:var(--pink-inner);opacity:.5}
 .d4{width:9.375rem;height:9.375rem;right:-4.6875rem;bottom:2.5rem}
 .hero-media .d5{width:3.75rem;height:3.75rem;right:-12%;top:36%;background:var(--pink-deco-soft)}
-@media(prefers-reduced-motion:reduce){.btn,.svc{transition:none}}
+@media(prefers-reduced-motion:reduce){.btn,.svc,.feature-card{transition:none}}
 /* ---------- about ---------- */
 .about{background:#FFF5F5;padding-block:var(--sec-pad)}
 .about-inner{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap-hero);align-items:center}
@@ -113,6 +115,19 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .svc-num{font-size:1.375rem;font-weight:800;color:#E3E5E9;letter-spacing:.02em}
 .svc h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:0.75rem}
 .svc p{font-size:1rem;line-height:1.65;color:var(--body);font-weight:500;margin:0}
+/* ---------- key features ---------- */
+.features{background:#F7F7F8;padding-block:var(--sec-pad)}
+.features-head{max-width:52rem;margin:0 auto 3rem;text-align:center}
+.features-eyebrow{font-size:.8125rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:.75rem}
+.features-head h2{font-size:clamp(1.9rem,3vw,3rem);line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--ink);margin-bottom:1rem}
+.features-head p{font-size:1.0625rem;line-height:1.7;color:var(--body)}
+.features-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.25rem;list-style:none}
+.feature-card{height:100%;padding:1.75rem 1.5rem;background:#fff;border:1px solid #ECEDEF;border-radius:12px;box-shadow:0 5px 18px rgba(17,17,17,.035);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.feature-card:hover{transform:translateY(-4px);border-color:#FFD0D8;box-shadow:0 14px 28px rgba(240,42,76,.09)}
+.feature-icon{display:grid;place-items:center;width:2.75rem;height:2.75rem;margin-bottom:1.125rem;border-radius:9px;background:#FFF0F2;color:var(--coral)}
+.feature-icon svg{width:1.5rem;height:1.5rem;display:block}
+.feature-card h3{font-size:1.0625rem;line-height:1.35;font-weight:700;color:var(--ink);margin-bottom:.6rem}
+.feature-card p{font-size:.9375rem;line-height:1.65;font-weight:400;color:var(--body);margin:0}
 /* ---------- testimonials ---------- */
 .testimonials{--tst-card:clamp(760px,46vw,1000px);--tst-gap:clamp(1rem,1.5vw,1.5rem);--tst-logo-h:clamp(2.5rem,3.6vw,3.25rem);background:#FFF1F3;padding-block:clamp(4rem,6.7vw,6rem);overflow:hidden}
 .tst-head{text-align:center;margin-bottom:clamp(2rem,3.5vw,3rem)}
@@ -194,7 +209,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 .footer-brand{display:flex;justify-content:center;margin-top:3rem}
 .footer-brand img{display:block;height:2.75rem;width:auto}
 .footer a:focus-visible{outline:2px solid var(--coral-dark);outline-offset:3px;border-radius:2px}
-#about,#services,#testimonials,#how-it-works,#contact{scroll-margin-top:calc(var(--nav-h) + 1.5rem)}
+#about,#features,#testimonials,#how-it-works,#contact{scroll-margin-top:calc(var(--nav-h) + 1.5rem)}
 /* ---------- responsive ---------- */
 @media(min-width:768px) and (max-width:1023px){
   .testimonials{--tst-card:70vw;--tst-gap:1.25rem;--tst-logo-h:2.75rem;padding-block:5rem}
@@ -211,6 +226,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
   .how-num{font-size:3rem;margin-bottom:1.25rem}
   .how-card h3{font-size:1.375rem}
   .how-card p{font-size:1rem}
+  .features-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:768px){
   :root{--nav-h:64px}
@@ -240,6 +256,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
   .d2{width:9rem;height:9rem;left:-2rem;bottom:-2.5rem}
   .about-inner{grid-template-columns:1fr;gap:2rem}
   .svc-grid{grid-template-columns:1fr 1fr}
+  .features-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .footer{padding-block:2.75rem 2.5rem}
   .footer-grid{grid-template-columns:1fr;row-gap:1.75rem;justify-items:start}
   .footer-contact{justify-self:start;padding-top:0}
@@ -266,6 +283,12 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
   .how-card h3{font-size:1.25rem}
   .how-card p{font-size:1rem}
   .how-accent{margin:1rem 0}
+  .features{padding-block:4rem}
+  .features-head{margin-bottom:2rem}
+  .features-head p{font-size:1rem}
+  .features-grid{grid-template-columns:1fr;gap:.875rem}
+  .feature-card{padding:1.375rem}
+  .feature-icon{width:2.5rem;height:2.5rem;margin-bottom:.875rem}
 }
 @media(max-width:560px){.svc-grid{grid-template-columns:1fr}}
 </style>
@@ -275,12 +298,14 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
   <div class="wrap nav-inner">
     <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
     <div class="nav-cta">
+      <a class="nav-feature-link" href="#features">Key features</a>
       <a class="btn btn-nav btn-coral" href="/login/">Login</a>
       <a class="btn btn-nav btn-outline" href="#contact">Request access</a>
     </div>
     <button class="menu-btn" id="menubtn" aria-expanded="false" aria-controls="mobilemenu" aria-label="Open menu"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobilemenu">
+    <a class="btn btn-hero btn-secondary" href="#features">Explore features</a>
     <a class="btn btn-hero btn-outline" href="#contact">Request access</a>
     <a class="btn btn-hero btn-coral" href="/login/">Login</a>
   </div>
@@ -323,30 +348,20 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
     </div>
   </div>
 </section>
-<section class="services" id="services" aria-labelledby="svc-h">
+<section class="features" id="features" aria-labelledby="features-title">
   <div class="wrap">
-    <h2 id="svc-h">What we do</h2>
-    <div class="svc-grid">
-      <article class="svc">
-        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="10" r="2.4"/><path d="M15.5 14.6A4.3 4.3 0 0 1 21 18.5"/></svg></span><span class="svc-num">01</span></div>
-        <h3>People records</h3>
-        <p>Keep every employee&rsquo;s profile, documents and contracts in one secure place, so nothing gets lost in folders or chat threads.</p>
-      </article>
-      <article class="svc">
-        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m10.5 15 1.8 1.8 3.2-3.6"/></svg></span><span class="svc-num">02</span></div>
-        <h3>Attendance</h3>
-        <p>Record check-ins and check-outs, and see who&rsquo;s present, late or absent. You set the working hours and the late rule.</p>
-      </article>
-      <article class="svc">
-        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6.5 9.5h.01M17.5 16h.01"/></svg></span><span class="svc-num">03</span></div>
-        <h3>Payroll and reports</h3>
-        <p>Prepare monthly payroll, generate payslips, track payments, and export reports when you need them.</p>
-      </article>
-      <article class="svc">
-        <div class="svc-top"><span class="svc-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="13" height="17" rx="2"/><path d="M9 8.5h6M9 12h6M9 15.5h4"/></svg></span><span class="svc-num">04</span></div>
-        <h3>Leave and onboarding</h3>
-        <p>Staff request leave and managers approve it. New hires follow a checklist, so nothing is missed in their first week.</p>
-      </article>
+    <header class="features-head"><p class="features-eyebrow">One connected workspace</p><h2 id="features-title">Key features</h2><p>Everything your team needs to manage people, everyday HR work and company documents in one place.</p></header>
+    <div class="features-grid">
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8"/></svg></span><h3>Employee records</h3><p>Keep employee profiles, departments, work details and staff documents together, with role-based access to people information.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-9 3v4m-2-2h4"/></svg></span><h3>Attendance and time</h3><p>Record check-ins and check-outs, review attendance, and manage working hours, late rules and kiosk clock-ins.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4m8-4v4M3 9h18m-13 4h3m-3 4h7"/></svg></span><h3>Leave requests</h3><p>Employees submit leave requests, managers and HR review them, and administrators configure the leave types their company uses.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-13 5h3m4 0h2"/></svg></span><h3>Payroll processing</h3><p>Check payroll readiness, prepare payroll runs, review and approve payroll, track payment status and provide payslips.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s8-4 8-10V5l-8-3-8 3v6c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span><h3>Hiring and onboarding</h3><p>Invite applicants and new employees, organize onboarding stages, and assign and track the tasks needed to get people started.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 12h8m-8 4h8"/></svg></span><h3>Documents and DigiDoc</h3><p>Store employee files and create formatted company documents with letterheads, page breaks, images and PDF or Word exports.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 3 3 6-7"/><path d="M16 6h4v4"/></svg></span><h3>Reports and analytics</h3><p>Review attendance and administrative reports, explore team analytics, and export attendance records when you need them.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16m8-16v16"/></svg></span><h3>Dashboards and self-service</h3><p>Give HR, managers and employees views suited to their roles, with employee profile, document and leave tools available to staff.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v14H3z"/><path d="m3 7 9 6 9-6"/></svg></span><h3>Team communication</h3><p>Use the workspace mail area to view the inbox and compose company messages from the HR workspace.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18m9-9H3"/><circle cx="12" cy="12" r="9"/></svg></span><h3>Company settings and branding</h3><p>Set up company attendance and leave rules, departments, logos, brand colours, navigation colours and letterhead artwork.</p></article>
     </div>
   </div>
 </section>

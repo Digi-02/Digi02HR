@@ -121,7 +121,7 @@
                     <span class="letterhead-guide letterhead-guide--bottom" data-margin="bottom" role="slider" tabindex="0" aria-label="Bottom page margin" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ letterhead.margin_bottom_mm }}"></span>
                     <span class="letterhead-guide letterhead-guide--left" data-margin="left" role="slider" tabindex="0" aria-label="Left page margin" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ letterhead.margin_left_mm }}"></span>
                   </div>
-                  <small class="field-help">Drag a guide or use its arrow keys. The preview never stretches your image.</small>
+                  <small class="field-help">Drag a guide or use its arrow keys. DigiDoc shows these safe edges while editing and keeps text 4 mm inside them. The preview never stretches your image.</small>
                 </div>
                 <div class="letterhead-controls">
                   <div class="letterhead-margin-grid" aria-label="Letterhead margins in millimetres">
@@ -166,6 +166,18 @@
                 </div>
                 <small class="field-help">Only actual PNG and JPEG images are accepted. The uploaded file is re-encoded before private storage. <a href="{% url 'open_source_notices' %}">Open-source notices</a></small>
               </div>
+              {% if has_letterhead %}
+              <div class="letterhead-upload-row letterhead-upload-row--second">
+                <h6>Second letterhead <span class="field-help">Optional alternate artwork for a cover or continuation page.</span></h6>
+                {% if has_second_letterhead %}<div class="letterhead-upload-preview"><img src="{{ letterhead_second_image_url }}" alt="Preview of the second company letterhead" style="object-fit:{% if letterhead.scale_mode == 'fill' %}cover{% else %}contain{% endif %}"></div>{% endif %}
+                <label class="form-label" for="letterheadFile2">{% if has_second_letterhead %}Replace second letterhead{% else %}Add second letterhead{% endif %}</label>
+                <input class="form-control" type="file" id="letterheadFile2" name="letterhead_file_2" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
+                <div class="letterhead-actions">
+                  <button class="btn btn-outline-primary" type="submit" name="action" value="letterhead_upload_2">{% if has_second_letterhead %}Replace second letterhead{% else %}Upload second letterhead{% endif %}</button>
+                  {% if has_second_letterhead %}<button class="btn btn-outline-danger" type="submit" name="action" value="letterhead_remove_2" formnovalidate>Remove second</button>{% endif %}
+                </div>
+              </div>
+              {% endif %}
             </section>
           </div>
         </div>
@@ -753,18 +765,18 @@
   }
   if (form && uploadButton && uploadProgress) {
     form.addEventListener('submit', function (event) {
-      if (!event.submitter || event.submitter.value !== 'letterhead_upload') { return; }
+      if (!event.submitter || !event.submitter.value.startsWith('letterhead_upload')) { return; }
       // The submit button carries the server-side action. Once disabled it is
       // excluded from the browser's form payload, so preserve its value in a
       // hidden field before disabling it to prevent duplicate uploads.
       var uploadAction = document.createElement('input');
       uploadAction.type = 'hidden';
       uploadAction.name = 'action';
-      uploadAction.value = 'letterhead_upload';
+      uploadAction.value = event.submitter.value;
       form.appendChild(uploadAction);
       uploadProgress.hidden = false;
-      uploadButton.disabled = true;
-      uploadButton.textContent = 'Processing…';
+      event.submitter.disabled = true;
+      event.submitter.textContent = 'Processing…';
       form.setAttribute('aria-busy', 'true');
     });
   }

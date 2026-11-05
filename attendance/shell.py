@@ -502,6 +502,9 @@ def shell_context(request, organization=None):
         ),
         "shell_user_name": display_name,
         "shell_user_initials": _initials(display_name, request.user.username),
+        "shell_organization_initials": _initials(
+            organization.name if organization is not None else "DIGI HR", ""
+        ),
         "shell_profile_url": profile_url,
         "shell_recent_storage_key": "digi02hr:recent:%s"
         % (organization.pk if organization is not None else "global"),

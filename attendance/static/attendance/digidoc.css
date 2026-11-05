@@ -35,6 +35,13 @@
 .dd-page { box-sizing:border-box; position:relative; flex:none; width:794px; height:1123px; margin:0 auto; padding:96px 76px; background-color:#fff; color:#202124; box-shadow:0 2px 12px #17202d24; outline:none; overflow:hidden; }
 .dd-page:focus { box-shadow:0 2px 14px #17202d30; }
 .dd-page:after { content:attr(data-page-number); position:absolute; right:30px; bottom:18px; color:#9aa2ad; font-size:11px; pointer-events:none; }
+.dd-page-zones { display:none; }
+.dd-letterhead .dd-page-zones { display:block; position:absolute; z-index:20; inset:0; pointer-events:none; }
+.dd-page-zones:before,.dd-page-zones:after { position:absolute; box-sizing:border-box; left:var(--dd-letterhead-left-zone,20mm); right:var(--dd-letterhead-right-zone,20mm); height:22px; padding:2px 7px; color:#861344; background:rgba(255,244,248,.97); font:700 10px/17px Arial,sans-serif; letter-spacing:.035em; text-transform:uppercase; box-shadow:0 1px 5px #64103324; }
+.dd-page-zones:before { content:"Header guide - text starts 4 mm below"; top:var(--dd-letterhead-header-guide,25mm); transform:translateY(-100%); border-bottom:2px dashed #c2185b; text-align:left; }
+.dd-page-zones:after { content:"Footer guide - text ends 4 mm above"; bottom:var(--dd-letterhead-footer-guide,25mm); transform:translateY(100%); border-top:2px dashed #c2185b; text-align:left; }
+#dd-sheet.dd-letterhead .dd-page:not([data-letterhead-slot]) .dd-page-zones { display:none; }
+#dd-sheet.dd-guides-hidden .dd-page-zones { display:none!important; }
 .dd-sheet.dd-zoom-50 { zoom:.5; }.dd-sheet.dd-zoom-75 { zoom:.75; }.dd-sheet.dd-zoom-100 { zoom:1; }.dd-sheet.dd-zoom-125 { zoom:1.25; }.dd-sheet.dd-zoom-150 { zoom:1.5; }
 .dd-sheet [data-align="left"] { text-align:left; }.dd-sheet [data-align="center"] { text-align:center; }.dd-sheet [data-align="right"] { text-align:right; }.dd-sheet [data-align="justify"] { text-align:justify; }.dd-inline-image { display:block; max-width:100%; max-height:700px; object-fit:contain; margin:12px auto; }
 .dd-sheet .dd-image-frame { position:relative; display:block; box-sizing:border-box; max-width:100%; margin-top:12px; margin-bottom:12px; overflow:hidden; aspect-ratio:var(--dd-image-ratio,auto); border:2px solid transparent; border-radius:2px; cursor:grab; }
@@ -89,6 +96,21 @@
 .dd-group-controls button:disabled:hover { background:transparent; border-color:transparent!important; }
 .dd-group-controls button span { font-size:12px; }
 .dd-group-controls select,.dd-select-label select { max-width:145px; height:32px; padding:4px 7px; border:1px solid #cfd4dc; border-radius:5px; background:white; color:#303844; font-size:12px; }
+.dd-split-control { position:relative; z-index:1; display:inline-flex; align-items:center; flex:none; }
+.dd-group-paragraph { z-index:30; }
+.dd-split-control:focus-within { z-index:60; }
+.dd-split-control .dd-split-main { min-width:32px; width:32px; padding:5px; border-radius:5px 0 0 5px; }
+.dd-split-control .dd-split-toggle { min-width:18px; width:18px; padding:4px 2px; margin-left:-1px; border-radius:0 5px 5px 0; }
+.dd-split-control .dd-split-main svg { width:18px; height:18px; }
+.dd-split-control .dd-split-toggle svg { width:12px; height:12px; }
+.dd-control-menu-popover { position:fixed; z-index:2000; top:0; left:0; min-width:max-content; padding:5px; display:flex; align-items:center; gap:3px; border:1px solid #d9dee6; border-radius:6px; background:#fff; box-shadow:0 6px 18px #17202d24; }
+.dd-control-menu-popover[hidden] { display:none!important; }
+.dd-control-menu-popover button { min-width:32px!important; width:32px; height:32px; padding:5px!important; border:1px solid transparent!important; border-radius:5px!important; background:#fff!important; }
+.dd-control-menu-popover button:hover,.dd-control-menu-popover button[aria-checked="true"] { border-color:#d7dce4!important; background:#edf1f7!important; color:#17202d!important; }
+.dd-control-menu-popover button svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.dd-spacing-menu { min-width:120px; align-items:stretch; flex-direction:column; }
+.dd-control-menu-popover.dd-spacing-menu button { width:100%; text-align:left; padding:6px 9px!important; font-size:12px; }
+.dd-group-paragraph .dd-group-controls button svg { width:18px; height:18px; }
 .dd-font-tools select:first-child { width:120px; }.dd-font-tools select:nth-child(2) { width:56px; }
 .dd-group-label { align-self:center; padding:1px 4px 0; color:#606b78; font-size:10px; line-height:14px; }
 .dd-color-control { width:34px; height:34px; position:relative; display:inline-flex; align-items:center; justify-content:center; margin:0; color:#293341; font-size:14px; font-weight:700; border-radius:5px; }
@@ -115,5 +137,11 @@
 .dd-visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 @media(max-width:1000px) { .dd-main { margin-left:0; }.dd-statusbar { left:0; }.dd-app .app-sidebar { transform:translateX(-100%); transition:transform .2s ease; z-index:1300; }.dd-nav-open .app-sidebar { transform:translateX(0); }.dd-nav-open .dd-backdrop { display:block; position:fixed; inset:0; z-index:1200; border:0; background:#10182766; }.dd-app .app-sidebar__close { display:block; }.dd-collapse-toggle { display:none; } }
 @media(max-width:700px) { .dd-mobile-head { display:flex; align-items:center; gap:12px; padding:4px 10px 8px; border-bottom:1px solid var(--dd-line); background:#fff; }.dd-mobile-head button { border:0; background:transparent; font-size:22px; cursor:pointer; }.dd-mobile-head a { color:#202124; font-weight:700; text-decoration:none; }.dd-topbar { min-height:50px; padding:5px 7px; gap:5px; }.dd-title { font-size:13px; max-width:none; }.dd-status { min-width:0; max-width:72px; overflow:hidden; text-overflow:ellipsis; }.dd-quick-access { gap:0; }.dd-quick-access .dd-icon-button { width:29px; }.dd-top-actions { gap:4px; }.dd-button,.dd-download summary { padding:6px 8px; font-size:12px; }.dd-tabs { height:36px; padding:0 5px; }.dd-tabs [role=tab] { padding:0 13px; }.dd-ribbon-panel { padding-left:8px; }.dd-ruler-wrap { width:calc(100% - 20px); }.dd-workspace { padding:10px 0 42px; }.dd-page { width:calc(100vw - 20px); height:calc((100vw - 20px) * 1.4142857); padding:36px 24px; }.dd-page:after { right:14px; bottom:8px; }.dd-statusbar { height:30px; padding:0 7px; font-size:10px; }.dd-statusbar>div { gap:5px; }.dd-statusbar-zoom input { width:62px!important; }.dd-statusbar-zoom output { min-width:32px; }.dd-statusbar #dd-status-fit { display:none; }.dd-file-panel { inset:86px 0 30px; grid-template-columns:140px minmax(0,1fr); }.dd-file-menu { padding:12px 7px; }.dd-file-menu button,.dd-file-menu summary { padding:7px 8px; font-size:12px; }.dd-file-info { padding:22px 16px; overflow:auto; }.dd-file-info h1 { font-size:18px; } }
-@media print { .dd-tabs,.dd-ribbon,.dd-ruler-wrap,.dd-file-panel,.dd-statusbar { display:none!important; }.dd-main { height:auto; overflow:visible; }.dd-editor { height:auto; }.dd-workspace { padding:0; }.dd-page { width:210mm; height:297mm; margin:0; padding:25mm; box-shadow:none; } }
+@media print { .dd-tabs,.dd-ribbon,.dd-ruler-wrap,.dd-file-panel,.dd-statusbar { display:none!important; }.dd-page-zones { display:none!important; }.dd-main { height:auto; overflow:visible; }.dd-editor { height:auto; }.dd-workspace { padding:0; }.dd-page { width:210mm; height:297mm; margin:0; padding:25mm; box-shadow:none; } }
 button, input[type="button"], input[type="submit"], input[type="reset"], .btn, .dd-button { border-radius:5px !important; }
+
+.dd-sheet ul[data-checklist="true"] { list-style:none; padding-left:0; }
+.dd-sheet ul[data-checklist="true"] > li { position:relative; padding-left:25px; }
+.dd-sheet ul[data-checklist="true"] > li:before { content:""; position:absolute; left:2px; top:.25em; width:13px; height:13px; box-sizing:border-box; border:1.5px solid #687080; border-radius:2px; background:#fff; }
+
+.dd-page .dd-page-break-marker { box-sizing:border-box; display:flex; min-height:24px!important; height:24px; align-items:center; justify-content:center; margin:14px 0!important; border-top:1px dashed #99a2af; color:#768091; font:11px/1 Arial,sans-serif; }

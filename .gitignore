@@ -11,4 +11,6 @@ media/
 .ruff_cache/
 .DS_Store
 server.*.log
+runserver-*.log
+private_media/
 

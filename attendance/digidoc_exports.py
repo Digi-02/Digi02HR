@@ -26,9 +26,11 @@ def _text_paragraphs(nodes):
         if kind in {"paragraph", "heading", "tableCell"}:
             paragraphs.append(_plain_inline(node.get("content", [])))
         elif kind in {"bulletList", "orderedList"}:
+            checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
             for index, item in enumerate(node.get("content", []), 1):
                 line = " ".join(_plain_inline(child.get("content", [])) for child in item.get("content", []))
-                paragraphs.append(("• " if kind == "bulletList" else f"{index}. ") + line)
+                marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{index}. ")
+                paragraphs.append(marker + line)
         elif kind == "table":
             for row in node.get("content", []):
                 paragraphs.append("\t".join(_plain_inline(cell.get("content", [])) for cell in row.get("content", [])))
@@ -131,16 +133,18 @@ def _docx_blocks(parent, nodes):
         if kind in {"paragraph", "heading"}:
             _docx_paragraph(parent, node)
         elif kind in {"bulletList", "orderedList"}:
+            checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
             for index, item in enumerate(node.get("content", []), 1):
                 children = item.get("content", [])
+                marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{index}. ")
                 if children:
                     for child_index, child in enumerate(children):
                         if child["type"] in {"paragraph", "heading"}:
-                            _docx_paragraph(parent, child, ("• " if kind == "bulletList" else f"{index}. ") if child_index == 0 else "")
+                            _docx_paragraph(parent, child, marker if child_index == 0 else "")
                         else:
                             _docx_blocks(parent, [child])
                 else:
-                    _docx_paragraph(parent, {"type": "paragraph", "content": []}, "• " if kind == "bulletList" else f"{index}. ")
+                    _docx_paragraph(parent, {"type": "paragraph", "content": []}, marker)
         elif kind == "table":
             table = ET.SubElement(parent, f"{{{w}}}tbl")
             props = ET.SubElement(table, f"{{{w}}}tblPr")
@@ -263,18 +267,19 @@ def odt(content):
             if kind in {"paragraph", "heading"}:
                 para(parent, node)
             elif kind in {"bulletList", "orderedList"}:
+                checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
                 list_el = ET.SubElement(parent, f"{{{ns['text']}}}list")
                 for item in node.get("content", []):
                     li = ET.SubElement(list_el, f"{{{ns['text']}}}list-item")
                     children = item.get("content", [])
                     if children:
-                        for child in children:
+                        for child_index, child in enumerate(children):
                             if child["type"] in {"paragraph", "heading"}:
-                                para(li, child)
+                                para(li, child, "[ ] " if checklist and child_index == 0 else "")
                             else:
                                 blocks(li, [child])
                     else:
-                        para(li)
+                        para(li, prefix="[ ] " if checklist else "")
             elif kind == "table":
                 table_el = ET.SubElement(parent, f"{{{ns['table']}}}table", {f"{{{ns['table']}}}name": f"Table{len(parent)}"})
                 for row in node.get("content", []):

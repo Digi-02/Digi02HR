@@ -1,1 +1,43 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ document.title }} | Preview</title><style>body{margin:0;padding:24px;background:#eef0f3;font:14px/1.4 Arial,sans-serif;color:#202124}.preview{max-width:1000px;margin:0 auto}.preview h1{font-size:18px;font-weight:600}.page{display:block;max-width:100%;height:auto;margin:18px auto;background:white;box-shadow:0 2px 12px #17202d24}.page-label{max-width:794px;margin:12px auto 0;color:#667085}@media(max-width:600px){body{padding:8px}}</style></head><body><main class="preview"><h1>{{ document.title|escape }}</h1>{% for page in pages %}<p class="page-label">Page {{ page.number }}</p><img class="page" src="data:image/png;base64,{{ page.data }}" alt="Rendered document page {{ page.number }}">{% endfor %}</main></body></html>
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ document.title }} | Preview</title>
+  <link rel="stylesheet" href="{% static 'attendance/digidoc-preview.css' %}">
+  {% if has_letterhead_guides %}<style nonce="{{ csp_nonce }}">{% for page in pages %}{% if page.show_letterhead_guides %}.preview-page[data-page-number="{{ page.number }}"]{--guide-header:{{ page.guide_top_pct }}%;--guide-footer:{{ page.guide_bottom_pct }}%;--guide-left:{{ page.guide_left_pct }}%;--guide-right:{{ page.guide_right_pct }}%}{% endif %}{% endfor %}</style>{% endif %}
+</head>
+<body>
+  <header class="preview-toolbar" aria-label="Document preview controls">
+    <a class="preview-back" href="{% url 'digidoc_editor' document.id %}" aria-label="Back to editor">‹ <span>Back to editor</span></a>
+    <div class="preview-title"><strong>Print preview</strong><span title="{{ document.title }}">{{ document.title }}</span></div>
+    <div class="preview-tools">
+      <span class="preview-page-count">Page <b id="preview-current-page">1</b> of <b>{{ pages|length }}</b></span>
+      <button class="preview-action" type="button" id="preview-previous" aria-label="Previous page" title="Previous page">↑</button>
+      <button class="preview-action" type="button" id="preview-next" aria-label="Next page" title="Next page">↓</button>
+      <button class="preview-action" type="button" id="preview-zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+      <output id="preview-zoom-value" aria-live="polite">100%</output>
+      <button class="preview-action" type="button" id="preview-zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+      <button class="preview-action" type="button" id="preview-fit">Fit</button>
+      <button class="preview-action" type="button" id="preview-guides" aria-pressed="true" {% if not has_letterhead_guides %}disabled{% endif %}>Hide guides</button>
+      <button class="preview-action" type="button" id="preview-print">Print</button>
+      <a class="preview-action preview-action--primary" href="{% url 'digidoc_pdf' document.id %}">Download PDF</a>
+    </div>
+  </header>
+  <main class="preview-stage" id="preview-stage" data-zoom="100" data-fit="true" aria-label="Document pages">
+    <div class="preview-pages">
+      {% for page in pages %}
+      <section class="preview-page{% if page.show_letterhead_guides %} has-letterhead-guides{% endif %}" data-page-number="{{ page.number }}" data-header-mm="{{ letterhead_margins.top }}" data-footer-mm="{{ letterhead_margins.bottom }}" data-left-mm="{{ letterhead_margins.left }}" data-right-mm="{{ letterhead_margins.right }}" aria-label="Page {{ page.number }}">
+        <p class="preview-page-caption">Page {{ page.number }}</p>
+        <div class="preview-page-canvas">
+          <img src="data:image/png;base64,{{ page.data }}" alt="Rendered page {{ page.number }}">
+          {% if page.show_letterhead_guides %}<div class="preview-letterhead-guides" aria-hidden="true"><span class="preview-letterhead-guide preview-letterhead-guide--header"></span><span class="preview-letterhead-guide preview-letterhead-guide--footer"></span></div>{% endif %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  </main>
+  <script src="{% static 'attendance/digidoc-preview.js' %}" defer></script>
+</body>
+</html>

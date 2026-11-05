@@ -6,15 +6,18 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from attendance.digidoc import _render_pdf_isolated, validate_document_json
+from attendance.digidoc_exports import plain_text
 from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, Organization, OrganizationMembership
 from attendance.shell import build_navigation
 from PIL import Image
 from io import BytesIO
 import json
+import base64
 from pathlib import Path
 import re
 from zipfile import ZipFile
 from xml.etree import ElementTree
+from unittest.mock import patch
 
 
 class DigiDocPhaseTwoTests(TestCase):
@@ -78,6 +81,45 @@ class DigiDocPhaseTwoTests(TestCase):
         sections, pages = build_navigation(user, self.organization)
         self.assertNotIn("digidoc", pages)
 
+    def test_document_library_uses_preview_cards_and_working_filters(self):
+        first = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Quarterly report", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        other = User.objects.create_user("second_author", first_name="Second", last_name="Author", password="test-pass-123")
+        OrganizationMembership.objects.create(user=other, organization=self.organization, role="owner")
+        second = DigiDocDocument.objects.create(organization=self.organization, created_by=other, title="Policy draft", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        response = self.client.get(reverse("digidoc_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recent documents")
+        self.assertContains(response, "Quarterly report")
+        self.assertContains(response, "Policy draft")
+        self.assertContains(response, reverse("digidoc_thumbnail", args=[first.pk]))
+        self.assertContains(response, "dd-document-grid")
+        owned = self.client.get(reverse("digidoc_list"), {"owner": "me", "sort": "title"})
+        self.assertContains(owned, "Quarterly report")
+        self.assertNotContains(owned, "Policy draft")
+        by_owner = self.client.get(reverse("digidoc_list"), {"owner": str(other.pk)})
+        self.assertContains(by_owner, "Policy draft")
+        self.assertNotContains(by_owner, "Quarterly report")
+
+    def test_document_thumbnail_is_private_scoped_and_cached(self):
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        png = b"\x89PNG\r\n\x1a\nthumbnail"
+        with patch("attendance.digidoc._render_pdf_isolated", return_value=b"%PDF-test") as pdf, patch("attendance.digidoc._render_preview_images_isolated", return_value=[{"number": 1, "data": base64.b64encode(png).decode()}]) as render:
+            response = self.client.get(reverse("digidoc_thumbnail", args=[document.pk]))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["Content-Type"], "image/png")
+            self.assertEqual(response["Cache-Control"], "private, max-age=3600")
+            self.assertEqual(response.content, png)
+            self.client.get(reverse("digidoc_thumbnail", args=[document.pk]))
+            pdf.assert_called_once()
+            render.assert_called_once_with(b"%PDF-test", first_page_only=True)
+
+    def test_document_thumbnail_renders_the_actual_first_page(self):
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Thumbnail source", content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "A preview of this document"}]}]})
+        response = self.client.get(reverse("digidoc_thumbnail", args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertTrue(response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+
     def test_allow_list_accepts_safe_content_and_rejects_unknown_nodes_attrs_and_urls(self):
         clean = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hello", "marks": [{"type": "bold"}]}]}]}
         self.assertEqual(validate_document_json(clean), clean)
@@ -90,6 +132,17 @@ class DigiDocPhaseTwoTests(TestCase):
         for attack in attacks:
             with self.subTest(attack=attack), self.assertRaises(ValidationError):
                 validate_document_json(attack)
+
+    def test_checklist_is_validated_and_exports_with_checkbox_markers(self):
+        content = {"type": "doc", "content": [{"type": "bulletList", "attrs": {"list_style": "checklist"}, "content": [
+            {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Review the report"}]}]},
+        ]}]}
+        clean = validate_document_json(content)
+        self.assertEqual(clean["content"][0]["attrs"], {"list_style": "checklist"})
+        self.assertIn("[ ] Review the report", plain_text(clean))
+        invalid = {"type": "doc", "content": [{"type": "bulletList", "attrs": {"list_style": "script"}, "content": []}]}
+        with self.assertRaises(ValidationError):
+            validate_document_json(invalid)
 
     def test_allow_list_round_trips_safe_formatting_and_rejects_css_values(self):
         document = {"type": "doc", "content": [{"type": "paragraph", "attrs": {"align": "center", "indent": 2, "line_spacing": "1.5"}, "content": [{"type": "text", "text": "Formatted", "marks": [{"type": "fontFamily", "attrs": {"value": "Times-Roman"}}, {"type": "fontSize", "attrs": {"value": 18}}, {"type": "textColor", "attrs": {"color": "#336699"}}, {"type": "highlight", "attrs": {"color": "#ffff00"}}]}]}]}
@@ -136,7 +189,7 @@ class DigiDocPhaseTwoTests(TestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1280, "height": 900})
-            page.add_init_script("window.fetch = async () => new Response(JSON.stringify({version: 1, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}})")
+            page.add_init_script("window.__saveCount=0;window.fetch = async () => {window.__saveCount++;return new Response(JSON.stringify({version: 1, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}})}")
             page.set_content(markup, wait_until="domcontentloaded")
             page.add_style_tag(content=css)
             page.add_script_tag(content=editor_js)
@@ -157,7 +210,7 @@ class DigiDocPhaseTwoTests(TestCase):
             page.mouse.down()
             page.mouse.move(target_box["x"] + 20, target_box["y"] + target_box["height"] - 1, steps=8)
             page.mouse.up()
-            self.assertEqual(frame.evaluate("el => [...el.parentElement.children].indexOf(el)"), 2)
+            self.assertEqual(frame.evaluate("el => [...el.parentElement.children].filter(child => !child.classList.contains('dd-page-zones')).indexOf(el)"), 2)
             self.assertEqual(page.locator(".dd-inline-image").count(), 1)
             browser.close()
 
@@ -180,6 +233,28 @@ class DigiDocPhaseTwoTests(TestCase):
         preview = self.client.get(reverse("digidoc_preview", args=[document.pk]))
         self.assertEqual(preview.status_code, 200, preview.content[:200])
         self.assertContains(preview, "data:image/png;base64,")
+
+    def test_preview_route_uses_secure_static_viewer_assets(self):
+        from unittest.mock import patch
+
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Professional preview",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        with patch("attendance.digidoc._render_pdf_isolated", return_value=b"%PDF-preview"), patch(
+            "attendance.digidoc._render_preview_images_isolated",
+            return_value=[{"number": 1, "data": "AA=="}],
+        ):
+            response = self.client.get(reverse("digidoc_preview", args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "attendance/digidoc-preview.css")
+        self.assertContains(response, "attendance/digidoc-preview.js")
+        self.assertContains(response, "preview-next")
+        self.assertContains(response, "Download PDF")
+        self.assertIn("style-src 'self'", response["Content-Security-Policy"])
+        self.assertIn("script-src 'self'", response["Content-Security-Policy"])
 
     def test_editor_download_formats_are_clickable_and_return_valid_files(self):
         content = {"type": "doc", "content": [
@@ -223,6 +298,7 @@ class DigiDocPhaseTwoTests(TestCase):
         markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
         css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
         js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -235,6 +311,258 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertEqual(page.locator("#dd-sheet").text_content(), long_text)
             first_height = pages.nth(0).evaluate("node => node.getBoundingClientRect().height")
             self.assertAlmostEqual(first_height, 1123, delta=2)
+            browser.close()
+
+    def test_pasting_markdown_letter_formats_headings_bold_and_left_alignment(self):
+        from playwright.sync_api import sync_playwright
+
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Letter formatting",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        pasted = "**[YOUR FULL NAME]**\n[Your Address]\n[City, State]\n\n[Date]\n\n**Dear Hiring Manager,**\n\n### LETTER OF ACCEPTANCE\n\nI am pleased to accept the position.\n\n- Confirm the role\n- Agree to the start date"
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.add_init_script("window.fetch = async () => new Response(JSON.stringify({version: 2, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}})")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.evaluate("""text => {
+              const editor=document.querySelector('#dd-sheet'), paragraph=editor.querySelector('.dd-page p');
+              paragraph.focus();const range=document.createRange();range.selectNodeContents(paragraph);range.collapse(false);
+              const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+              const clipboard=new DataTransfer();clipboard.setData('text/plain',text);
+              editor.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
+            }""", pasted)
+            self.assertEqual(page.locator("#dd-sheet strong").all_inner_texts(), ["[YOUR FULL NAME]", "Dear Hiring Manager,"])
+            self.assertEqual(page.locator("#dd-sheet h3").inner_text(), "LETTER OF ACCEPTANCE")
+            self.assertNotIn("**", page.locator("#dd-sheet").inner_text())
+            self.assertNotIn("###", page.locator("#dd-sheet").inner_text())
+            self.assertEqual(page.locator("#dd-sheet ul li").all_inner_texts(), ["Confirm the role", "Agree to the start date"])
+            self.assertTrue(page.locator("#dd-sheet p, #dd-sheet h3").evaluate_all("els => els.every(el => getComputedStyle(el).textAlign === 'left')"))
+            browser.close()
+
+    def test_letterhead_editor_shows_nonprinting_header_and_footer_guides(self):
+        from playwright.sync_api import sync_playwright
+
+        image_buffer = BytesIO()
+        Image.new("RGB", (210, 297), "white").save(image_buffer, format="PNG")
+        letterhead = CompanyLetterhead.objects.create(
+            organization=self.organization,
+            image_format="png",
+            image_width=210,
+            image_height=297,
+            margin_top_mm=40,
+            margin_bottom_mm=30,
+            margin_left_mm=20,
+            margin_right_mm=20,
+        )
+        letterhead.image.save("guide-letterhead.png", ContentFile(image_buffer.getvalue()), save=True)
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Letterhead guides",
+            letterhead_enabled=True,
+            letterhead_page_mode="every",
+            content_json={"type": "doc", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "First page"}]},
+                {"type": "hardBreak"},
+                {"type": "paragraph", "content": [{"type": "text", "text": "Second page"}]},
+            ]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.add_init_script("window.fetch = async (url, options = {}) => { if (options.body) window.__savedDocument = JSON.parse(options.body); return new Response(JSON.stringify({version: 2, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}}); }")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.add_script_tag(content=ribbon_js)
+            guides = page.locator(".dd-page-zones")
+            self.assertEqual(guides.count(), 2)
+            self.assertTrue(guides.nth(0).is_visible())
+            self.assertTrue(guides.nth(0).evaluate("el => el.getAttribute('aria-hidden') === 'true' && el.contentEditable === 'false'"))
+            self.assertEqual(guides.nth(0).evaluate("el => getComputedStyle(el).getPropertyValue('--dd-letterhead-header-guide').trim()"), "40mm")
+            self.assertEqual(guides.nth(0).evaluate("el => getComputedStyle(el).getPropertyValue('--dd-letterhead-footer-guide').trim()"), "30mm")
+            self.assertIn("Header guide", guides.nth(0).evaluate("el => getComputedStyle(el, '::before').content"))
+            self.assertIn("Footer guide", guides.nth(0).evaluate("el => getComputedStyle(el, '::after').content"))
+            self.assertNotIn("boundary", page.locator("#dd-sheet").inner_text())
+            second_page = page.locator("#dd-sheet > .dd-page").nth(1)
+            page_box, text_box = second_page.bounding_box(), second_page.locator("p").bounding_box()
+            self.assertGreaterEqual(text_box["y"], page_box["y"] + 150)
+            self.assertLessEqual(text_box["y"] + text_box["height"], page_box["y"] + 1123 - 112)
+            page.emulate_media(media="print")
+            self.assertFalse(guides.nth(0).is_visible())
+            page.emulate_media(media="screen")
+            page.locator('[data-tab="insert"]').click()
+            page.locator("#dd-letterhead-other").select_option("none")
+            self.assertTrue(guides.nth(0).is_visible())
+            self.assertFalse(guides.nth(1).is_visible())
+            browser.close()
+
+    def test_editor_alignment_color_and_undo_redo_apply_to_selection(self):
+        from playwright.sync_api import sync_playwright
+
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Formatting controls",
+            content_json={"type": "doc", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "First paragraph"}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": "Second paragraph"}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": "Third paragraph"}]},
+            ]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.add_init_script("window.fetch = async () => new Response(JSON.stringify({version: 1, updated_at: 'Saved'}), {status: 200, headers: {'Content-Type': 'application/json'}})")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=editor_js)
+            page.add_script_tag(content=ribbon_js)
+            page.locator("#dd-sheet").evaluate("sheet => { const ps=sheet.querySelectorAll('p'); const range=document.createRange(); range.setStart(ps[0].firstChild,0); range.setEnd(ps[1].firstChild,ps[1].firstChild.length); const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range); }")
+            page.locator("#dd-align-menu-toggle").click()
+            page.locator('[data-align-choice="center"]').click()
+            self.assertEqual(page.locator("#dd-sheet .dd-page p").evaluate_all("els => els.map(el => el.dataset.align || '')"), ["center", "center", ""])
+            page.locator("#dd-undo").click()
+            self.assertEqual(page.locator("#dd-sheet .dd-page p").evaluate_all("els => els.map(el => el.dataset.align || '')"), ["", "", ""])
+            page.locator("#dd-redo").click()
+            self.assertEqual(page.locator("#dd-sheet .dd-page p").evaluate_all("els => els.map(el => el.dataset.align || '')"), ["center", "center", ""])
+
+            page.locator("#dd-sheet .dd-page p").first.evaluate("p => { const range=document.createRange(); range.selectNodeContents(p); const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range); document.getElementById('dd-sheet').focus(); }")
+            color = page.locator("#dd-text-color")
+            color.evaluate("el => el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))")
+            color.evaluate("el => {el.value='#c0c0c0';el.dispatchEvent(new Event('change',{bubbles:true}));}")
+            color.evaluate("el => el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))")
+            color.evaluate("el => {el.value='#202124';el.dispatchEvent(new Event('change',{bubbles:true}));}")
+            self.assertEqual(page.locator("#dd-sheet [data-dd-text-color]").count(), 1)
+            self.assertEqual(page.locator("#dd-sheet [data-dd-text-color]").first.evaluate("el => getComputedStyle(el).color"), "rgb(32, 33, 36)")
+            page.locator("#dd-undo").click()
+            self.assertEqual(page.locator("#dd-sheet [data-dd-text-color]").first.evaluate("el => getComputedStyle(el).color"), "rgb(192, 192, 192)")
+            page.locator("#dd-redo").click()
+            self.assertEqual(page.locator("#dd-sheet [data-dd-text-color]").first.evaluate("el => getComputedStyle(el).color"), "rgb(32, 33, 36)")
+            page.locator("#dd-spacing-menu-toggle").click()
+            page.locator('[data-spacing-choice="1.5"]').click()
+            self.assertEqual(page.locator("#dd-sheet .dd-page p").first.get_attribute("data-line-spacing"), "1.5")
+
+            page.locator("#dd-sheet .dd-page p").first.evaluate("p => { const range=document.createRange(); range.selectNodeContents(p); const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range); }")
+            page.wait_for_timeout(25)
+            page.locator('[data-tab="insert"]').click()
+            dialogs = []
+            page.once("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.accept("https://example.com")))
+            page.locator("#dd-link").click()
+            self.assertTrue(dialogs, "Link control did not open its URL dialog")
+            self.assertEqual(page.locator('#dd-sheet a[href="https://example.com"]').count(), 1)
+            page.locator("#dd-sheet .dd-page p").nth(1).evaluate("p => { const text=p.firstChild; const range=document.createRange(); range.setStart(text,7); range.collapse(true); const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range); }")
+            page.locator("#dd-break").click()
+            self.assertEqual(page.locator("#dd-sheet > .dd-page").count(), 2)
+            self.assertIn("Second", page.locator("#dd-sheet > .dd-page").nth(0).inner_text())
+            self.assertIn("paragraph", page.locator("#dd-sheet > .dd-page").nth(1).inner_text())
+            page.evaluate("window.__saveClickCount = 0; document.getElementById('digidoc').addEventListener('digidoc:save', () => window.__saveClickCount++)")
+            page.locator("#dd-save-now").click()
+            page.wait_for_function("window.__saveClickCount > 0")
+            browser.close()
+
+    def test_enter_creates_a_paragraph_without_forcing_a_new_page(self):
+        from playwright.sync_api import sync_playwright
+
+        letterhead_buffer = BytesIO()
+        Image.new("RGB", (80, 120), "white").save(letterhead_buffer, format="PNG")
+        letterhead = CompanyLetterhead.objects.create(
+            organization=self.organization,
+            image=SimpleUploadedFile("enter-test-letterhead.png", letterhead_buffer.getvalue(), content_type="image/png"),
+            image_format="png",
+            image_width=80,
+            image_height=120,
+            margin_top_mm=40,
+            margin_bottom_mm=30,
+            margin_left_mm=20,
+            margin_right_mm=20,
+        )
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Enter key regression",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+            letterhead_enabled=True,
+            letterhead_first_slot="1",
+            letterhead_other_slot="1",
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=editor_js)
+            paragraph = page.locator("#dd-sheet .dd-page p").first
+            paragraph.click(position={"x": 5, "y": 5})
+            page.keyboard.type("Acceptance letter to Divine Ohien")
+            page.keyboard.press("Enter")
+            page.keyboard.type("Dear Divine, your appointment is confirmed.")
+            page.keyboard.press("Enter")
+            page.keyboard.type("Please report on Monday morning.")
+            pages = page.locator("#dd-sheet > .dd-page")
+            self.assertEqual(pages.count(), 1, "Ordinary Enter presses should add paragraphs on the current page")
+            self.assertEqual(page.locator("#dd-sheet .dd-page p").count(), 3)
+            self.assertIn("Acceptance letter to Divine Ohien", pages.first.inner_text())
+            self.assertIn("Dear Divine, your appointment is confirmed.", pages.first.inner_text())
+            self.assertIn("Please report on Monday morning.", pages.first.inner_text())
+            selection_page = page.evaluate("() => getSelection().anchorNode.parentElement.closest('.dd-page')?.dataset.pageNumber")
+            self.assertEqual(selection_page, "1", "The caret should stay on the page while there is room")
+            self.assertEqual(page.locator("#dd-sheet > .dd-page").first.get_attribute("data-letterhead-slot"), "1")
+            self.assertNotEqual(page.locator("#dd-sheet > .dd-page").first.evaluate("el => getComputedStyle(el).backgroundImage"), "none")
+            browser.close()
+
+    def test_preview_viewer_zoom_navigation_and_print_layout(self):
+        from playwright.sync_api import sync_playwright
+
+        css = Path("attendance/static/attendance/digidoc-preview.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-preview.js").read_text(encoding="utf-8")
+        markup = f'''<!doctype html><html><body>
+          <header class="preview-toolbar"><button id="preview-previous"></button><button id="preview-next"></button><button id="preview-zoom-out"></button><output id="preview-zoom-value"></output><button id="preview-zoom-in"></button><button id="preview-fit"></button><button id="preview-print"></button></header>
+          <main class="preview-stage" id="preview-stage"><div class="preview-pages">
+            <section class="preview-page"><p class="preview-page-caption">Page 1</p><img alt="Page one"></section>
+            <section class="preview-page"><p class="preview-page-caption">Page 2</p><img alt="Page two"></section>
+          </div></main><span id="preview-current-page"></span></body></html>'''
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.set_content(markup, wait_until="commit")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            image = page.locator(".preview-page img").first
+            self.assertAlmostEqual(image.bounding_box()["width"], 794, delta=1)
+            page.locator("#preview-next").click()
+            self.assertEqual(page.locator("#preview-current-page").inner_text(), "2")
+            page.locator("#preview-zoom-in").click()
+            self.assertAlmostEqual(image.bounding_box()["width"], 993, delta=1)
+            page.locator("#preview-fit").click()
+            self.assertAlmostEqual(image.bounding_box()["width"], 794, delta=1)
+            page.emulate_media(media="print")
+            self.assertFalse(page.locator(".preview-toolbar").is_visible())
+            self.assertAlmostEqual(image.bounding_box()["width"], 794, delta=2)
             browser.close()
 
     def test_three_page_pdf_table_image_and_letterhead_modes_render_to_png(self):
@@ -262,6 +590,8 @@ class DigiDocPhaseTwoTests(TestCase):
         for mode, enabled in (("none", False), ("every", True), ("first", True)):
             document.letterhead_enabled = enabled
             document.letterhead_page_mode = "first" if mode == "first" else "every"
+            document.letterhead_first_slot = "1"
+            document.letterhead_other_slot = "none" if mode == "first" else "1"
             pdf_data = _render_pdf_isolated(document)
             rendered = pdfium.PdfDocument(pdf_data)
             self.assertEqual(len(rendered), 3)

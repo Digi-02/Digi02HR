@@ -7,20 +7,20 @@ from types import SimpleNamespace
 
 
 def main():
-    payload = sys.stdin.buffer.read(32 * 1024 * 1024 + 1)
-    if not payload or len(payload) > 32 * 1024 * 1024:
+    payload = sys.stdin.buffer.read(48 * 1024 * 1024 + 1)
+    if not payload or len(payload) > 48 * 1024 * 1024:
         return 2
     try:
         value = json.loads(payload.decode("utf-8"))
-        expected = {"title", "content", "letterhead_enabled", "letterhead_page_mode", "letterhead_meta", "letterhead_bytes", "assets"}
+        expected = {"title", "content", "letterhead_enabled", "letterhead_page_mode", "letterhead_first_slot", "letterhead_other_slot", "letterhead_meta", "letterhead_bytes", "assets"}
         if not isinstance(value, dict) or set(value) != expected or not isinstance(value["assets"], dict):
             return 2
         import django
         django.setup()
         from .digidoc import _build_pdf
-        document = SimpleNamespace(title=value["title"], content_json=value["content"], letterhead_enabled=value["letterhead_enabled"], letterhead_page_mode=value["letterhead_page_mode"])
+        document = SimpleNamespace(title=value["title"], content_json=value["content"], letterhead_enabled=value["letterhead_enabled"], letterhead_page_mode=value["letterhead_page_mode"], letterhead_first_slot=value["letterhead_first_slot"], letterhead_other_slot=value["letterhead_other_slot"])
         assets = {key: base64.b64decode(data, validate=True) for key, data in value["assets"].items()}
-        letterhead_bytes = base64.b64decode(value["letterhead_bytes"], validate=True) if value["letterhead_bytes"] else None
+        letterhead_bytes = {slot: base64.b64decode(data, validate=True) for slot, data in value["letterhead_bytes"].items()} if value["letterhead_bytes"] else None
         output = _build_pdf(document, pdf_assets=assets, letterhead_bytes=letterhead_bytes, letterhead_meta=value["letterhead_meta"])
         if not output.startswith(b"%PDF-") or len(output) > 25 * 1024 * 1024:
             return 3

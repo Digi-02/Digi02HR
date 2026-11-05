@@ -22,6 +22,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -114,7 +115,7 @@ def validate_document_json(value):
             allowed_keys |= {"text", "marks"}
         if kind == "heading":
             allowed_keys |= {"level", "content", "attrs"}
-        if kind in {"paragraph", "tableCell"}:
+        if kind in {"paragraph", "tableCell", "bulletList"}:
             allowed_keys |= {"attrs"}
         if kind == "image":
             allowed_keys |= {"attrs"}
@@ -199,9 +200,16 @@ def validate_document_json(value):
                     "crop": crop,
                 }
             else:
-                if set(attrs) - {"align", "indent", "line_spacing"}:
+                allowed_attrs = {"align", "indent", "line_spacing"}
+                if kind == "bulletList":
+                    allowed_attrs.add("list_style")
+                if set(attrs) - allowed_attrs:
                     raise ValidationError("Unsupported element property.")
                 clean_attrs = {}
+                if "list_style" in attrs:
+                    if attrs["list_style"] != "checklist":
+                        raise ValidationError("Unsupported list style.")
+                    clean_attrs["list_style"] = "checklist"
                 if "align" in attrs:
                     if not isinstance(attrs["align"], str) or attrs["align"] not in ALIGNMENTS:
                         raise ValidationError("Unsupported alignment.")
@@ -256,10 +264,45 @@ def _doc_context(request, organization, **extra):
 def digidoc_list(request):
     organization = _scope(request)
     query = _clean_title(request.GET.get("q", "")) if request.GET.get("q") else ""
-    documents = DigiDocDocument.objects.filter(organization=organization)
+    documents = DigiDocDocument.objects.filter(organization=organization).select_related("created_by")
     if query:
         documents = documents.filter(title__icontains=query)
-    return render(request, "attendance/digidoc_list.html", _doc_context(request, organization, documents=documents, query=query))
+    owner = request.GET.get("owner", "")
+    if owner == "me":
+        documents = documents.filter(created_by=request.user)
+    elif owner.isdigit():
+        documents = documents.filter(created_by_id=int(owner))
+    sort = request.GET.get("sort", "recent")
+    if sort == "title":
+        documents = documents.order_by("title", "-updated_at")
+    else:
+        sort = "recent"
+        documents = documents.order_by("-updated_at")
+    page = Paginator(documents, 24).get_page(request.GET.get("page"))
+    owners = DigiDocDocument.objects.filter(organization=organization).select_related("created_by").values_list("created_by_id", "created_by__first_name", "created_by__last_name", "created_by__username").distinct().order_by("created_by__username")
+    return render(request, "attendance/digidoc_list.html", _doc_context(request, organization,
+        documents=page.object_list, document_page=page, query=query, owner=owner, sort=sort, owners=owners))
+
+
+@login_required
+def digidoc_thumbnail(request, document_id):
+    organization = _scope(request)
+    document = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    revision = document.updated_at.isoformat() if document.updated_at else "new"
+    cache_key = f"digidoc:thumbnail:{document.pk}:{document.version}:{revision}"
+    image = cache.get(cache_key)
+    if image is None:
+        try:
+            pdf_data = _render_pdf_isolated(document)
+            pages = _render_preview_images_isolated(pdf_data, first_page_only=True)
+            image = base64.b64decode(pages[0]["data"], validate=True)
+            cache.set(cache_key, image, timeout=60 * 60 * 24)
+        except Exception:
+            return HttpResponse(status=404)
+    response = HttpResponse(image, content_type="image/png")
+    response["Cache-Control"] = "private, max-age=3600"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @login_required
@@ -274,6 +317,8 @@ def digidoc_create(request):
         content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
         letterhead_enabled=bool(letterhead and letterhead.image),
         letterhead_page_mode=letterhead.default_page_mode if letterhead else "every",
+        letterhead_first_slot="1",
+        letterhead_other_slot="none" if letterhead and letterhead.default_page_mode == "first" else "1",
     )
     return redirect("digidoc_editor", document_id=doc.pk)
 
@@ -290,7 +335,7 @@ def digidoc_editor(request, document_id):
     letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
     nonce = secrets.token_urlsafe(18)
     safe_json_script = str(json_script(content, "dd-initial")).replace("<script ", f'<script nonce="{nonce}" ', 1)
-    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, initial_json_script=safe_json_script, letterhead=letterhead, letterhead_image_url=reverse("company_letterhead_image"), branding_url=reverse("organization_branding"), csp_nonce=nonce))
+    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, initial_json_script=safe_json_script, letterhead=letterhead, letterhead_image_url=reverse("company_letterhead_image"), letterhead_second_image_url=reverse("company_letterhead_image") + "?slot=2", branding_url=reverse("organization_branding"), csp_nonce=nonce))
     response["Content-Security-Policy"] = f"default-src 'self'; script-src 'self'; style-src 'self' 'nonce-{nonce}'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     response["X-Frame-Options"] = "DENY"
     response["Referrer-Policy"] = "same-origin"
@@ -315,7 +360,7 @@ def digidoc_save(request, document_id):
         cache.set(rate_key, 1, timeout=60)
     try:
         payload = json.loads(request.body.decode("utf-8"))
-        if not isinstance(payload, dict) or set(payload) - {"title", "content", "letterhead_enabled", "letterhead_page_mode", "version"}:
+        if not isinstance(payload, dict) or set(payload) - {"title", "content", "letterhead_enabled", "letterhead_page_mode", "letterhead_first_slot", "letterhead_other_slot", "version"}:
             raise ValidationError("Unsupported save request.")
         content = validate_document_json(payload.get("content"))
         _ensure_company_images(content, organization)
@@ -325,7 +370,11 @@ def digidoc_save(request, document_id):
         title = _clean_title(payload.get("title"))
         enabled = payload.get("letterhead_enabled", False)
         mode = payload.get("letterhead_page_mode", "every")
-        if type(enabled) is not bool or mode not in {"every", "first"}:
+        first_slot = payload.get("letterhead_first_slot", "1")
+        other_slot = payload.get("letterhead_other_slot", "none" if mode == "first" else "1")
+        current_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
+        valid_slots = {"1", "none"} | ({"2"} if current_letterhead and current_letterhead.image_second else set())
+        if type(enabled) is not bool or mode not in {"every", "first"} or first_slot not in valid_slots or other_slot not in valid_slots:
             raise ValidationError("Invalid letterhead settings.")
         if enabled and not CompanyLetterhead.objects.filter(organization=organization).exists():
             raise ValidationError("This company has no saved letterhead.")
@@ -335,8 +384,9 @@ def digidoc_save(request, document_id):
                 return JsonResponse({"error": "This document changed in another session. Reload before saving."}, status=409)
             doc.title, doc.content_json = title, content
             doc.letterhead_enabled, doc.letterhead_page_mode = enabled, mode
+            doc.letterhead_first_slot, doc.letterhead_other_slot = first_slot, other_slot
             doc.version += 1
-            doc.save(update_fields=["title", "content_json", "letterhead_enabled", "letterhead_page_mode", "version", "updated_at"])
+            doc.save(update_fields=["title", "content_json", "letterhead_enabled", "letterhead_page_mode", "letterhead_first_slot", "letterhead_other_slot", "version", "updated_at"])
         return JsonResponse({"ok": True, "version": doc.version, "updated_at": timezone.localtime(doc.updated_at).strftime("%I:%M %p").lstrip("0")})
     except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
         message = exc.messages[0] if isinstance(exc, ValidationError) else "Invalid save request."
@@ -348,7 +398,7 @@ def digidoc_save(request, document_id):
 def digidoc_duplicate(request, document_id):
     organization = _scope(request)
     original = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
-    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode)
+    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode, letterhead_first_slot=original.letterhead_first_slot, letterhead_other_slot=original.letterhead_other_slot)
     return redirect("digidoc_editor", document_id=doc.pk)
 
 
@@ -434,14 +484,35 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             pdfmetrics.registerFontFamily(family, normal=family, bold=f"{family}-Bold", italic=family, boldItalic=f"{family}-Bold")
     content = validate_document_json(doc.content_json)
     if letterhead_meta is not None:
-        letterhead = SimpleNamespace(**letterhead_meta) if doc.letterhead_enabled else None
+        if doc.letterhead_enabled and isinstance(letterhead_meta, dict) and "scale_mode" in letterhead_meta:
+            letterhead_assets = {"1": SimpleNamespace(**letterhead_meta)}
+        elif doc.letterhead_enabled and isinstance(letterhead_meta, dict):
+            letterhead_assets = {slot: SimpleNamespace(**meta) for slot, meta in letterhead_meta.items()}
+        else:
+            letterhead_assets = {}
+        letterhead_data = letterhead_bytes if isinstance(letterhead_bytes, dict) else ({"1": letterhead_bytes} if letterhead_bytes else {})
     else:
-        letterhead = CompanyLetterhead.objects.filter(organization=organization).first() if doc.letterhead_enabled else None
-    if doc.letterhead_enabled and not letterhead:
+        asset = CompanyLetterhead.objects.filter(organization=organization).first() if doc.letterhead_enabled else None
+        letterhead_assets, letterhead_data = {}, {}
+        if asset:
+            for slot, field_name in (("1", "image"), ("2", "image_second")):
+                image = getattr(asset, field_name)
+                if image:
+                    letterhead_assets[slot] = asset
+                    with image.open("rb") as source:
+                        letterhead_data[slot] = source.read(8 * 1024 * 1024 + 1)
+    first_slot = getattr(doc, "letterhead_first_slot", "1")
+    other_slot = getattr(doc, "letterhead_other_slot", "none" if getattr(doc, "letterhead_page_mode", "every") == "first" else "1")
+    if doc.letterhead_enabled and not letterhead_assets:
         raise ValidationError("The saved letterhead is unavailable.")
+    if doc.letterhead_enabled and any(slot not in {"1", "2", "none"} for slot in (first_slot, other_slot)):
+        raise ValidationError("The selected letterhead is unavailable.")
+    if doc.letterhead_enabled and any(slot != "none" and (slot not in letterhead_assets or slot not in letterhead_data) for slot in (first_slot, other_slot)):
+        raise ValidationError("The selected letterhead is unavailable.")
     margins = (25, 20, 25, 20)
+    letterhead = letterhead_assets.get("1") or next(iter(letterhead_assets.values()), None)
     if letterhead:
-        margins = (letterhead.margin_top_mm, letterhead.margin_right_mm, letterhead.margin_bottom_mm, letterhead.margin_left_mm)
+        margins = (letterhead.margin_top_mm + 4, letterhead.margin_right_mm, letterhead.margin_bottom_mm + 4, letterhead.margin_left_mm)
     buffer = BytesIO()
     top, right, bottom, left = margins
     pdf = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=left*mm, rightMargin=right*mm, topMargin=top*mm, bottomMargin=bottom*mm, title=_clean_title(doc.title), pageCompression=1)
@@ -506,9 +577,11 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 from reportlab.platypus import HRFlowable
                 flow.extend([HRFlowable(width="100%", thickness=0.8, color="#9aa2ad", spaceBefore=6, spaceAfter=10), Spacer(1, 2)])
             elif kind in {"bulletList", "orderedList"}:
+                checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
                 for ix, item in enumerate(node.get("content", []), 1):
                     raw = "".join(_paragraph_html(child) for child in item.get("content", []))
-                    flow.append(Paragraph(("• " if kind == "bulletList" else f"{ix}. ") + (raw or "&#160;"), styles["BodyText"]))
+                    marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{ix}. ")
+                    flow.append(Paragraph(marker + (raw or "&#160;"), styles["BodyText"]))
             elif kind == "table":
                 rows = []
                 for row in node.get("content", []):
@@ -523,23 +596,24 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 blocks(node.get("content", []))
     blocks(content.get("content", []))
 
-    image_handle = None
-    if letterhead:
-        if letterhead_bytes is None:
-            with letterhead.image.open("rb") as source:
-                letterhead_bytes = source.read(8 * 1024 * 1024 + 1)
-        if not letterhead_bytes or len(letterhead_bytes) > 8 * 1024 * 1024:
-            raise ValidationError("The saved letterhead is unavailable.")
-        image_handle = BytesIO(letterhead_bytes)
-        reader = ImageReader(image_handle)
-        iw, ih = reader.getSize()
-        scale = max(A4[0]/iw, A4[1]/ih) if letterhead.scale_mode == "fill" else min(A4[0]/iw, A4[1]/ih)
-        w, h = iw*scale, ih*scale
+    image_handles, readers = {}, {}
+    if doc.letterhead_enabled:
+        for slot, raw in letterhead_data.items():
+            if not raw or len(raw) > 8 * 1024 * 1024:
+                raise ValidationError("The saved letterhead is unavailable.")
+            image_handles[slot] = BytesIO(raw)
+            readers[slot] = ImageReader(image_handles[slot])
         def draw_page(canvas, _document):
             page_number = canvas.getPageNumber()
             if page_number > 100:
                 raise ValidationError("The document exceeds the 100 page limit.")
-            if doc.letterhead_page_mode == "every" or page_number == 1:
+            slot = first_slot if page_number == 1 else other_slot
+            if slot != "none":
+                reader = readers[slot]
+                iw, ih = reader.getSize()
+                selected_letterhead = letterhead_assets[slot]
+                scale = max(A4[0]/iw, A4[1]/ih) if selected_letterhead.scale_mode == "fill" else min(A4[0]/iw, A4[1]/ih)
+                w, h = iw*scale, ih*scale
                 canvas.saveState(); path=canvas.beginPath(); path.rect(0,0,A4[0],A4[1]); canvas.clipPath(path, stroke=0, fill=0)
                 canvas.drawImage(reader,(A4[0]-w)/2,(A4[1]-h)/2,width=w,height=h,mask="auto"); canvas.restoreState()
     else:
@@ -560,11 +634,9 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
     try:
         pdf.build(flow or [Paragraph("&#160;", styles["BodyText"])], onFirstPage=draw_page, onLaterPages=draw_page, canvasmaker=make_canvas)
     except Exception:
-        if image_handle:
-            image_handle.close()
+        for image_handle in image_handles.values(): image_handle.close()
         raise
-    if image_handle:
-        image_handle.close()
+    for image_handle in image_handles.values(): image_handle.close()
     data = buffer.getvalue()
     if len(data) > 25 * 1024 * 1024:
         raise ValidationError("The generated PDF is too large.")
@@ -597,19 +669,25 @@ def _render_pdf_isolated(document):
         letterhead = CompanyLetterhead.objects.filter(organization=document.organization).first()
         if not letterhead:
             raise ValidationError("The saved letterhead is unavailable.")
-        with letterhead.image.open("rb") as source:
-            letterhead_bytes = source.read(8 * 1024 * 1024 + 1)
-        letterhead_meta = {"scale_mode": letterhead.scale_mode, "margin_top_mm": letterhead.margin_top_mm, "margin_bottom_mm": letterhead.margin_bottom_mm, "margin_left_mm": letterhead.margin_left_mm, "margin_right_mm": letterhead.margin_right_mm}
+        letterhead_bytes, letterhead_meta = {}, {}
+        for slot, field_name in (("1", "image"), ("2", "image_second")):
+            image = getattr(letterhead, field_name)
+            if image:
+                with image.open("rb") as source:
+                    letterhead_bytes[slot] = source.read(8 * 1024 * 1024 + 1)
+                letterhead_meta[slot] = {"scale_mode": letterhead.scale_mode, "margin_top_mm": letterhead.margin_top_mm, "margin_bottom_mm": letterhead.margin_bottom_mm, "margin_left_mm": letterhead.margin_left_mm, "margin_right_mm": letterhead.margin_right_mm}
     worker_request = {
         "title": _clean_title(document.title), "content": content,
         "letterhead_enabled": document.letterhead_enabled,
         "letterhead_page_mode": document.letterhead_page_mode,
+        "letterhead_first_slot": document.letterhead_first_slot,
+        "letterhead_other_slot": document.letterhead_other_slot,
         "letterhead_meta": letterhead_meta,
-        "letterhead_bytes": base64.b64encode(letterhead_bytes).decode("ascii") if letterhead_bytes else None,
+        "letterhead_bytes": {slot: base64.b64encode(data).decode("ascii") for slot, data in letterhead_bytes.items()} if letterhead_bytes else None,
         "assets": image_payload,
     }
     payload = json.dumps(worker_request, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if len(payload) > 32 * 1024 * 1024:
+    if len(payload) > 48 * 1024 * 1024:
         raise ValidationError("The document exceeds the PDF input limit.")
     worker_env = {name: os.environ[name] for name in ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP") if name in os.environ}
     worker_env.update({"PYTHONIOENCODING": "utf-8", "DJANGO_SETTINGS_MODULE": "core.settings"})
@@ -642,7 +720,7 @@ def _render_pdf_isolated(document):
     return output
 
 
-def _render_preview_images_isolated(pdf_data):
+def _render_preview_images_isolated(pdf_data, *, first_page_only=False):
     """Rasterize a generated PDF in a bounded worker and validate its PNG bundle."""
     if not pdf_data.startswith(b"%PDF-") or len(pdf_data) > 25 * 1024 * 1024:
         raise ValidationError("The preview could not be generated.")
@@ -655,7 +733,7 @@ def _render_preview_images_isolated(pdf_data):
             resource.setrlimit(resource.RLIMIT_CPU, (20, 20))
         kwargs["preexec_fn"] = set_limits
     process = subprocess.Popen(
-        [sys.executable, "-m", "attendance.digidoc_preview_worker"],
+        [sys.executable, "-m", "attendance.digidoc_preview_worker", *( ["--first-page"] if first_page_only else [] )],
         cwd=str(settings.BASE_DIR), env=worker_env, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs,
     )
@@ -789,8 +867,27 @@ def digidoc_preview(request, document_id):
         pages = _render_preview_images_isolated(pdf_data)
     except Exception:
         return HttpResponse("The document preview could not be generated.", status=400)
-    response = render(request, "attendance/digidoc_preview.html", {"document": doc, "pages": pages})
-    response["Content-Security-Policy"] = "default-src 'self'; img-src data:; style-src 'self'; script-src 'none'; object-src 'none'; frame-ancestors 'none'"
+    letterhead = CompanyLetterhead.objects.filter(organization=organization).first() if doc.letterhead_enabled else None
+    for page in pages:
+        slot = doc.letterhead_first_slot if page["number"] == 1 else doc.letterhead_other_slot
+        page["show_letterhead_guides"] = bool(letterhead and slot != "none" and (slot == "1" and letterhead.image or slot == "2" and letterhead.image_second))
+        page["guide_top_pct"] = round((letterhead.margin_top_mm / 297) * 100, 4) if letterhead else 0
+        page["guide_bottom_pct"] = round((letterhead.margin_bottom_mm / 297) * 100, 4) if letterhead else 0
+        page["guide_left_pct"] = round((letterhead.margin_left_mm / 210) * 100, 4) if letterhead else 0
+        page["guide_right_pct"] = round((letterhead.margin_right_mm / 210) * 100, 4) if letterhead else 0
+    nonce = secrets.token_urlsafe(18)
+    response = render(request, "attendance/digidoc_preview.html", {
+        "document": doc, "pages": pages,
+        "csp_nonce": nonce,
+        "letterhead_margins": {
+            "top": letterhead.margin_top_mm if letterhead else 0,
+            "bottom": letterhead.margin_bottom_mm if letterhead else 0,
+            "left": letterhead.margin_left_mm if letterhead else 0,
+            "right": letterhead.margin_right_mm if letterhead else 0,
+        },
+        "has_letterhead_guides": any(page["show_letterhead_guides"] for page in pages),
+    })
+    response["Content-Security-Policy"] = f"default-src 'self'; img-src data:; style-src 'self' 'nonce-{nonce}'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
     response["X-Frame-Options"] = "DENY"
     response["Referrer-Policy"] = "same-origin"
     response["Cache-Control"] = "private, no-store"

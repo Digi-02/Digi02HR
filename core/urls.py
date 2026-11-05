@@ -165,6 +165,7 @@ urlpatterns = [
     path('digidoc/create/', digidoc_views.digidoc_create, name='digidoc_create'),
     path('digidoc/images/upload/', digidoc_views.digidoc_image_upload, name='digidoc_image_upload'),
     path('digidoc/images/<uuid:asset_id>/', digidoc_views.digidoc_image, name='digidoc_image'),
+    path('digidoc/<uuid:document_id>/thumbnail.png', digidoc_views.digidoc_thumbnail, name='digidoc_thumbnail'),
     path('digidoc/<uuid:document_id>/', digidoc_views.digidoc_editor, name='digidoc_editor'),
     path('digidoc/<uuid:document_id>/save/', digidoc_views.digidoc_save, name='digidoc_save'),
     path('digidoc/<uuid:document_id>/preview/', digidoc_views.digidoc_preview, name='digidoc_preview'),

@@ -7,9 +7,9 @@
            aria-label="{{ active_organization.name|default:'DIGI HR' }} home">
             {% if active_organization and active_organization.logo %}
             <span class="brand-logo-full{% if active_organization.logo_is_light %} dark-tile{% endif %}"><img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo"></span>
-            <span class="brand-initials brand-initials--rail" aria-hidden="true">{{ active_organization.name|slice:":1"|upper }}</span>
+            <span class="brand-initials brand-initials--rail" aria-hidden="true">{{ shell_organization_initials|default:"DH" }}</span>
             {% elif active_organization %}
-            <span class="brand-initials">{{ active_organization.name|slice:":2"|upper }}</span>
+            <span class="brand-initials">{{ shell_organization_initials|default:"DH" }}</span>
             {% else %}
             <span class="brand-initials">HR</span>
             {% endif %}

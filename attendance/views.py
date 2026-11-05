@@ -5119,6 +5119,8 @@ def organization_branding(request):
             ('right', stored_letterhead.margin_right_mm if stored_letterhead else 20),
         ],
         'letterhead_image_url': reverse('company_letterhead_image'),
+        'letterhead_second_image_url': reverse('company_letterhead_image') + '?slot=2',
+        'has_second_letterhead': bool(stored_letterhead and stored_letterhead.image_second),
         'form': form,
         'suggested_color': suggested,
         'preview_vars': accent_vars(
@@ -5149,7 +5151,7 @@ def _letterhead_values(post):
         if value < 0 or value > 100:
             raise ValidationError('Margins must be between 0 and 100 mm.')
         values[field] = value
-    if values['top'] + values['bottom'] >= 297 or values['left'] + values['right'] >= 210:
+    if values['top'] + values['bottom'] + 8 >= 297 or values['left'] + values['right'] >= 210:
         raise ValidationError('The selected margins leave no printable area on A4.')
     values['scale_mode'] = post.get('letterhead_scale_mode', 'fit')
     values['default_page_mode'] = post.get('letterhead_default_page_mode', 'every')
@@ -5171,7 +5173,10 @@ def _handle_company_letterhead_post(request, organization):
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
     try:
         values = _letterhead_values(request.POST)
-        if action == 'letterhead_upload':
+        if action in {'letterhead_upload', 'letterhead_upload_1', 'letterhead_upload_2'}:
+            slot = '2' if action == 'letterhead_upload_2' or request.POST.get('letterhead_slot') == '2' else '1'
+            if slot == '2' and not (asset and asset.image):
+                raise ValidationError('Upload the first letterhead before adding a second one.')
             cutoff = timezone.now() - timedelta(hours=1)
             uploads = CompanyLetterheadUpload.objects.filter(
                 user=request.user, created_at__gte=cutoff
@@ -5180,7 +5185,7 @@ def _handle_company_letterhead_post(request, organization):
                 return HttpResponse('Upload limit reached. Try again later.', status=429)
             CompanyLetterheadUpload.objects.create(organization=organization, user=request.user)
 
-            upload = request.FILES.get('letterhead_file')
+            upload = request.FILES.get('letterhead_file_2' if slot == '2' else 'letterhead_file')
             data, image_format, extension, width, height = sanitize_letterhead(upload)
 
             quota = settings.DIGIDOC_COMPANY_STORAGE_QUOTA_BYTES
@@ -5195,12 +5200,14 @@ def _handle_company_letterhead_post(request, organization):
                     organization=organization
                 ).first()
                 current = CompanyLetterhead.objects.filter(organization=organization).first()
-                old_name = current.image.name if current and current.image else None
+                image_field = 'image_second' if slot == '2' else 'image'
+                old_image = getattr(current, image_field) if current else None
+                old_name = old_image.name if old_image else None
                 if current is None:
                     current = CompanyLetterhead(organization=organization)
-                current.image_format = image_format.lower()
-                current.image_width = width
-                current.image_height = height
+                setattr(current, f'{image_field}_format' if slot == '2' else 'image_format', image_format.lower())
+                setattr(current, f'{image_field}_width' if slot == '2' else 'image_width', width)
+                setattr(current, f'{image_field}_height' if slot == '2' else 'image_height', height)
                 current.scale_mode = values['scale_mode']
                 current.default_page_mode = values['default_page_mode']
                 current.margin_top_mm = values['top']
@@ -5208,17 +5215,18 @@ def _handle_company_letterhead_post(request, organization):
                 current.margin_left_mm = values['left']
                 current.margin_right_mm = values['right']
                 import uuid
-                current.image.save(f"{uuid.uuid4().hex}.{extension}", ContentFile(data), save=False)
+                getattr(current, image_field).save(f"{uuid.uuid4().hex}.{extension}", ContentFile(data), save=False)
                 current.save()
-                if old_name and old_name != current.image.name:
-                    storage = current.image.storage
+                new_image = getattr(current, image_field)
+                if old_name and old_name != new_image.name:
+                    storage = new_image.storage
                     transaction.on_commit(lambda: storage.delete(old_name))
                 write_audit_log(
                     request, organization=organization, area='organization',
                     action='branding.letterhead_uploaded',
-                    summary=f'Updated company letterhead for {organization.name}',
+                    summary=f'Updated company letterhead {slot} for {organization.name}',
                     target=current,
-                    metadata={'format': image_format, 'width': width, 'height': height},
+                    metadata={'slot': slot, 'format': image_format, 'width': width, 'height': height},
                 )
             messages.success(request, 'Letterhead uploaded and safely processed.')
         elif action == 'letterhead_save_settings':
@@ -5244,16 +5252,33 @@ def _handle_company_letterhead_post(request, organization):
             messages.success(request, 'Letterhead page settings saved.')
         elif action == 'letterhead_remove':
             if asset:
-                old_name = asset.image.name
+                old_names = [image.name for image in (asset.image, asset.image_second) if image]
                 storage = asset.image.storage
                 asset.delete()
-                transaction.on_commit(lambda: storage.delete(old_name))
+                transaction.on_commit(lambda: [storage.delete(name) for name in old_names])
                 write_audit_log(
                     request, organization=organization, area='organization',
                     action='branding.letterhead_removed',
                     summary=f'Removed company letterhead for {organization.name}',
                 )
             messages.success(request, 'Company letterhead removed.')
+        elif action == 'letterhead_remove_2':
+            if asset and asset.image_second:
+                old_name = asset.image_second.name
+                storage = asset.image_second.storage
+                asset.image_second = None
+                asset.image_second_format = ''
+                asset.image_second_width = None
+                asset.image_second_height = None
+                asset.save(update_fields=['image_second', 'image_second_format', 'image_second_width', 'image_second_height', 'updated_at'])
+                transaction.on_commit(lambda: storage.delete(old_name))
+                write_audit_log(
+                    request, organization=organization, area='organization',
+                    action='branding.letterhead_removed',
+                    summary=f'Removed company letterhead 2 for {organization.name}',
+                    target=asset, metadata={'slot': '2'},
+                )
+            messages.success(request, 'Second letterhead removed.')
         else:
             raise ValidationError('Unknown letterhead action.')
     except ValidationError as exc:
@@ -5271,10 +5296,15 @@ def company_letterhead_image(request):
     if not organization:
         return HttpResponse(status=404)
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
-    if not asset or not asset.image:
+    slot = request.GET.get('slot', '1')
+    if slot not in {'1', '2'}:
         return HttpResponse(status=404)
-    response = FileResponse(asset.image.open('rb'), content_type=(
-        'image/png' if asset.image_format == 'png' else 'image/jpeg'
+    field = 'image_second' if slot == '2' else 'image'
+    if not asset or not getattr(asset, field):
+        return HttpResponse(status=404)
+    image_format = asset.image_second_format if slot == '2' else asset.image_format
+    response = FileResponse(getattr(asset, field).open('rb'), content_type=(
+        'image/png' if image_format == 'png' else 'image/jpeg'
     ))
     response['X-Content-Type-Options'] = 'nosniff'
     response['Cache-Control'] = 'private, no-store'

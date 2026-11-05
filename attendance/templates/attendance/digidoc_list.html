@@ -1,16 +1,55 @@
 {% extends 'attendance/base.html' %}
+{% load static %}
 {% block title %}DigiDoc | HR Management{% endblock %}
 {% block page_title %}DigiDoc{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/digidoc-library.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'attendance/digidoc-library.js' %}" defer></script>{% endblock %}
 {% block content %}
-<div class="container-fluid p-0">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div><h2 class="mb-1">My documents</h2><p class="text-muted mb-0">Create and edit company documents.</p></div>
-    <form method="post" action="{% url 'digidoc_create' %}">{% csrf_token %}<button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>New document</button></form>
-  </div>
-  <form method="get" class="mb-3"><div class="input-group" style="max-width:520px"><input class="form-control" name="q" value="{{ query }}" placeholder="Search documents" aria-label="Search documents"><button class="btn btn-outline-secondary">Search</button></div></form>
-  <div class="card border-0"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Title</th><th>Last edited</th><th>Created by</th><th class="text-end">Actions</th></tr></thead><tbody>
-  {% for document in documents %}<tr><td><a class="fw-semibold text-decoration-none" href="{% url 'digidoc_editor' document.id %}">{{ document.title }}</a></td><td>{{ document.updated_at|date:"M j, Y · g:i A" }}</td><td>{{ document.created_by.get_full_name|default:document.created_by.username }}</td><td class="text-end"><div class="d-inline-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="{% url 'digidoc_editor' document.id %}">Open</a><form method="post" action="{% url 'digidoc_duplicate' document.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Duplicate</button></form><a class="btn btn-sm btn-outline-secondary" href="{% url 'digidoc_pdf' document.id %}">PDF</a><form method="post" action="{% url 'digidoc_delete' document.id %}" onsubmit="return confirm('Delete this document?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Delete</button></form></div></td></tr>
-  {% empty %}<tr><td colspan="4" class="text-center text-muted py-5">{% if query %}No documents match “{{ query }}”.{% else %}No documents yet. Create your first document to get started.{% endif %}</td></tr>{% endfor %}
-  </tbody></table></div></div>
-</div>
+<main class="dd-library" aria-labelledby="dd-library-title">
+  <header class="dd-library-header">
+    <div><p class="dd-library-eyebrow">DIGIDOC</p><h1 id="dd-library-title">Recent documents</h1><p class="dd-library-subtitle">Pick up where you left off or create a new document.</p></div>
+    <form method="post" action="{% url 'digidoc_create' %}">{% csrf_token %}<button class="dd-library-new" type="submit"><span aria-hidden="true">＋</span> New document</button></form>
+  </header>
+
+  <form class="dd-library-toolbar" method="get" role="search">
+    <label class="dd-library-search"><span class="bi bi-search" aria-hidden="true"></span><input type="search" name="q" value="{{ query }}" placeholder="Search documents" aria-label="Search documents"><button type="submit">Search</button></label>
+    <div class="dd-library-options">
+      <label class="dd-library-filter"><span class="bi bi-people" aria-hidden="true"></span><select name="owner" aria-label="Filter by owner"><option value="" {% if not owner %}selected{% endif %}>Owned by anyone</option><option value="me" {% if owner == 'me' %}selected{% endif %}>Owned by me</option>{% for owner_row in owners %}<option value="{{ owner_row.0 }}" {% if owner == owner_row.0|stringformat:'s' %}selected{% endif %}>{% if owner_row.1 or owner_row.2 %}{{ owner_row.1 }} {{ owner_row.2 }}{% else %}{{ owner_row.3 }}{% endif %}</option>{% endfor %}</select></label>
+      <label class="dd-library-filter dd-library-sort"><span class="bi bi-sort-alpha-down" aria-hidden="true"></span><select name="sort" aria-label="Sort documents"><option value="recent" {% if sort == 'recent' %}selected{% endif %}>Last edited</option><option value="title" {% if sort == 'title' %}selected{% endif %}>Title A–Z</option></select></label>
+    </div>
+  </form>
+
+  {% if documents %}
+  <section class="dd-document-grid" aria-label="Recent documents">
+    {% for document in documents %}
+    <article class="dd-document-card">
+      <a class="dd-document-preview" href="{% url 'digidoc_editor' document.id %}" aria-label="Open {{ document.title }}">
+        <img src="{% url 'digidoc_thumbnail' document.id %}" alt="First page preview of {{ document.title }}" loading="lazy" decoding="async">
+        <span class="dd-document-preview-placeholder" hidden><span class="bi bi-file-earmark-text" aria-hidden="true"></span><span>Preview unavailable</span></span>
+      </a>
+      <div class="dd-document-details">
+        <a class="dd-document-title" href="{% url 'digidoc_editor' document.id %}" title="{{ document.title }}">{{ document.title }}</a>
+        <div class="dd-document-meta">
+          <span class="dd-document-type" aria-label="DigiDoc document"><span class="bi bi-file-earmark-word-fill" aria-hidden="true"></span></span>
+          <span class="dd-document-owner" title="Created by {{ document.created_by.get_full_name|default:document.created_by.username }}"><span class="bi bi-people-fill" aria-hidden="true"></span><span class="dd-sr-only">Created by {{ document.created_by.get_full_name|default:document.created_by.username }}</span></span>
+          <time datetime="{{ document.updated_at|date:'c' }}" title="Last edited {{ document.updated_at|date:'M j, Y, g:i A' }}">Edited {{ document.updated_at|date:"M j, Y" }}</time>
+          <details class="dd-document-menu">
+            <summary aria-label="Actions for {{ document.title }}" title="Document actions"><span aria-hidden="true">⋮</span></summary>
+            <div class="dd-document-menu-popover" role="menu">
+              <a role="menuitem" href="{% url 'digidoc_editor' document.id %}"><span class="bi bi-pencil-square" aria-hidden="true"></span> Open</a>
+              <form method="post" action="{% url 'digidoc_duplicate' document.id %}">{% csrf_token %}<button role="menuitem" type="submit"><span class="bi bi-copy" aria-hidden="true"></span> Make a copy</button></form>
+              <a role="menuitem" href="{% url 'digidoc_pdf' document.id %}"><span class="bi bi-file-earmark-pdf" aria-hidden="true"></span> Download PDF</a>
+              <form class="dd-document-delete-form" method="post" action="{% url 'digidoc_delete' document.id %}">{% csrf_token %}<button class="dd-document-delete" role="menuitem" type="submit"><span class="bi bi-trash3" aria-hidden="true"></span> Delete</button></form>
+            </div>
+          </details>
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% if document_page.has_other_pages %}<nav class="dd-library-pagination" aria-label="Document pages"><span>Page {{ document_page.number }} of {{ document_page.paginator.num_pages }}</span><div>{% if document_page.has_previous %}<a href="?q={{ query|urlencode }}&owner={{ owner|urlencode }}&sort={{ sort }}&page={{ document_page.previous_page_number }}" aria-label="Previous page">‹</a>{% endif %}{% if document_page.has_next %}<a href="?q={{ query|urlencode }}&owner={{ owner|urlencode }}&sort={{ sort }}&page={{ document_page.next_page_number }}" aria-label="Next page">›</a>{% endif %}</div></nav>{% endif %}
+  {% else %}
+  <section class="dd-library-empty"><span class="bi bi-file-earmark-plus" aria-hidden="true"></span><h2>{% if query %}No matching documents{% else %}Your documents will appear here{% endif %}</h2><p>{% if query %}Try another search or clear the filters.{% else %}Create a document to get started. Your first-page previews will appear here automatically.{% endif %}</p>{% if query or owner %}<a href="{% url 'digidoc_list' %}">Clear filters</a>{% endif %}</section>
+  {% endif %}
+</main>
 {% endblock %}

@@ -61,7 +61,8 @@
     zoomOutput.textContent = `${zoom}%`;
     statusOutput.value = `${zoom}%`;
     statusOutput.textContent = `${zoom}%`;
-    sheet.className = `dd-sheet${document.getElementById('dd-letterhead').checked ? ' dd-letterhead' : ''} dd-zoom-${zoom}`;
+    sheet.classList.forEach(name => { if (name.startsWith('dd-zoom-')) sheet.classList.remove(name); });
+    sheet.classList.add(`dd-zoom-${zoom}`);
     sheet.style.zoom = String(zoom / 100);
     document.getElementById('dd-ruler-wrap').style.zoom = String(zoom / 100);
   }
@@ -90,9 +91,6 @@
     checkbox.checked = !checkbox.checked;
     letterheadToggle.textContent = checkbox.checked ? 'Remove letterhead' : 'Letterhead';
     checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  document.getElementById('dd-letterhead-mode').addEventListener('change', event => {
-    document.getElementById('dd-sheet').dataset.letterheadMode = event.target.value;
   });
   document.getElementById('dd-letterhead').addEventListener('change', event => {
     letterheadToggle.textContent = event.target.checked ? 'Remove letterhead' : 'Letterhead';
