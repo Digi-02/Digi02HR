@@ -426,6 +426,8 @@ class EmployeeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.organization = kwargs.pop('organization', None)
         super().__init__(*args, **kwargs)
+        self.fields['is_active'].label = 'Active employee'
+        self.fields['is_active'].help_text = 'Inactive employees are removed from attendance counts and daily absence lists.'
 
         if self.organization and not self.instance.pk:
             self.instance.organization = self.organization
@@ -499,6 +501,9 @@ class EmployeeForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         category = cleaned_data.get('category')
+
+        if cleaned_data.get('employment_status') in {'terminated', 'completed'}:
+            cleaned_data['is_active'] = False
 
         # Staff-specific validation (birthday is now optional for all)
         if category and category.code == 'STAFF':

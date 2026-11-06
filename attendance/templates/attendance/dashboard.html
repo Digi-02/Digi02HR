@@ -51,6 +51,38 @@
     {% endfor %}
   </section>
 
+  <section class="overview-panel overview-inactive" aria-labelledby="inactive-employees-title">
+    <div class="overview-panel__head">
+      <div>
+        <h2 id="inactive-employees-title">Inactive employees <span class="overview-pill">{{ inactive_employee_count }}</span></h2>
+        <p>These profiles are excluded from daily attendance and absence counts.</p>
+      </div>
+      <a href="{% url 'employee_list' %}?status=inactive">View all inactive employees <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    </div>
+    {% if inactive_employee_rows %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Employee</th><th>Category</th><th>Department</th><th class="text-end">Action</th></tr></thead>
+        <tbody>
+          {% for employee in inactive_employee_rows %}
+          <tr>
+            <td><strong>{{ employee.display_name }}</strong><br><small class="text-muted">{{ employee.employee_id }}</small></td>
+            <td>{{ employee.category.name }}</td>
+            <td>{{ employee.department|default:"-" }}</td>
+            <td class="text-end">
+              <form method="post" action="{% url 'employee_reactivate' employee.pk %}" class="d-inline">
+                {% csrf_token %}<input type="hidden" name="return_to" value="dashboard">
+                <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-person-check me-1" aria-hidden="true"></i>Reactivate</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<div class="overview-empty">No inactive employees.</div>{% endif %}
+  </section>
+
   <div class="overview-section-grid">
     <div>
       <section class="overview-panel" aria-labelledby="weekly-attendance-title">

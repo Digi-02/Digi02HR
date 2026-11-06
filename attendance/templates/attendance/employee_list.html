@@ -10,8 +10,8 @@
 
     <div class="page-head">
         <div>
-            <h5>Employees</h5>
-            <p>Everyone in {{ organization.name }}. Search, filter and manage profiles.</p>
+            <h5>{% if selected_status == 'inactive' %}Inactive employees{% else %}Employees{% endif %}</h5>
+            <p>{% if selected_status == 'inactive' %}Inactive profiles are kept out of daily attendance. Reactivate a person here to return them to the active roster.{% else %}Everyone in {{ organization.name }}. Search, filter and manage profiles.{% endif %}</p>
         </div>
         <div class="responsive-actions">
             <a href="{% url 'employee_create' %}" class="btn btn-primary btn-sm">
@@ -128,7 +128,9 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if employee.is_checked_in_today %}
+                                {% if not employee.is_active %}
+                                    <span class="badge badge-neutral"><i class="bi bi-person-slash me-1"></i>Excluded</span>
+                                {% elif employee.is_checked_in_today %}
                                     <span class="badge badge-present">
                                         <i class="bi bi-clock me-1"></i> Checked in
                                     </span>
@@ -155,6 +157,14 @@
                                        title="Delete">
                                         <i class="bi bi-trash"></i>
                                     </a>
+                                    {% if not employee.is_active %}
+                                    <form method="post" action="{% url 'employee_reactivate' employee.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Reactivate {{ employee.full_name }}">
+                                            <i class="bi bi-person-check me-1" aria-hidden="true"></i>Reactivate
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

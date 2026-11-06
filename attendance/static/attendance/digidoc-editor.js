@@ -164,12 +164,20 @@
     return continuation;
   }
   function paginate() {
+    let paginationChanged = false;
+    const selection = window.getSelection();
+    const activeSelection = selection && selection.anchorNode && sheet.contains(selection.anchorNode)
+      ? {
+          anchor: selectionOffset(selection.anchorNode, selection.anchorOffset),
+          focus: selectionOffset(selection.focusNode, selection.focusOffset),
+        }
+      : null;
     let pages = Array.from(sheet.querySelectorAll(':scope > .dd-page'));
     if (!pages.length) pages = [createPage()];
     // Pull content out of any accidental root-level nodes created by browser
     // editing, while preserving the content and active selection.
     const stray = Array.from(sheet.childNodes).filter(node => !(node.nodeType === Node.ELEMENT_NODE && node.classList.contains('dd-page')));
-    if (stray.length) pages[pages.length - 1].append(...stray);
+    if (stray.length) { pages[pages.length - 1].append(...stray); paginationChanged = true; }
     for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       const page = pages[pageIndex];
       const pageRect = page.getBoundingClientRect();
@@ -184,6 +192,7 @@
             let next = pages[pageIndex + 1];
             if (!next) { next = createPage(page); pages.push(next); }
             moveBefore(nodes.slice(nodeIndex + 1), next);
+            paginationChanged = true;
             break;
           }
           continue;
@@ -193,6 +202,7 @@
           let next = pages[pageIndex + 1];
           if (!next) { next = createPage(page); pages.push(next); }
           moveBefore(nodes.slice(nodeIndex), next);
+          paginationChanged = true;
           break;
         }
         const continuation = splitOversizedTextBlock(node, page, contentBottom);
@@ -200,14 +210,20 @@
           let next = pages[pageIndex + 1];
           if (!next) { next = createPage(page); pages.push(next); }
           next.insertBefore(continuation, next.firstChild);
+          paginationChanged = true;
         }
       }
     }
     pages = Array.from(sheet.querySelectorAll(':scope > .dd-page'));
     while (pages.length > 1 && !Array.from(pages[pages.length - 1].childNodes).some(node => !(node.nodeType === Node.ELEMENT_NODE && node.classList.contains('dd-page-zones')))) {
-      pages.pop().remove();
+      pages.pop().remove(); paginationChanged = true;
     }
     pages.forEach((page, index) => { page.dataset.pageNumber = String(index + 1); });
+    if (paginationChanged && activeSelection && activeSelection.anchor !== null && activeSelection.focus !== null && selection.setBaseAndExtent) {
+      const anchor = historyPointAt(activeSelection.anchor);
+      const focus = historyPointAt(activeSelection.focus);
+      if (anchor && focus) selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+    }
     syncLetterheadPages();
   }
   paginate();

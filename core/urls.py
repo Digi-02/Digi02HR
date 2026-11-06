@@ -159,6 +159,7 @@ urlpatterns = [
     path('employees/<int:pk>/', views.employee_detail, name='employee_detail'),
     path('employees/<int:pk>/account/', views.employee_account_create, name='employee_account_create'),
     path('employees/<int:pk>/edit/', views.employee_edit, name='employee_edit'),
+    path('employees/<int:pk>/reactivate/', views.employee_reactivate, name='employee_reactivate'),
     path('employees/<int:pk>/delete/', views.employee_delete, name='employee_delete'),
     path('documents/', views.employee_documents, name='employee_documents'),
     path('digidoc/', digidoc_views.digidoc_list, name='digidoc_list'),

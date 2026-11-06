@@ -533,6 +533,16 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertEqual(selection_page, "1", "The caret should stay on the page while there is room")
             self.assertEqual(page.locator("#dd-sheet > .dd-page").first.get_attribute("data-letterhead-slot"), "1")
             self.assertNotEqual(page.locator("#dd-sheet > .dd-page").first.evaluate("el => getComputedStyle(el).backgroundImage"), "none")
+            page.locator("#dd-sheet .dd-page p").first.evaluate("p => { p.textContent = 'w'.repeat(14000); const range = document.createRange(); range.selectNodeContents(p); range.collapse(false); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); p.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:'w'})); }")
+            page.wait_for_function("document.querySelectorAll('#dd-sheet > .dd-page').length > 1")
+            selection_page = page.evaluate("() => getSelection().anchorNode.parentElement.closest('.dd-page')?.dataset.pageNumber")
+            self.assertEqual(selection_page, str(page.locator("#dd-sheet > .dd-page").count()), "Pagination should keep the caret at the end of the flowed text")
+            page.keyboard.press("Enter")
+            page.keyboard.type("Continued on the next page")
+            selection_page = page.evaluate("() => getSelection().anchorNode.parentElement.closest('.dd-page')?.dataset.pageNumber")
+            final_page = page.locator("#dd-sheet > .dd-page").count()
+            self.assertEqual(selection_page, str(final_page), "Typing at the end of flowed text should keep the caret on its continuation page")
+            self.assertIn("Continued on the next page", page.locator("#dd-sheet > .dd-page").last.inner_text())
             browser.close()
 
     def test_preview_viewer_zoom_navigation_and_print_layout(self):

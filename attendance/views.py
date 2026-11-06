@@ -1126,6 +1126,14 @@ def dashboard_view(request):
         is_active=True,
     ).select_related('category', 'department')
     total_employees = active_employees.count()
+    inactive_employee_count = Employee.objects.filter(
+        organization=organization,
+        is_active=False,
+    ).count()
+    inactive_employee_rows = Employee.objects.filter(
+        organization=organization,
+        is_active=False,
+    ).select_related('category', 'department').order_by('first_name', 'last_name')[:5]
     
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
@@ -1353,6 +1361,12 @@ def dashboard_view(request):
             'trend': leave_trend,
             'trend_label': 'Requests submitted · 7 days',
         },
+        {
+            'label': 'Inactive employees', 'value': inactive_employee_count,
+            'context': 'Excluded from daily attendance',
+            'icon': 'person_off', 'style': 'violet',
+            'href': reverse('employee_list') + '?status=inactive',
+        },
     ]
     
     show_checklist = (total_employees == 0)
@@ -1373,6 +1387,8 @@ def dashboard_view(request):
     context = {
         'today': today,
         'total_employees': total_employees,
+        'inactive_employee_count': inactive_employee_count,
+        'inactive_employee_rows': inactive_employee_rows,
         'present_count': present_count,
         'checked_in_count': checked_in_count,
         'checked_out_count': checked_out_count,
@@ -1453,6 +1469,7 @@ def category_dashboard(request, code):
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
         employee__category=category,
+        employee__is_active=True,
         **local_date_range_filter('check_in_time', today),
     ).select_related('employee__category', 'employee__department')
 
@@ -1563,6 +1580,32 @@ def employee_list(request):
     }
     
     return render(request, 'attendance/employee_list.html', context)
+
+
+@login_required
+@hr_required
+@require_POST
+def employee_reactivate(request, pk):
+    """Return an inactive employee to active attendance and employee lists."""
+
+    organization = get_active_organization(request)
+    employee = get_object_or_404(Employee, organization=organization, pk=pk, is_active=False)
+    employee.is_active = True
+    employee.employment_status = 'active'
+    employee.save(update_fields=['is_active', 'employment_status', 'updated_at'])
+    write_audit_log(
+        request,
+        organization=organization,
+        area='employee',
+        action='employee_reactivated',
+        target=employee,
+        summary=f'Reactivated employee profile for {employee.full_name}.',
+        metadata={'employee_id': employee.employee_id},
+    )
+    messages.success(request, f'{employee.full_name} is active again and included in attendance.')
+    if request.POST.get('return_to') == 'dashboard':
+        return redirect('dashboard')
+    return redirect(f"{reverse('employee_list')}?status=inactive")
 
 
 @login_required
