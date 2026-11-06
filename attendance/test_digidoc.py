@@ -6,7 +6,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from attendance.digidoc import _render_pdf_isolated, validate_document_json
-from attendance.digidoc_exports import plain_text
+from attendance.digidoc_exports import _validate_rtf, plain_text
 from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, Organization, OrganizationMembership
 from attendance.shell import build_navigation
 from PIL import Image
@@ -162,11 +162,93 @@ class DigiDocPhaseTwoTests(TestCase):
         image_id = "8d1b0a3c-b2b2-4bce-9f1e-f299654ea96c"
         content = {"type": "doc", "content": [{"type": "image", "attrs": {"asset_id": image_id, "alt": "Report chart", "width_percent": 65, "align": "right", "crop": "landscape"}}]}
         cleaned = validate_document_json(content)
-        self.assertEqual(cleaned["content"][0]["attrs"], {"asset_id": image_id, "alt": "Report chart", "width_percent": 65, "align": "right", "crop": "landscape"})
+        self.assertEqual(cleaned["content"][0]["attrs"], {"asset_id": image_id, "alt": "Report chart", "width_percent": 65, "align": "right", "crop": "landscape", "layout": "inline", "wrap_side": "right", "margin_pt": 0, "anchor": "paragraph", "x_pt": 0, "y_pt": 0, "space_before_pt": 0, "space_after_pt": 0})
         for key, value in (("width_percent", 0), ("width_percent", 101), ("width_percent", 10.5), ("width_percent", True), ("align", "justify"), ("align", []), ("crop", "url(https://bad.test)"), ("crop", {}), ("style", "width:100%")):
             attrs = {"asset_id": image_id, "alt": "Chart", key: value}
             with self.subTest(key=key, value=value), self.assertRaises(ValidationError):
                 validate_document_json({"type": "doc", "content": [{"type": "image", "attrs": attrs}]})
+
+    def test_image_layout_attributes_are_strict_and_legacy_images_get_safe_defaults(self):
+        image_id = "8d1b0a3c-b2b2-4bce-9f1e-f299654ea96c"
+        legacy = validate_document_json({"type": "doc", "content": [{"type": "image", "attrs": {"asset_id": image_id, "alt": "Legacy"}}]})
+        self.assertEqual(legacy["content"][0]["attrs"]["layout"], "inline")
+        self.assertEqual(legacy["content"][0]["attrs"]["space_before_pt"], 0)
+        for key, value in (("layout", "url(https://bad.test)"), ("wrap_side", "center"), ("margin_pt", 72.1), ("margin_pt", "12px"), ("anchor", "body"), ("x_pt", -1), ("y_pt", 2001), ("space_before_pt", True), ("space_after_pt", 201), ("alt", "nul\x00byte"), ("alt", "javascript:alert(1)")):
+            attrs = {"asset_id": image_id, "alt": "safe", key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(ValidationError):
+                validate_document_json({"type": "doc", "content": [{"type": "image", "attrs": attrs}]})
+        floating = [{"type": "image", "attrs": {"asset_id": image_id, "alt": "float", "layout": "wrap"}} for _ in range(21)]
+        with self.assertRaises(ValidationError):
+            validate_document_json({"type": "doc", "content": floating})
+        with self.assertRaises(ValidationError):
+            validate_document_json({"type": "doc", "content": [{"type": "hardBreak"} for _ in range(50)]})
+        with self.assertRaises(ValidationError):
+            validate_document_json({"type": "doc", "content": [{"type": "image", "attrs": {"asset_id": image_id, "alt": "bad", "x_pt": float("nan")}}]})
+
+    def test_all_export_formats_embed_scoped_inline_images_and_preserve_spacing(self):
+        from attendance.digidoc import _build_pdf, _render_pdf_isolated
+        image_buffer = BytesIO()
+        Image.new("RGBA", (48, 32), (250, 120, 20, 180)).save(image_buffer, format="PNG")
+        asset = DigiDocImageAsset(organization=self.organization, uploaded_by=self.owner, image_format="png", image_width=48, image_height=32)
+        asset.image.save("all-formats.png", ContentFile(image_buffer.getvalue()), save=True)
+        image_nodes = []
+        for align in ("left", "center", "right"):
+            for crop in ("none", "square", "landscape", "portrait"):
+                image_nodes.append({"type": "image", "attrs": {"asset_id": str(asset.pk), "alt": f"{align} {crop}", "align": align, "crop": crop, "width_percent": 60, "space_before_pt": 8, "space_after_pt": 12}})
+        content = {"type": "doc", "content": [
+            {"type": "paragraph", "attrs": {"align": "center"}, "content": [{"type": "text", "text": "Before inline "}, image_nodes.pop(0), {"type": "text", "text": " after inline"}]},
+            *image_nodes,
+        ]}
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Image exports", content_json=content)
+        export_assets = {str(asset.pk): image_buffer.getvalue()}
+        pdf = _build_pdf(document, self.organization, pdf_assets=export_assets)
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        self.assertIn(b"/Subtype /Image", pdf)
+        inline_document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Inline image PDF", content_json={"type":"doc", "content":[{"type":"paragraph", "content":[{"type":"text", "text":"Before "}, {"type":"image", "attrs":{"asset_id":str(asset.pk), "alt":"Inline image", "space_before_pt":4, "space_after_pt":6}}, {"type":"text", "text":" after"}]}]})
+        isolated_pdf = _render_pdf_isolated(inline_document)
+        self.assertTrue(isolated_pdf.startswith(b"%PDF-"))
+        self.assertIn(b"/Subtype /Image", isolated_pdf)
+        for file_format in ("docx", "odt", "rtf", "txt"):
+            with self.subTest(file_format=file_format):
+                response = self.client.get(reverse("digidoc_export", args=[document.pk, file_format]))
+                self.assertEqual(response.status_code, 200, response.content[:300])
+                if file_format == "docx":
+                    archive = ZipFile(BytesIO(response.content))
+                    self.assertIsNone(archive.testzip())
+                    self.assertGreaterEqual(len([name for name in archive.namelist() if name.startswith("word/media/")]), 12)
+                    ElementTree.fromstring(archive.read("word/document.xml"))
+                    relationships = ElementTree.fromstring(archive.read("word/_rels/document.xml.rels"))
+                    self.assertTrue(all(rel.attrib.get("TargetMode") != "External" for rel in relationships))
+                    self.assertIn(b"descr=\"left none\"", archive.read("word/document.xml"))
+                elif file_format == "odt":
+                    archive = ZipFile(BytesIO(response.content))
+                    self.assertIsNone(archive.testzip())
+                    self.assertGreaterEqual(len([name for name in archive.namelist() if name.startswith("Pictures/")]), 12)
+                    ElementTree.fromstring(archive.read("content.xml"))
+                elif file_format == "rtf":
+                    _validate_rtf(response.content)
+                    self.assertGreaterEqual(response.content.count(b"\\pict"), 12)
+                    self.assertIn(b"\\pngblip", response.content)
+                    with self.assertRaises(ValueError):
+                        _validate_rtf(b"{\\rtf1\\object unsafe}")
+                else:
+                    text = response.content.decode("utf-8")
+                    self.assertIn("[Image: left none]", text)
+                    self.assertLessEqual(text.count("\n\n\n\n\n\n"), 12)
+
+    def test_export_uses_only_assets_owned_by_the_current_organization(self):
+        other_org = Organization.objects.create(name="Other DigiDoc", slug="other-digidoc", setup_completed=True)
+        foreign = DigiDocImageAsset(organization=other_org, uploaded_by=self.owner, image_format="png", image_width=10, image_height=10)
+        image_data = BytesIO()
+        Image.new("RGB", (10, 10), "red").save(image_data, format="PNG")
+        foreign.image.save("foreign.png", ContentFile(image_data.getvalue()), save=True)
+        content = {"type": "doc", "content": [{"type": "image", "attrs": {"asset_id": str(foreign.pk), "alt": "Confidential"}}]}
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json=content)
+        response = self.client.get(reverse("digidoc_export", args=[document.pk, "docx"]))
+        self.assertEqual(response.status_code, 200)
+        archive = ZipFile(BytesIO(response.content))
+        self.assertFalse(any(name.startswith("word/media/") for name in archive.namelist()))
+        self.assertIn("[Image unavailable: Confidential]", "".join(ElementTree.fromstring(archive.read("word/document.xml")).itertext()))
 
     def test_inserted_image_can_be_resized_aligned_cropped_and_dragged(self):
         from playwright.sync_api import sync_playwright
@@ -311,6 +393,36 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertEqual(page.locator("#dd-sheet").text_content(), long_text)
             first_height = pages.nth(0).evaluate("node => node.getBoundingClientRect().height")
             self.assertAlmostEqual(first_height, 1123, delta=2)
+            browser.close()
+
+    def test_editor_splits_a_paragraph_at_the_footer_instead_of_moving_it_whole(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(
+            organization=self.organization,
+            created_by=self.owner,
+            title="Footer flow check",
+            content_json={"type": "doc", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "first paragraph " * 160}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": "SECOND_START " + ("continuation " * 100) + " SECOND_END"}]},
+            ]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.wait_for_function("document.querySelectorAll('#dd-sheet > .dd-page').length > 1")
+            first_page = page.locator("#dd-sheet > .dd-page").nth(0)
+            second_page = page.locator("#dd-sheet > .dd-page").nth(1)
+            self.assertIn("SECOND_START", first_page.inner_text())
+            self.assertIn("SECOND_END", second_page.inner_text())
+            combined = page.locator("#dd-sheet").evaluate("el => [...el.querySelectorAll(':scope > .dd-page')].map(p => [...p.childNodes].filter(n => !n.classList?.contains('dd-page-zones')).map(n => n.textContent).join('')).join('')")
+            self.assertEqual(combined, ("first paragraph " * 160) + "SECOND_START " + ("continuation " * 100) + " SECOND_END")
             browser.close()
 
     def test_pasting_markdown_letter_formats_headings_bold_and_left_alignment(self):

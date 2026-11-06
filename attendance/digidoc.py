@@ -51,6 +51,8 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_DEPTH = 20
 MAX_NODES = 10000
 MAX_TITLE = 200
+MAX_PAGES = 50
+MAX_FLOATING_IMAGES = 20
 ALLOWED_TYPES = {"doc", "paragraph", "heading", "text", "hardBreak", "horizontalRule", "bulletList", "orderedList", "listItem", "table", "tableRow", "tableCell", "image"}
 ALLOWED_MARKS = {"bold", "italic", "underline", "strike", "link", "fontFamily", "fontSize", "textColor", "highlight"}
 ALIGNMENTS = {"left", "center", "right", "justify"}
@@ -102,6 +104,8 @@ def validate_document_json(value):
         raise ValidationError("The document exceeds the 2 MB limit.")
     count = [0]
     image_count = [0]
+    page_breaks = [0]
+    floating_images = [0]
 
     def visit(node, depth=0):
         count[0] += 1
@@ -164,6 +168,10 @@ def validate_document_json(value):
             if type(level) is not int or level not in {1, 2, 3}:
                 raise ValidationError("Unsupported heading level.")
             cleaned["level"] = level
+        if kind == "hardBreak":
+            page_breaks[0] += 1
+            if page_breaks[0] >= MAX_PAGES:
+                raise ValidationError("A document can contain up to 50 pages.")
         attrs = node.get("attrs")
         if kind == "image" and attrs is None:
             raise ValidationError("Image references are required.")
@@ -171,10 +179,17 @@ def validate_document_json(value):
             if not isinstance(attrs, dict):
                 raise ValidationError("Unsupported element property.")
             if kind == "image":
-                if not {"asset_id", "alt"} <= set(attrs) or set(attrs) - {"asset_id", "alt", "width_percent", "align", "crop"}:
+                image_attrs = {"asset_id", "alt", "width_percent", "align", "crop", "layout", "wrap_side", "margin_pt", "anchor", "x_pt", "y_pt", "space_before_pt", "space_after_pt"}
+                if not {"asset_id", "alt"} <= set(attrs) or set(attrs) - image_attrs:
                     raise ValidationError("Invalid image reference.")
+                if any(isinstance(item, str) and "\x00" in item for item in attrs.values()):
+                    raise ValidationError("Image properties cannot contain null bytes.")
+                if any(isinstance(item, str) and re.search(r"(?:url\s*\(|https?://|data:|javascript:)", item, re.I) for item in attrs.values()):
+                    raise ValidationError("Image properties cannot contain URLs or CSS values.")
                 try:
-                    asset_id = str(uuid.UUID(str(attrs["asset_id"])))
+                    if not isinstance(attrs["asset_id"], str):
+                        raise ValueError("asset_id must be text")
+                    asset_id = str(uuid.UUID(attrs["asset_id"]))
                 except (ValueError, TypeError, AttributeError) as exc:
                     raise ValidationError("Invalid image reference.") from exc
                 alt = attrs.get("alt", "")
@@ -186,18 +201,51 @@ def validate_document_json(value):
                 width_percent = attrs.get("width_percent", 100)
                 alignment = attrs.get("align", "center")
                 crop = attrs.get("crop", "none")
+                layout = attrs.get("layout", "inline")
+                wrap_side = attrs.get("wrap_side", "right")
+                margin_pt = attrs.get("margin_pt", 0)
+                anchor = attrs.get("anchor", "paragraph")
+                x_pt = attrs.get("x_pt", 0)
+                y_pt = attrs.get("y_pt", 0)
+                space_before_pt = attrs.get("space_before_pt", 0)
+                space_after_pt = attrs.get("space_after_pt", 0)
                 if type(width_percent) is not int or not 10 <= width_percent <= 100:
                     raise ValidationError("Image width must be between 10 and 100 percent.")
                 if not isinstance(alignment, str) or alignment not in {"left", "center", "right"}:
                     raise ValidationError("Unsupported image alignment.")
                 if not isinstance(crop, str) or crop not in {"none", "square", "landscape", "portrait"}:
                     raise ValidationError("Unsupported image crop shape.")
+                if not isinstance(layout, str) or layout not in {"inline", "wrap", "break", "behind", "front"}:
+                    raise ValidationError("Unsupported image layout.")
+                if not isinstance(wrap_side, str) or wrap_side not in {"left", "right"}:
+                    raise ValidationError("Unsupported image wrap side.")
+                if not isinstance(anchor, str) or anchor not in {"paragraph", "page"}:
+                    raise ValidationError("Unsupported image anchor.")
+                for field, field_value, low, high in (
+                    ("margin_pt", margin_pt, 0, 72), ("x_pt", x_pt, 0, 2000),
+                    ("y_pt", y_pt, 0, 2000), ("space_before_pt", space_before_pt, 0, 200),
+                    ("space_after_pt", space_after_pt, 0, 200),
+                ):
+                    if type(field_value) is not int or not low <= field_value <= high:
+                        raise ValidationError(f"Invalid image {field.replace('_', ' ')}.")
+                if layout in {"wrap", "behind", "front"}:
+                    floating_images[0] += 1
+                    if floating_images[0] > MAX_FLOATING_IMAGES:
+                        raise ValidationError("A document can contain up to 20 floating images.")
                 cleaned["attrs"] = {
                     "asset_id": asset_id,
                     "alt": "".join(ch for ch in alt if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs"}),
                     "width_percent": width_percent,
                     "align": alignment,
                     "crop": crop,
+                    "layout": layout,
+                    "wrap_side": wrap_side,
+                    "margin_pt": margin_pt,
+                    "anchor": anchor,
+                    "x_pt": x_pt,
+                    "y_pt": y_pt,
+                    "space_before_pt": space_before_pt,
+                    "space_after_pt": space_after_pt,
                 }
             else:
                 allowed_attrs = {"align", "indent", "line_spacing"}
@@ -523,35 +571,66 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
     alignments = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT, "justify": TA_JUSTIFY}
     flow = []
 
+    def image_flow(node):
+        attrs = node.get("attrs", {})
+        asset_id = attrs.get("asset_id", "")
+        image_data = pdf_assets.get(asset_id, b"") if pdf_assets is not None else b""
+        if pdf_assets is None:
+            try:
+                asset = DigiDocImageAsset.objects.get(pk=asset_id, organization=organization)
+                with asset.image.open("rb") as image_file:
+                    image_data = image_file.read(8 * 1024 * 1024 + 1)
+            except (DigiDocImageAsset.DoesNotExist, OSError, ValueError):
+                image_data = b""
+        result = []
+        if attrs.get("space_before_pt", 0):
+            result.append(Spacer(1, attrs["space_before_pt"]))
+        if not image_data or len(image_data) > 8 * 1024 * 1024:
+            alt = html.escape(attrs.get("alt") or "Image unavailable")
+            result.append(Paragraph(f"[Image unavailable: {alt}]", styles["BodyText"]))
+        else:
+            crop_ratio = {"square": 1, "landscape": 16 / 9, "portrait": 3 / 4}.get(attrs.get("crop", "none"))
+            if crop_ratio:
+                from PIL import Image, ImageOps
+                with Image.open(BytesIO(image_data)) as source_image:
+                    cropped = ImageOps.fit(source_image.convert("RGB"), (1200, max(1, round(1200 / crop_ratio))), centering=(0.5, 0.5))
+                    image_buffer = BytesIO()
+                    cropped.save(image_buffer, format="JPEG", quality=90, optimize=True)
+                    image_data = image_buffer.getvalue()
+            image = PdfImage(BytesIO(image_data))
+            max_width, max_height = A4[0] - (left + right) * mm, A4[1] - (top + bottom) * mm
+            max_width *= attrs.get("width_percent", 100) / 100
+            scale = min(max_width / image.imageWidth, max_height / image.imageHeight, 1)
+            image.drawWidth = image.imageWidth * scale
+            image.drawHeight = image.imageHeight * scale
+            image.hAlign = {"left": "LEFT", "center": "CENTER", "right": "RIGHT"}.get(attrs.get("align", "center"), "CENTER")
+            result.append(image)
+        if attrs.get("space_after_pt", 0):
+            result.append(Spacer(1, attrs["space_after_pt"]))
+        return result
+
+    def paragraph_flows(node, style):
+        children = node.get("content", [])
+        if not any(child.get("type") == "image" for child in children):
+            return [Paragraph(_paragraph_html(node) or "&#160;", style)]
+        result, segment = [], []
+        for child in children:
+            if child.get("type") == "image":
+                if segment:
+                    result.append(Paragraph(_paragraph_html({"type": "paragraph", "content": segment}) or "&#160;", style))
+                    segment = []
+                result.extend(image_flow(child))
+            else:
+                segment.append(child)
+        if segment:
+            result.append(Paragraph(_paragraph_html({"type": "paragraph", "content": segment}) or "&#160;", style))
+        return result
+
     def blocks(nodes):
         for node in nodes:
             kind = node["type"]
             if kind == "image":
-                if pdf_assets is not None:
-                    image_data = pdf_assets.get(node["attrs"]["asset_id"], b"")
-                else:
-                    asset = get_object_or_404(DigiDocImageAsset, pk=node["attrs"]["asset_id"], organization=organization)
-                    with asset.image.open("rb") as image_file:
-                        image_data = image_file.read(8 * 1024 * 1024 + 1)
-                if len(image_data) > 8 * 1024 * 1024:
-                    raise ValidationError("A document image is unavailable.")
-                attrs = node["attrs"]
-                crop_ratio = {"square": 1, "landscape": 16 / 9, "portrait": 3 / 4}.get(attrs.get("crop", "none"))
-                if crop_ratio:
-                    from PIL import Image, ImageOps
-                    with Image.open(BytesIO(image_data)) as source_image:
-                        cropped = ImageOps.fit(source_image.convert("RGB"), (1200, max(1, round(1200 / crop_ratio))), centering=(0.5, 0.5))
-                        image_buffer = BytesIO()
-                        cropped.save(image_buffer, format="JPEG", quality=90, optimize=True)
-                        image_data = image_buffer.getvalue()
-                image_flow = PdfImage(BytesIO(image_data))
-                max_width, max_height = A4[0] - (left + right) * mm, A4[1] - (top + bottom) * mm
-                max_width *= attrs.get("width_percent", 100) / 100
-                scale = min(max_width / image_flow.imageWidth, max_height / image_flow.imageHeight, 1)
-                image_flow.drawWidth = image_flow.imageWidth * scale
-                image_flow.drawHeight = image_flow.imageHeight * scale
-                image_flow.hAlign = {"left": "LEFT", "center": "CENTER", "right": "RIGHT"}.get(attrs.get("align", "center"), "CENTER")
-                flow.extend([image_flow, Spacer(1, 8)])
+                flow.extend(image_flow(node))
                 continue
             if kind in {"paragraph", "heading", "tableCell"}:
                 text = _paragraph_html(node)
@@ -569,9 +648,11 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                     "DigiDocBlock", parent=base_style, fontName=base_style.fontName,
                     fontSize=base_size, leading=round(base_size * leading_ratio, 1),
                     alignment=alignments.get(attrs.get("align"), TA_LEFT),
-                    leftIndent=attrs.get("indent", 0) * 18, spaceAfter=7,
+                    leftIndent=attrs.get("indent", 0) * 18,
+                    spaceBefore=attrs.get("space_before_pt", 0),
+                    spaceAfter=attrs.get("space_after_pt", 7),
                 )
-                flow.append(Paragraph(text or "&#160;", style))
+                flow.extend(paragraph_flows(node, style))
             elif kind == "hardBreak": flow.append(PageBreak())
             elif kind == "horizontalRule":
                 from reportlab.platypus import HRFlowable
@@ -605,8 +686,8 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             readers[slot] = ImageReader(image_handles[slot])
         def draw_page(canvas, _document):
             page_number = canvas.getPageNumber()
-            if page_number > 100:
-                raise ValidationError("The document exceeds the 100 page limit.")
+            if page_number > MAX_PAGES:
+                raise ValidationError("The document exceeds the 50 page limit.")
             slot = first_slot if page_number == 1 else other_slot
             if slot != "none":
                 reader = readers[slot]
@@ -618,8 +699,8 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 canvas.drawImage(reader,(A4[0]-w)/2,(A4[1]-h)/2,width=w,height=h,mask="auto"); canvas.restoreState()
     else:
         def draw_page(canvas, _document):
-            if canvas.getPageNumber() > 100:
-                raise ValidationError("The document exceeds the 100 page limit.")
+            if canvas.getPageNumber() > MAX_PAGES:
+                raise ValidationError("The document exceeds the 50 page limit.")
 
     def make_canvas(*args, **kwargs):
         kwargs.update(pagesize=A4, pageCompression=1, invariant=1)
@@ -646,7 +727,6 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
 def _render_pdf_isolated(document):
     """Run PDF generation in a short-lived worker with a process memory cap."""
     content = validate_document_json(document.content_json)
-    _ensure_company_images(content, document.organization)
     image_ids = set()
     def collect(node):
         if node["type"] == "image": image_ids.add(node["attrs"]["asset_id"])
@@ -655,10 +735,13 @@ def _render_pdf_isolated(document):
     image_payload = {}
     total_asset_bytes = 0
     for asset in DigiDocImageAsset.objects.filter(organization=document.organization, pk__in=image_ids):
-        with asset.image.open("rb") as source:
-            data = source.read(8 * 1024 * 1024 + 1)
+        try:
+            with asset.image.open("rb") as source:
+                data = source.read(8 * 1024 * 1024 + 1)
+        except (OSError, ValueError):
+            continue
         if not data or len(data) > 8 * 1024 * 1024:
-            raise ValidationError("A document image is unavailable.")
+            continue
         total_asset_bytes += len(data)
         if total_asset_bytes > 20 * 1024 * 1024:
             raise ValidationError("The combined document images exceed the PDF input limit.")
@@ -836,7 +919,24 @@ def digidoc_export(request, document_id, file_format):
     try:
         content = validate_document_json(doc.content_json)
         exporter, content_type = exporters[file_format]
-        data = exporter(content)
+        image_ids = set()
+        def collect(node):
+            if node["type"] == "image":
+                image_ids.add(node["attrs"]["asset_id"])
+            for child in node.get("content", []):
+                collect(child)
+        collect(content)
+        export_assets = {}
+        for asset in DigiDocImageAsset.objects.filter(organization=organization, pk__in=image_ids):
+            try:
+                with asset.image.open("rb") as source:
+                    image_data = source.read(8 * 1024 * 1024 + 1)
+            except (OSError, ValueError):
+                continue
+            if not image_data or len(image_data) > 8 * 1024 * 1024:
+                continue
+            export_assets[str(asset.pk)] = {"data": image_data, "format": asset.image_format, "width": asset.image_width, "height": asset.image_height}
+        data = exporter(content, export_assets)
     except ValidationError as exc:
         return HttpResponse(exc.messages[0], status=400)
     except Exception:

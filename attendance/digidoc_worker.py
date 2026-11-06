@@ -28,7 +28,7 @@ def main():
             return 3
         import pypdfium2 as pdfium
         check = pdfium.PdfDocument(output)
-        if not 1 <= len(check) <= 100:
+        if not 1 <= len(check) <= 50:
             check.close()
             return 3
         check.close()

@@ -105,7 +105,7 @@
     return {node:last.node, offset:last.node.length};
   }
   function splitOversizedTextBlock(block, page, contentBottom) {
-    if (!block || !['P', 'H1', 'H2', 'H3'].includes(block.tagName)) return null;
+    if (!block || !['P', 'H1', 'H2', 'H3'].includes(block.tagName) || block.querySelector('.dd-image-frame')) return null;
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
     const points = [];
     let total = 0, text = '', current;
@@ -198,19 +198,20 @@
           continue;
         }
         if (node.getBoundingClientRect().bottom <= contentBottom + 1) continue;
-        if (nodeIndex > 0) {
-          let next = pages[pageIndex + 1];
-          if (!next) { next = createPage(page); pages.push(next); }
-          moveBefore(nodes.slice(nodeIndex), next);
-          paginationChanged = true;
-          break;
-        }
         const continuation = splitOversizedTextBlock(node, page, contentBottom);
         if (continuation) {
           let next = pages[pageIndex + 1];
           if (!next) { next = createPage(page); pages.push(next); }
           next.insertBefore(continuation, next.firstChild);
           paginationChanged = true;
+          break;
+        }
+        if (nodeIndex > 0) {
+          let next = pages[pageIndex + 1];
+          if (!next) { next = createPage(page); pages.push(next); }
+          moveBefore(nodes.slice(nodeIndex), next);
+          paginationChanged = true;
+          break;
         }
       }
     }
