@@ -216,7 +216,26 @@
       }
     }
     pages = Array.from(sheet.querySelectorAll(':scope > .dd-page'));
-    while (pages.length > 1 && !Array.from(pages[pages.length - 1].childNodes).some(node => !(node.nodeType === Node.ELEMENT_NODE && node.classList.contains('dd-page-zones')))) {
+    function hasPageContent(page) {
+      return Array.from(page.childNodes).some(node => {
+        if (node.nodeType === Node.COMMENT_NODE) return false;
+        if (node.nodeType === Node.TEXT_NODE) return Boolean(node.textContent.trim());
+        if (node.nodeType !== Node.ELEMENT_NODE || node.classList.contains('dd-page-zones')) return false;
+        if (node.dataset.pageBreak === 'true') return false;
+        if (node.matches('p,h1,h2,h3,li,td,th')) {
+          return Boolean(node.textContent.trim() || node.querySelector('img,.dd-image-frame,table,hr'));
+        }
+        return Boolean(node.textContent.trim() || node.querySelector('img,.dd-image-frame,table,hr'));
+      });
+    }
+    function endsWithExplicitPageBreak(page) {
+      const contentNodes = Array.from(page.childNodes).filter(node =>
+        !(node.nodeType === Node.ELEMENT_NODE && node.classList.contains('dd-page-zones'))
+      );
+      return contentNodes[contentNodes.length - 1]?.nodeType === Node.ELEMENT_NODE
+        && contentNodes[contentNodes.length - 1].dataset.pageBreak === 'true';
+    }
+    while (pages.length > 1 && !hasPageContent(pages[pages.length - 1]) && !endsWithExplicitPageBreak(pages[pages.length - 2])) {
       pages.pop().remove(); paginationChanged = true;
     }
     pages.forEach((page, index) => { page.dataset.pageNumber = String(index + 1); });

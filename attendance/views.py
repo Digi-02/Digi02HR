@@ -627,6 +627,22 @@ def hr_required(view_func):
     return wrapper
 
 
+def dashboard_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        organization = get_active_organization(request)
+        if organization and (
+            user_has_hr_access(request.user, organization)
+            or user_has_manager_access(request.user, organization)
+        ):
+            return view_func(request, *args, **kwargs)
+        messages.warning(request, 'You do not have access to the organization dashboard.')
+        if hasattr(request.user, 'employee_profile'):
+            return redirect('employee_self_service_dashboard')
+        return redirect('login')
+    return wrapper
+
+
 def manager_required(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
@@ -674,7 +690,7 @@ def login_view(request):
         if user_has_payroll_access(request.user) and not user_has_hr_access(request.user):
             return redirect('finance_dashboard')
         if user_has_manager_access(request.user) and not user_has_hr_access(request.user):
-            return redirect('manager_dashboard')
+            return redirect('dashboard')
         return redirect('dashboard')
     
     if request.method == 'POST':
@@ -693,7 +709,7 @@ def login_view(request):
             if user_has_payroll_access(user) and not user_has_hr_access(user):
                 return redirect('finance_dashboard')
             if user_has_manager_access(user) and not user_has_hr_access(user):
-                return redirect('manager_dashboard')
+                return redirect('dashboard')
             return redirect('dashboard')
         else:
             messages.error(request, 'Invalid username or password.')
@@ -1099,9 +1115,9 @@ def kiosk_view(request, org_slug=None):
 # ==================== DASHBOARD VIEWS ====================
 
 @login_required
-@hr_required
+@dashboard_required
 def dashboard_view(request):
-    """Main HR Dashboard"""
+    """Unified organization and manager dashboard."""
     
     organization = get_active_organization(request)
     ensure_default_categories(organization)
@@ -1121,22 +1137,30 @@ def dashboard_view(request):
         attendance_status = ''
     
     # Statistics
-    active_employees = Employee.objects.filter(
+    is_hr_dashboard = user_has_hr_access(request.user, organization)
+    is_manager_dashboard = user_has_manager_access(request.user, organization)
+    scoped_employees = Employee.objects.filter(organization=organization)
+    manager_profile = getattr(request.user, 'employee_profile', None)
+    if not is_hr_dashboard:
+        if manager_profile is None or manager_profile.organization_id != organization.id:
+            scoped_employees = scoped_employees.none()
+        else:
+            scoped_employees = scoped_employees.filter(line_manager=manager_profile)
+
+    active_employees = scoped_employees.filter(
         organization=organization,
         is_active=True,
     ).select_related('category', 'department')
     total_employees = active_employees.count()
-    inactive_employee_count = Employee.objects.filter(
-        organization=organization,
-        is_active=False,
-    ).count()
-    inactive_employee_rows = Employee.objects.filter(
-        organization=organization,
-        is_active=False,
-    ).select_related('category', 'department').order_by('first_name', 'last_name')[:5]
+    inactive_employee_count = scoped_employees.filter(is_active=False).count() if is_hr_dashboard else 0
+    inactive_employee_rows = scoped_employees.filter(is_active=False).select_related(
+        'category', 'department'
+    ).order_by('first_name', 'last_name')[:5] if is_hr_dashboard else []
+    dashboard_employee_ids = list(active_employees.values_list('id', flat=True))
     
     todays_records = AttendanceRecord.objects.filter(
         organization=organization,
+        employee_id__in=dashboard_employee_ids,
         employee__is_active=True,
         **organization_date_range_filter('check_in_time', today, organization),
     ).select_related('employee__category', 'employee__department')
@@ -1156,6 +1180,7 @@ def dashboard_view(request):
 
     excused_employee_ids = set(AttendanceException.objects.filter(
         organization=organization,
+        employee_id__in=dashboard_employee_ids,
         start_date__lte=today,
         end_date__gte=today,
         employee__is_active=True,
@@ -1191,8 +1216,9 @@ def dashboard_view(request):
             })
 
     # Birthdays this week
-    birthdays_this_week = get_upcoming_birthdays(organization=organization)
-    internship_endings = get_upcoming_internship_endings(organization=organization)
+    scoped_employee_ids = None if is_hr_dashboard else dashboard_employee_ids
+    birthdays_this_week = get_upcoming_birthdays(organization=organization, employee_ids=scoped_employee_ids)
+    internship_endings = get_upcoming_internship_endings(organization=organization, employee_ids=scoped_employee_ids)
 
     # Work anniversaries this week (Staff only)
     anniversaries_this_week = []
@@ -1214,6 +1240,7 @@ def dashboard_view(request):
         late_in_category = len({employee_id for employee_id in late_employee_ids if latest_records_by_employee[employee_id].employee.category_id == category.pk})
         excused_in_category = AttendanceException.objects.filter(
             organization=organization, employee__category=category,
+            employee_id__in=dashboard_employee_ids,
             employee__is_active=True, start_date__lte=today, end_date__gte=today,
         ).exclude(employee_id__in=latest_records_by_employee).values('employee_id').distinct().count()
         category_stats.append({
@@ -1231,6 +1258,7 @@ def dashboard_view(request):
     end_range = organization_date_range_filter('check_in_time', today + timedelta(days=1), organization)
     trend_records = AttendanceRecord.objects.filter(
         organization=organization,
+        employee_id__in=dashboard_employee_ids,
         employee__is_active=True,
         check_in_time__gte=start_range['check_in_time__gte'],
         check_in_time__lt=end_range['check_in_time__lt'],
@@ -1293,10 +1321,20 @@ def dashboard_view(request):
     department_attendance.sort(key=lambda row: (row['rate'] is None, -(row['rate'] or 0), row['name']))
     department_attendance = department_attendance[:6]
 
-    pending_leave_requests = list(LeaveRequest.objects.filter(
-        organization=organization, status='pending'
-    ).select_related('employee', 'leave_type').order_by('-created_at')[:5])
-    pending_leave_total = LeaveRequest.objects.filter(organization=organization, status='pending').count()
+    pending_leave_qs = LeaveRequest.objects.filter(
+        organization=organization,
+        employee_id__in=dashboard_employee_ids,
+        status='pending',
+    )
+    pending_leave_requests = list(pending_leave_qs.select_related('employee', 'leave_type').order_by('-created_at')[:5])
+    pending_leave_total = pending_leave_qs.count()
+    manager_pending_leave_requests = pending_leave_qs.filter(
+        manager_approval_status='pending'
+    ).select_related('employee', 'leave_type').order_by('created_at')[:8]
+    recent_leave_requests = LeaveRequest.objects.filter(
+        organization=organization,
+        employee_id__in=dashboard_employee_ids,
+    ).select_related('employee', 'leave_type').order_by('-created_at')[:8]
     pending_window_start = timezone.make_aware(
         datetime.combine(trend_dates[0], time.min), company_tz,
     )
@@ -1307,16 +1345,18 @@ def dashboard_view(request):
         timezone.localtime(created_at, company_tz).date()
         for created_at in LeaveRequest.objects.filter(
         organization=organization,
+        employee_id__in=dashboard_employee_ids,
         created_at__gte=pending_window_start, created_at__lt=pending_window_end,
     ).values_list('created_at', flat=True)
     ]
     joined_recently = Employee.objects.filter(
-        organization=organization, is_active=True,
+        organization=organization, id__in=dashboard_employee_ids, is_active=True,
         hire_date__gte=trend_dates[0], hire_date__lte=today,
     ).count()
     hire_start = today - timedelta(days=55)
     hire_dates = Employee.objects.filter(
         organization=organization,
+        id__in=dashboard_employee_ids,
         is_active=True,
         hire_date__gte=hire_start,
         hire_date__lte=today,
@@ -1334,9 +1374,9 @@ def dashboard_view(request):
 
     dashboard_kpis = [
         {
-            'label': 'Active employees', 'value': total_employees,
+            'label': 'Active employees' if is_hr_dashboard else 'My team', 'value': total_employees,
             'context': f'{joined_recently} joined in the last 7 days',
-            'icon': 'groups', 'style': 'pink', 'href': reverse('employee_list'),
+            'icon': 'groups', 'style': 'pink', 'href': reverse('employee_list') if is_hr_dashboard else reverse('dashboard'),
             'trend': hires_trend,
             'trend_label': 'New hires · weekly · 8 weeks',
         },
@@ -1357,16 +1397,16 @@ def dashboard_view(request):
         {
             'label': 'Pending leave', 'value': pending_leave_total,
             'context': 'Requests awaiting review',
-            'icon': 'event_busy', 'style': 'violet', 'href': reverse('leave_requests'),
+            'icon': 'event_busy', 'style': 'violet', 'href': reverse('leave_requests') if is_hr_dashboard else reverse('manager_leave_requests'),
             'trend': leave_trend,
             'trend_label': 'Requests submitted · 7 days',
         },
-        {
+        *([{
             'label': 'Inactive employees', 'value': inactive_employee_count,
             'context': 'Excluded from daily attendance',
             'icon': 'person_off', 'style': 'violet',
             'href': reverse('employee_list') + '?status=inactive',
-        },
+        }] if is_hr_dashboard else []),
     ]
     
     show_checklist = (total_employees == 0)
@@ -1384,6 +1424,14 @@ def dashboard_view(request):
         ),
         'invite_done': OnboardingInvitation.objects.filter(organization=organization).exists(),
     }
+    team_status_rows = []
+    for employee in active_employees.order_by('first_name', 'last_name')[:10]:
+        record = latest_records_by_employee.get(employee.pk)
+        team_status_rows.append({
+            'employee': employee,
+            'status': 'Completed' if record and record.check_out_time else 'Checked in' if record else 'Not in',
+            'record': record,
+        })
     context = {
         'today': today,
         'total_employees': total_employees,
@@ -1421,6 +1469,20 @@ def dashboard_view(request):
         'donut_pct_3': f'{donut_pct_3:.2f}',
         'department_attendance': department_attendance,
         'pending_leave_requests': pending_leave_requests,
+        'pending_leave_total': pending_leave_total,
+        'manager_pending_leave_requests': manager_pending_leave_requests,
+        'recent_leave_requests': recent_leave_requests,
+        'team_members': active_employees.order_by('first_name', 'last_name')[:10],
+        'team_status_rows': team_status_rows,
+        'team_by_department': active_employees.values('department__name').annotate(total=Count('id')).order_by('department__name'),
+        'team_by_category': active_employees.values('category__name').annotate(total=Count('id')).order_by('category__name'),
+        'team_count': total_employees,
+        'present_today': present_count,
+        'absent_today': absent_count,
+        'open_attendance_count': todays_records.filter(check_out_time__isnull=True).values('employee_id').distinct().count(),
+        'completed_attendance_count': todays_records.filter(check_out_time__isnull=False).values('employee_id').distinct().count(),
+        'is_hr_dashboard': is_hr_dashboard,
+        'is_manager_dashboard': is_manager_dashboard,
         'dashboard_greeting_name': request.user.first_name or request.user.get_username(),
         'page_title': 'Dashboard',
     }
@@ -3155,143 +3217,15 @@ def employee_leave_request_create(request):
 @login_required
 @manager_required
 def manager_dashboard(request):
-    manager = getattr(request.user, 'employee_profile', None)
-    organization = manager.organization if manager else get_active_organization(request)
-    from .models import organization_today
-    today = organization_today(organization)
-
-    if manager and not user_has_hr_access(request.user):
-        team_members = Employee.objects.filter(
-            organization=organization,
-            line_manager=manager,
-            is_active=True,
-        ).select_related('department', 'category')
-    else:
-        team_members = Employee.objects.filter(
-            organization=organization,
-            is_active=True,
-        ).select_related('department', 'category')
-
-    team_member_ids = list(team_members.values_list('id', flat=True))
-    metric_trends = build_recent_dashboard_trends(
-        organization, today, employee_ids=team_member_ids,
-    )
-    pending_leave_requests = LeaveRequest.objects.filter(
-        organization=organization,
-        employee_id__in=team_member_ids,
-        status='pending',
-        manager_approval_status='pending',
-    ).select_related('employee', 'leave_type').order_by('created_at')
-    recent_leave_requests = LeaveRequest.objects.filter(
-        organization=organization,
-        employee_id__in=team_member_ids,
-    ).select_related('employee', 'leave_type').order_by('-created_at')[:8]
-    todays_records = AttendanceRecord.objects.filter(
-        organization=organization,
-        employee_id__in=team_member_ids,
-        **local_date_range_filter('check_in_time', today),
-    ).select_related('employee')
-    present_today = todays_records.values('employee_id').distinct().count()
-    late_today = count_distinct_late_employees(todays_records)
-    team_by_department = team_members.values('department__name').annotate(total=Count('id')).order_by('department__name')
-    team_by_category = team_members.values('category__name').annotate(total=Count('id')).order_by('category__name')
-    open_attendance_count = todays_records.filter(check_out_time__isnull=True).values('employee_id').distinct().count()
-    completed_attendance_count = todays_records.filter(check_out_time__isnull=False).values('employee_id').distinct().count()
-
-    context = {
-        'organization': organization,
-        'manager': manager,
-        'team_members': team_members.order_by('first_name', 'last_name')[:10],
-        'team_count': len(team_member_ids),
-        'metric_trends': metric_trends,
-        'present_today': present_today,
-        'late_today': late_today,
-        'absent_today': max(len(team_member_ids) - present_today, 0),
-        'open_attendance_count': open_attendance_count,
-        'completed_attendance_count': completed_attendance_count,
-        'team_by_department': team_by_department,
-        'team_by_category': team_by_category,
-        'pending_leave_requests': pending_leave_requests[:8],
-        'pending_leave_count': pending_leave_requests.count(),
-        'recent_leave_requests': recent_leave_requests,
-        'page_title': 'Manager Dashboard',
-    }
-    return render(request, 'attendance/manager_dashboard.html', context)
+    """Compatibility route: manager dashboard now uses the unified dashboard."""
+    return dashboard_view(request)
 
 
 @login_required
 @manager_required
 def manager_team(request):
-    manager = getattr(request.user, 'employee_profile', None)
-    organization = manager.organization if manager else get_active_organization(request)
-    from .models import organization_today
-    today = organization_today(organization)
-
-    if manager and not user_has_hr_access(request.user):
-        team_members = Employee.objects.filter(
-            organization=organization,
-            line_manager=manager,
-            is_active=True,
-        )
-    else:
-        team_members = Employee.objects.filter(
-            organization=organization,
-            is_active=True,
-        )
-
-    team_members = team_members.select_related('department', 'category', 'line_manager').order_by('first_name', 'last_name')
-    team_member_ids = list(team_members.values_list('id', flat=True))
-    metric_trends = build_recent_dashboard_trends(
-        organization, today, employee_ids=team_member_ids,
-    )
-    todays_records = AttendanceRecord.objects.filter(
-        organization=organization,
-        employee_id__in=team_member_ids,
-        **local_date_range_filter('check_in_time', today),
-    ).select_related('employee').order_by('employee_id', '-check_in_time')
-    todays_record_by_employee = {}
-    for record in todays_records:
-        todays_record_by_employee.setdefault(record.employee_id, record)
-
-    team_rows = []
-    for member in team_members:
-        record = todays_record_by_employee.get(member.id)
-        if record and record.check_out_time:
-            status = 'Completed'
-            status_color = 'primary'
-        elif record:
-            status = 'Checked In'
-            status_color = 'success'
-        else:
-            status = 'Not In'
-            status_color = 'secondary'
-        team_rows.append({
-            'member': member,
-            'today_record': record,
-            'status': status,
-            'status_color': status_color,
-        })
-    team_rows_page, team_rows_pagination_query = paginate_queryset(
-        request,
-        team_rows,
-        per_page=25,
-        page_param='team_page',
-    )
-
-    context = {
-        'organization': organization,
-        'manager': manager,
-        'team_rows': team_rows_page,
-        'team_rows_page_obj': team_rows_page,
-        'team_rows_pagination_query': team_rows_pagination_query,
-        'team_count': len(team_rows),
-        'metric_trends': metric_trends,
-        'checked_in_count': sum(1 for row in team_rows if row['status'] == 'Checked In'),
-        'completed_count': sum(1 for row in team_rows if row['status'] == 'Completed'),
-        'not_in_count': sum(1 for row in team_rows if row['status'] == 'Not In'),
-        'page_title': 'My Team',
-    }
-    return render(request, 'attendance/manager_team.html', context)
+    """Compatibility route: the separate team page is now part of Dashboard."""
+    return dashboard_view(request)
 
 
 @login_required
@@ -5017,7 +4951,7 @@ def build_person_hours_summary(records):
     return rows
 
 
-def get_upcoming_birthdays(days=None, organization=None):
+def get_upcoming_birthdays(days=None, organization=None, employee_ids=None):
     """Get employees with birthdays in the configured reminder window."""
 
     settings_obj = get_attendance_settings(organization)
@@ -5030,6 +4964,8 @@ def get_upcoming_birthdays(days=None, organization=None):
     employees = Employee.objects.filter(is_active=True, date_of_birth__isnull=False)
     if organization:
         employees = employees.filter(organization=organization)
+    if employee_ids is not None:
+        employees = employees.filter(pk__in=employee_ids)
 
     for employee in employees:
         bday = employee.date_of_birth
@@ -5048,7 +4984,7 @@ def get_upcoming_birthdays(days=None, organization=None):
     return birthdays
 
 
-def get_upcoming_internship_endings(days=None, organization=None):
+def get_upcoming_internship_endings(days=None, organization=None, employee_ids=None):
     """Get active interns whose end date is approaching."""
 
     settings_obj = get_attendance_settings(organization)
@@ -5066,6 +5002,8 @@ def get_upcoming_internship_endings(days=None, organization=None):
     ).select_related('department', 'category', 'supervisor')
     if organization:
         interns = interns.filter(organization=organization)
+    if employee_ids is not None:
+        interns = interns.filter(pk__in=employee_ids)
 
     for employee in interns:
         upcoming.append({

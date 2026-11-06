@@ -11,21 +11,21 @@
       <span class="overview-eyebrow"><i class="bi bi-calendar3" aria-hidden="true"></i> {{ today|date:"l, F j, Y" }}</span>
       <h1 id="overview-greeting">{{ company_greeting|default:"Good day" }}, {{ dashboard_greeting_name }}.</h1>
       {% if total_employees %}
-      <p>Your people overview for {{ organization.name }}. Work starts at {{ workday_start|time:"H:i" }}; late arrivals are counted after {{ late_threshold|time:"H:i" }}.</p>
+      <p>{% if is_hr_dashboard %}Your people overview for {{ organization.name }}.{% else %}Your team overview for {{ organization.name }}.{% endif %} Work starts at {{ workday_start|time:"H:i" }}; late arrivals are counted after {{ late_threshold|time:"H:i" }}.</p>
       {% else %}
-      <p>Your workspace is ready. Add your first employee to start building a live view of your team.</p>
+      <p>{% if is_hr_dashboard %}Your workspace is ready. Add your first employee to start building a live view of your team.{% else %}No active employees are currently assigned to your team.{% endif %}</p>
       {% endif %}
-      <div class="overview-welcome__actions">
+      {% if is_hr_dashboard %}<div class="overview-welcome__actions">
         <a href="{% url 'employee_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus me-1" aria-hidden="true"></i> Add employee</a>
         <a href="{% url 'attendance_reports' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bar-chart-line me-1" aria-hidden="true"></i> Attendance reports</a>
-      </div>
+      </div>{% endif %}
     </div>
     <div class="overview-welcome__portrait" aria-hidden="true">
       <img src="{% static 'female in circle background.png' %}" alt="" fetchpriority="high">
     </div>
   </section>
 
-  {% if not organization.setup_completed %}
+  {% if is_hr_dashboard and not organization.setup_completed %}
   <section class="card overview-setup mb-3" aria-labelledby="setup-title">
     <div class="card-header">
       <h2 class="mb-1" id="setup-title">Finish setting up {{ organization.name }}</h2>
@@ -51,7 +51,29 @@
     {% endfor %}
   </section>
 
-  <section class="overview-panel overview-inactive" aria-labelledby="inactive-employees-title">
+  {% if is_hr_dashboard or is_manager_dashboard %}
+  <section class="overview-section-grid" aria-label="Team overview and approvals">
+    <div>
+      <section class="overview-panel" aria-labelledby="manager-approvals-title">
+        <div class="overview-panel__head"><div><h2 id="manager-approvals-title">Pending leave approvals <span class="overview-pill">{{ manager_pending_leave_requests|length }}</span></h2><p>Requests from employees in your dashboard scope.</p></div><a href="{% if is_hr_dashboard %}{% url 'leave_requests' %}{% else %}{% url 'manager_leave_requests' %}{% endif %}">Review all <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
+        {% if manager_pending_leave_requests %}<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Leave</th><th>Dates</th><th class="text-end">Action</th></tr></thead><tbody>
+        {% for request in manager_pending_leave_requests %}<tr><td><strong>{{ request.employee.display_name }}</strong></td><td>{{ request.leave_type.name }}</td><td>{{ request.start_date|date:"M j" }}{% if request.end_date != request.start_date %} – {{ request.end_date|date:"M j" }}{% endif %}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% if is_hr_dashboard %}{% url 'leave_requests' %}{% else %}{% url 'manager_leave_requests' %}{% endif %}">Review</a></td></tr>{% endfor %}
+        </tbody></table></div>{% else %}<div class="overview-empty">No leave approvals are waiting for you.</div>{% endif %}
+      </section>
+      <section class="overview-panel" aria-labelledby="team-snapshot-title">
+        <div class="overview-panel__head"><div><h2 id="team-snapshot-title">Team snapshot</h2><p>{{ team_count }} active people · {{ open_attendance_count }} checked in · {{ completed_attendance_count }} checked out · {{ absent_today }} without a check-in</p></div></div>
+        <ul class="overview-list">{% for row in team_status_rows %}<li><div class="overview-list__main"><strong>{{ row.employee.display_name }}</strong><small>{{ row.employee.department|default:"No department" }}{% if row.record %} · {{ row.record.check_in_time|time:"H:i" }}{% endif %}</small></div><span class="overview-pill">{{ row.status }}</span></li>{% empty %}<li class="overview-empty">No active team members to show.</li>{% endfor %}</ul>
+      </section>
+    </div>
+    <aside>
+      <section class="overview-panel" aria-labelledby="team-department-title"><div class="overview-panel__head"><div><h2 id="team-department-title">Team by department</h2></div></div><ul class="overview-list">{% for row in team_by_department %}<li><div class="overview-list__main"><strong>{{ row.department__name|default:"No department" }}</strong></div><span class="overview-pill">{{ row.total }}</span></li>{% empty %}<li class="overview-empty">No department assignments.</li>{% endfor %}</ul></section>
+      <section class="overview-panel" aria-labelledby="team-category-title"><div class="overview-panel__head"><div><h2 id="team-category-title">Team by category</h2></div></div><ul class="overview-list">{% for row in team_by_category %}<li><div class="overview-list__main"><strong>{{ row.category__name|default:"Uncategorized" }}</strong></div><span class="overview-pill">{{ row.total }}</span></li>{% empty %}<li class="overview-empty">No category assignments.</li>{% endfor %}</ul></section>
+      <section class="overview-panel" aria-labelledby="team-leave-title"><div class="overview-panel__head"><div><h2 id="team-leave-title">Recent team leave activity</h2></div></div><ul class="overview-list">{% for item in recent_leave_requests %}<li><div class="overview-list__main"><strong>{{ item.employee.display_name }}</strong><small>{{ item.leave_type.name }} · {{ item.created_at|date:"M j" }}</small></div><span class="overview-pill">{{ item.get_status_display }}</span></li>{% empty %}<li class="overview-empty">No recent leave activity.</li>{% endfor %}</ul></section>
+    </aside>
+  </section>
+  {% endif %}
+
+  {% if is_hr_dashboard %}<section class="overview-panel overview-inactive" aria-labelledby="inactive-employees-title">
     <div class="overview-panel__head">
       <div>
         <h2 id="inactive-employees-title">Inactive employees <span class="overview-pill">{{ inactive_employee_count }}</span></h2>
@@ -81,14 +103,14 @@
       </table>
     </div>
     {% else %}<div class="overview-empty">No inactive employees.</div>{% endif %}
-  </section>
+  </section>{% endif %}
 
   <div class="overview-section-grid">
     <div>
       <section class="overview-panel" aria-labelledby="weekly-attendance-title">
         <div class="overview-panel__head">
           <div><h2 id="weekly-attendance-title">Attendance this week</h2><p>Unique employees checked in each day, by arrival time.</p></div>
-          <a href="{% url 'attendance_reports' %}">Full report <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          {% if is_hr_dashboard %}<a href="{% url 'attendance_reports' %}">Full report <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
         </div>
         <div class="overview-legend" aria-label="Chart legend">
           <span><i style="--legend-color:var(--chart-rose)"></i> On time</span>
@@ -162,7 +184,7 @@
       </section>
 
       <section class="overview-panel" aria-labelledby="late-title">
-        <div class="overview-panel__head"><div><h2 id="late-title">Late arrivals</h2><p>Today, after {{ late_threshold|time:"H:i" }}.</p></div><a href="{% url 'attendance_reports' %}">Reports</a></div>
+        <div class="overview-panel__head"><div><h2 id="late-title">Late arrivals</h2><p>Today, after {{ late_threshold|time:"H:i" }}.</p></div>{% if is_hr_dashboard %}<a href="{% url 'attendance_reports' %}">Reports</a>{% endif %}</div>
         <ul class="overview-list">
           {% for row in late_today %}
           <li><div class="overview-list__main"><strong>{{ row.employee.display_name }}</strong><small>{{ row.employee.department|default:"No department" }}{% if row.record %} &middot; {{ row.record.check_in_time|time:"H:i" }}{% endif %}</small></div><span class="overview-pill">Late</span></li>
@@ -171,7 +193,7 @@
       </section>
 
       <section class="overview-panel" aria-labelledby="leave-title">
-        <div class="overview-panel__head"><div><h2 id="leave-title">Leave requests</h2><p>{{ pending_leave_total }} awaiting review</p></div><a href="{% url 'leave_requests' %}">Review</a></div>
+        <div class="overview-panel__head"><div><h2 id="leave-title">Leave requests</h2><p>{{ pending_leave_total }} awaiting review</p></div><a href="{% if is_hr_dashboard %}{% url 'leave_requests' %}{% else %}{% url 'manager_leave_requests' %}{% endif %}">Review</a></div>
         <ul class="overview-list">
           {% for leave_request in pending_leave_requests %}
           <li><div class="overview-list__main"><strong>{{ leave_request.employee.display_name }}</strong><small>{{ leave_request.leave_type.name }} &middot; {{ leave_request.start_date|date:"M j" }}{% if leave_request.end_date != leave_request.start_date %} - {{ leave_request.end_date|date:"M j" }}{% endif %}</small></div><span class="overview-pill">Pending</span></li>
@@ -205,7 +227,7 @@
     </div>
     <div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Employee</th><th>Category</th><th>Department</th><th>Check in</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>
       {% for row in attendance_people %}
-      <tr><td><strong>{{ row.employee.display_name }}</strong><br><small class="text-muted">{{ row.employee.employee_id }}</small></td><td>{{ row.employee.category.name }}</td><td>{{ row.employee.department|default:"-" }}</td><td>{% if row.record %}{{ row.record.check_in_time|time:"H:i" }}{% else %}-{% endif %}</td><td>{{ row.status_label }}</td><td class="text-end"><a href="{% url 'employee_detail' row.employee.pk %}" class="btn btn-sm btn-outline-primary">Open</a></td></tr>
+      <tr><td><strong>{{ row.employee.display_name }}</strong><br><small class="text-muted">{{ row.employee.employee_id }}</small></td><td>{{ row.employee.category.name }}</td><td>{{ row.employee.department|default:"-" }}</td><td>{% if row.record %}{{ row.record.check_in_time|time:"H:i" }}{% else %}-{% endif %}</td><td>{{ row.status_label }}</td><td class="text-end">{% if is_hr_dashboard %}<a href="{% url 'employee_detail' row.employee.pk %}" class="btn btn-sm btn-outline-primary">Open</a>{% endif %}</td></tr>
       {% empty %}<tr><td colspan="6"><div class="overview-empty">No employees found for this filter.</div></td></tr>{% endfor %}
     </tbody></table></div>
   </section>

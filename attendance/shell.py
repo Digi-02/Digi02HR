@@ -78,25 +78,16 @@ NAV_SECTIONS = (
     ),
     NavSection(
         key="dashboards",
-        label="Dashboards",
+        label="Main",
         items=(
             NavItem(
                 key="overview",
-                label="Overview",
+                label="Dashboard",
                 icon="bi-grid-1x2",
                 url_name="dashboard",
-                match=("dashboard", "category_dashboard"),
-                access=("hr",),
+                match=("dashboard", "category_dashboard", "manager_dashboard", "manager_team"),
+                access=("hr", "manager"),
                 keywords="home dashboard overview",
-            ),
-            NavItem(
-                key="manager_dashboard",
-                label="Manager dashboard",
-                icon="bi-kanban",
-                url_name="manager_dashboard",
-                match=("manager_dashboard",),
-                access=("manager",),
-                keywords="team manager overview",
             ),
         ),
     ),
@@ -167,15 +158,6 @@ NAV_SECTIONS = (
                 ),
                 access=("hr",),
                 keywords="hiring tasks applicants stages",
-            ),
-            NavItem(
-                key="manager_team",
-                label="My team",
-                icon="bi-people-fill",
-                url_name="manager_team",
-                match=("manager_team",),
-                access=("manager",),
-                keywords="direct reports team manager",
             ),
         ),
     ),
@@ -400,6 +382,8 @@ def build_navigation(user, organization):
         visible_items = []
         for item in section.items:
             if item.access and not any(flags.get(access) for access in item.access):
+                continue
+            if item.key == "my_dashboard" and (flags["hr"] or flags["manager"]):
                 continue
             try:
                 url = _item_url(item, organization)
