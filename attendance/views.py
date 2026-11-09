@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
 from django.db import transaction
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.core.exceptions import PermissionDenied
 from django.core.mail import send_mail, EmailMessage
 from django.conf import settings
@@ -24,6 +24,7 @@ from html.parser import HTMLParser
 from datetime import datetime, time, timedelta, date
 from functools import wraps
 import csv
+import mimetypes
 import imaplib
 import email
 import html
@@ -52,6 +53,8 @@ from .models import (
     Organization,
     CompanyLetterhead,
     CompanyLetterheadUpload,
+    PersonalLetterhead,
+    PersonalLetterheadUpload,
     OrganizationMembership,
 )
 from .forms import (
@@ -83,6 +86,7 @@ from .forms import (
     PayrollRunForm,
 )
 from .organization import (
+    DIGIDOC_ROLES,
     ensure_default_categories,
     get_active_organization,
     get_default_organization,
@@ -92,6 +96,7 @@ from .organization import (
     user_has_hr_access,
     user_has_manager_access,
     user_has_payroll_access,
+    user_has_viewer_access,
 )
 from .platform import platform_admin_required, _send_templated_mail
 
@@ -620,6 +625,8 @@ def hr_required(view_func):
         organization = get_active_organization(request)
         if organization and user_has_hr_access(request.user, organization):
             return view_func(request, *args, **kwargs)
+        if organization is None:
+            return redirect('no_active_company')
         messages.warning(request, 'You do not have access to the HR admin area.')
         if hasattr(request.user, 'employee_profile'):
             return redirect('employee_self_service_dashboard')
@@ -634,8 +641,11 @@ def dashboard_required(view_func):
         if organization and (
             user_has_hr_access(request.user, organization)
             or user_has_manager_access(request.user, organization)
+            or user_has_viewer_access(request.user, organization)
         ):
             return view_func(request, *args, **kwargs)
+        if organization is None:
+            return redirect('no_active_company')
         messages.warning(request, 'You do not have access to the organization dashboard.')
         if hasattr(request.user, 'employee_profile'):
             return redirect('employee_self_service_dashboard')
@@ -649,6 +659,8 @@ def manager_required(view_func):
         organization = get_active_organization(request)
         if organization and user_has_manager_access(request.user, organization):
             return view_func(request, *args, **kwargs)
+        if organization is None:
+            return redirect('no_active_company')
         messages.warning(request, 'You do not have access to manager approvals.')
         if hasattr(request.user, 'employee_profile'):
             return redirect('employee_self_service_dashboard')
@@ -662,6 +674,8 @@ def payroll_required(view_func):
         organization = get_active_organization(request)
         if organization and user_has_payroll_access(request.user, organization):
             return view_func(request, *args, **kwargs)
+        if organization is None:
+            return redirect('no_active_company')
         messages.warning(request, 'You do not have access to payroll or finance tools.')
         if hasattr(request.user, 'employee_profile'):
             return redirect('employee_self_service_dashboard')
@@ -673,8 +687,6 @@ def login_view(request):
     from .organization import get_user_organizations
 
     def suspended_org_for(user):
-        if user.is_superuser:
-            return None
         orgs = list(get_user_organizations(user))
         if orgs and all(getattr(o, 'is_suspended', False) for o in orgs):
             return orgs[0]
@@ -721,6 +733,27 @@ def logout_view(request):
     """Custom logout view"""
     logout(request)
     return redirect('login')
+
+
+@login_required
+def no_active_company(request):
+    return render(request, 'attendance/no_active_company.html', status=403)
+
+
+def _active_employee_profile(request, *, allow_viewer=True):
+    """Resolve self-service data only inside the user's active company membership."""
+    organization = get_active_organization(request)
+    if organization is None:
+        return None, None
+    membership = OrganizationMembership.objects.filter(
+        user=request.user, organization=organization, is_active=True,
+    ).first()
+    if membership is None:
+        return None, None
+    if membership.role == 'viewer' and not allow_viewer:
+        raise PermissionDenied('Viewer access is read-only and excludes this page.')
+    employee = Employee.objects.filter(user=request.user, organization=organization).first()
+    return employee, membership
 
 
 # ==================== ORGANIZATION VIEWS ====================
@@ -777,7 +810,15 @@ def organization_create(request):
 @login_required
 @hr_required
 def organization_edit(request, pk):
-    organization = get_object_or_404(get_user_organizations(request.user), pk=pk)
+    organization = get_object_or_404(
+        Organization.objects.filter(
+            memberships__user=request.user,
+            memberships__is_active=True,
+            memberships__role__in={'owner', 'hr_admin'},
+            is_active=True,
+        ),
+        pk=pk,
+    )
 
     if request.method == 'POST':
         form = OrganizationForm(request.POST, instance=organization)
@@ -798,12 +839,11 @@ def organization_edit(request, pk):
 
 
 @login_required
-@hr_required
 def organization_switch(request, pk):
     organization = get_object_or_404(get_user_organizations(request.user), pk=pk)
     request.session['active_organization_id'] = organization.pk
     messages.success(request, f'Switched to {organization.name}.')
-    return redirect('dashboard')
+    return redirect('employee_self_service_dashboard' if is_employee_self_service_user(request.user) else 'dashboard')
 
 
 @login_required
@@ -812,9 +852,25 @@ def organization_settings(request):
     organization = get_active_organization(request)
     settings_obj = get_attendance_settings(organization)
 
+    if request.method == 'POST' and request.POST.get('action') == 'digidoc_staff_access':
+        enabled = request.POST.get('enabled') == 'true'
+        previous = organization.allow_staff_digidoc
+        if enabled != previous:
+            organization.allow_staff_digidoc = enabled
+            organization.save(update_fields=['allow_staff_digidoc'])
+            write_audit_log(
+                request, organization=organization, area='organization',
+                action='digidoc.staff_access_changed',
+                summary=f"{'Enabled' if enabled else 'Disabled'} DigiDoc access for staff in {organization.name}.",
+                target=organization, metadata={'enabled': enabled},
+            )
+        messages.success(request, 'DigiDoc staff access setting saved.')
+        return redirect('organization_settings')
+
     context = {
         'organization': organization,
         'settings_obj': settings_obj,
+        'allow_staff_digidoc': organization.allow_staff_digidoc,
         'departments': Department.objects.filter(organization=organization).order_by('name'),
         'categories': Category.objects.filter(organization=organization).order_by('name'),
         'exception_types': AttendanceExceptionType.objects.filter(organization=organization).order_by('name'),
@@ -2976,9 +3032,11 @@ def applicant_reject(request, pk):
 def employee_self_service_dashboard(request):
     """Self-service dashboard for an employee login."""
 
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, membership = _active_employee_profile(request)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
+        return redirect('dashboard')
+    if membership.role == 'viewer':
         return redirect('dashboard')
 
     attendance_history = AttendanceRecord.objects.filter(
@@ -3055,9 +3113,9 @@ def employee_self_service_dashboard(request):
 
 @login_required
 def employee_my_profile(request):
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, _membership = _active_employee_profile(request)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
         return redirect('dashboard')
 
     employee = Employee.objects.select_related(
@@ -3066,12 +3124,7 @@ def employee_my_profile(request):
         'department',
         'line_manager',
         'supervisor',
-    ).prefetch_related(
-        'educations',
-        'certifications',
-        'work_experiences',
-        'documents',
-    ).get(pk=employee.pk)
+    ).prefetch_related('educations', 'certifications', 'work_experiences').get(pk=employee.pk)
 
     context = {
         'employee': employee,
@@ -3083,9 +3136,9 @@ def employee_my_profile(request):
 
 @login_required
 def employee_my_documents(request):
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, _membership = _active_employee_profile(request, allow_viewer=False)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
         return redirect('dashboard')
 
     documents = employee.documents.order_by('-uploaded_at', 'title')
@@ -3109,9 +3162,9 @@ def employee_my_documents(request):
 
 @login_required
 def employee_my_document_upload(request):
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, _membership = _active_employee_profile(request, allow_viewer=False)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -3145,9 +3198,9 @@ def employee_my_document_upload(request):
 
 @login_required
 def employee_my_document_edit(request, pk):
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, _membership = _active_employee_profile(request, allow_viewer=False)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
         return redirect('dashboard')
 
     document = get_object_or_404(EmployeeDocument, employee=employee, pk=pk)
@@ -3181,9 +3234,9 @@ def employee_my_document_edit(request, pk):
 
 @login_required
 def employee_leave_request_create(request):
-    employee = getattr(request.user, 'employee_profile', None)
+    employee, _membership = _active_employee_profile(request, allow_viewer=False)
     if not employee:
-        messages.info(request, 'Your account is not linked to an employee profile yet.')
+        messages.info(request, 'No employee profile is available in your active company.')
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -4222,15 +4275,17 @@ def payroll_run_mark_paid(request, pk):
 @login_required
 def payslip_detail(request, pk):
     payslip = get_object_or_404(Payslip.objects.select_related('payroll_run', 'employee'), pk=pk)
-    employee = getattr(request.user, 'employee_profile', None)
     active_organization = get_active_organization(request)
+    employee, membership = _active_employee_profile(request)
+    if membership is None or membership.role == 'viewer':
+        raise PermissionDenied('This account cannot view sensitive payroll information.')
 
     has_payroll_access = (
         active_organization
         and payslip.payroll_run.organization_id == active_organization.pk
         and user_has_payroll_access(request.user, active_organization)
     )
-    owns_payslip = employee and payslip.employee_id == employee.pk
+    owns_payslip = employee and payslip.employee_id == employee.pk and payslip.payroll_run.organization_id == active_organization.pk
     if not has_payroll_access and not owns_payslip:
         raise PermissionDenied('You can only view your own payslips.')
 
@@ -5018,6 +5073,208 @@ def get_upcoming_internship_endings(days=None, organization=None, employee_ids=N
 
 # ==================== COMPANY BRANDING ====================
 
+def _active_branding_membership(request, roles):
+    """Resolve branding scope only through active memberships; never profile fallback."""
+    memberships = OrganizationMembership.objects.filter(
+        user=request.user, is_active=True, role__in=roles, organization__is_active=True,
+    ).select_related('organization')
+    organization_id = request.session.get('active_organization_id')
+    membership = memberships.filter(organization_id=organization_id).first() if organization_id else None
+    if membership is None:
+        membership = memberships.order_by('organization__name').first()
+    return (membership.organization, membership) if membership else (None, None)
+
+
+def _personal_letterhead_membership(request):
+    organization, membership = _active_branding_membership(request, DIGIDOC_ROLES)
+    if not membership or not membership.can_use_personal_letterhead:
+        raise PermissionDenied
+    return organization, membership
+
+
+@login_required
+def my_letterhead(request):
+    organization, membership = _personal_letterhead_membership(request)
+    if request.method == 'POST':
+        from django.core.files.base import ContentFile
+        from .letterhead import sanitize_letterhead
+        if request.POST.get('action') == 'delete':
+            letter = get_object_or_404(PersonalLetterhead, pk=request.POST.get('letterhead_id'), organization=organization, user=request.user)
+            letter.image.delete(save=False)
+            letter.delete()
+            write_audit_log(request, organization=organization, area='organization', action='digidoc.personal_letterhead_deleted', summary=f'Deleted a personal letterhead for {request.user.username}', target=letter)
+            messages.success(request, 'Personal letterhead deleted.')
+            return redirect('my_letterhead')
+        if request.POST.get('action') != 'upload':
+            raise PermissionDenied
+        if PersonalLetterhead.objects.filter(organization=organization, user=request.user).count() >= 5:
+            messages.error(request, 'You can save up to five personal letterheads.')
+            return redirect('my_letterhead')
+        cutoff = timezone.now() - timedelta(hours=1)
+        if PersonalLetterheadUpload.objects.filter(organization=organization, user=request.user, created_at__gte=cutoff).count() >= settings.DIGIDOC_UPLOADS_PER_USER_PER_HOUR:
+            return HttpResponse('Upload limit reached. Try again later.', status=429)
+        upload = request.FILES.get('letterhead_file')
+        try:
+            data, image_format, _extension, width, height = sanitize_letterhead(upload)
+        except Exception as exc:
+            messages.error(request, str(exc))
+            return redirect('my_letterhead')
+        label = ' '.join((request.POST.get('label') or '').split())[:100]
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=request.user.pk)
+            if PersonalLetterhead.objects.filter(organization=organization, user=request.user).count() >= 5:
+                messages.error(request, 'You can save up to five personal letterheads.')
+                return redirect('my_letterhead')
+            letter = PersonalLetterhead(organization=organization, user=request.user, label=label, image_format=image_format, image_width=width, image_height=height)
+            letter.image.save('personal-letterhead.png' if image_format == 'png' else 'personal-letterhead.jpg', ContentFile(data), save=True)
+            PersonalLetterheadUpload.objects.create(organization=organization, user=request.user)
+        write_audit_log(request, organization=organization, area='organization', action='digidoc.personal_letterhead_uploaded', summary=f'Uploaded a personal letterhead for {request.user.username}', target=letter, metadata={'format': image_format, 'width': width, 'height': height})
+        messages.success(request, 'Personal letterhead uploaded.')
+        return redirect('my_letterhead')
+    letters = PersonalLetterhead.objects.filter(organization=organization, user=request.user)
+    return render(request, 'attendance/my_letterhead.html', {'organization': organization, 'letters': letters, 'remaining': max(0, 5 - letters.count()), 'page_title': 'My Letterhead'})
+
+
+@login_required
+def personal_letterhead_image(request, letterhead_id):
+    organization, membership = _active_branding_membership(request, DIGIDOC_ROLES)
+    if not membership:
+        raise PermissionDenied
+    letter = get_object_or_404(PersonalLetterhead, pk=letterhead_id, organization=organization)
+    is_admin = membership.role in {'owner', 'hr_admin'}
+    if not is_admin and (letter.user_id != request.user.pk or not membership.can_use_personal_letterhead):
+        raise PermissionDenied
+    response = FileResponse(letter.image.open('rb'), content_type='image/png' if letter.image_format == 'png' else 'image/jpeg')
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@login_required
+def personal_letterhead_admin(request):
+    organization, membership = _active_branding_membership(request, {'owner', 'hr_admin'})
+    if not membership:
+        raise PermissionDenied
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'default':
+            organization.personal_letterhead_default_enabled = request.POST.get('enabled') == 'true'
+            organization.save(update_fields=['personal_letterhead_default_enabled'])
+            write_audit_log(request, organization=organization, area='organization', action='digidoc.personal_letterhead_default_changed', summary='Changed the per-company personal letterhead default', target=organization, metadata={'enabled': organization.personal_letterhead_default_enabled})
+        elif action == 'bulk_enable':
+            changed = OrganizationMembership.objects.filter(organization=organization, is_active=True, role__in={'employee', 'manager', 'payroll_officer'}).update(can_use_personal_letterhead=True)
+            write_audit_log(request, organization=organization, area='organization', action='digidoc.personal_letterhead_bulk_enabled', summary='Enabled personal letterheads for active staff memberships', target=organization, metadata={'memberships_updated': changed})
+        elif action in {'grant', 'revoke_access'}:
+            target = get_object_or_404(OrganizationMembership, pk=request.POST.get('membership_id'), organization=organization, role__in={'employee', 'manager', 'payroll_officer'})
+            target.can_use_personal_letterhead = action == 'grant'
+            target.save(update_fields=['can_use_personal_letterhead'])
+            write_audit_log(request, organization=organization, area='organization', action=f'digidoc.personal_letterhead_{action}', summary=f'{"Granted" if target.can_use_personal_letterhead else "Revoked"} personal letterhead access for {target.user.username}', target=target, metadata={'enabled': target.can_use_personal_letterhead})
+        elif action == 'delete_letterhead':
+            letter = get_object_or_404(PersonalLetterhead, pk=request.POST.get('letterhead_id'), organization=organization)
+            letter.image.delete(save=False)
+            letter.delete()
+            write_audit_log(request, organization=organization, area='organization', action='digidoc.personal_letterhead_deleted_by_hr', summary=f'Deleted a personal letterhead owned by {letter.user.username}', target=letter)
+        else:
+            raise PermissionDenied
+        return redirect('personal_letterhead_admin')
+    memberships = OrganizationMembership.objects.filter(organization=organization, role__in={'employee', 'manager', 'payroll_officer'}).select_related('user').order_by('user__username')
+    letters = PersonalLetterhead.objects.filter(organization=organization).select_related('user').order_by('user__username', '-created_at')
+    return render(request, 'attendance/personal_letterhead_admin.html', {'organization': organization, 'memberships': memberships, 'letters': letters, 'page_title': 'Personal Letterheads'})
+
+
+def _send_private_upload(file_field, *, as_attachment=False):
+    if not file_field:
+        raise Http404
+    try:
+        file_field.open('rb')
+    except (OSError, ValueError):
+        raise Http404
+    content_type = mimetypes.guess_type(file_field.name)[0] or 'application/octet-stream'
+    response = FileResponse(file_field, content_type=content_type, as_attachment=as_attachment)
+    response['Cache-Control'] = 'private, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+def _active_company_member(request, organization):
+    return bool(organization and organization.is_active and OrganizationMembership.objects.filter(
+        user=request.user, organization=organization, is_active=True,
+    ).exists())
+
+
+@login_required
+def organization_logo(request, organization_id):
+    organization = get_object_or_404(Organization, pk=organization_id, is_active=True)
+    if not _active_company_member(request, organization):
+        raise Http404
+    return _send_private_upload(organization.logo)
+
+
+@platform_admin_required
+def platform_organization_logo(request, organization_id):
+    organization = get_object_or_404(Organization, pk=organization_id, is_active=True)
+    return _send_private_upload(organization.logo)
+
+
+@login_required
+def organization_profile_photo(request, employee_id):
+    employee = get_object_or_404(Employee.objects.select_related('organization'), pk=employee_id)
+    membership = request.user.organization_memberships.filter(
+        organization=employee.organization, is_active=True, organization__is_active=True,
+    ).first()
+    if not membership:
+        raise Http404
+    if membership.role not in {'owner', 'hr_admin'} and employee.user_id != request.user.pk:
+        raise Http404
+    return _send_private_upload(employee.profile_photo)
+
+
+@login_required
+def employee_document_download(request, document_id):
+    document = get_object_or_404(EmployeeDocument.objects.select_related('employee__organization'), pk=document_id)
+    organization = document.employee.organization
+    membership = request.user.organization_memberships.filter(
+        organization=organization, is_active=True, organization__is_active=True,
+    ).first()
+    if not membership or membership.role == 'viewer':
+        raise Http404
+    if membership.role not in {'owner', 'hr_admin'} and document.employee.user_id != request.user.pk:
+        raise Http404
+    return _send_private_upload(document.file, as_attachment=True)
+
+
+@login_required
+def legacy_private_media(request, path):
+    """Serve old stored media URLs only after resolving and authorizing their record."""
+    organization = Organization.objects.filter(logo=path, is_active=True).first()
+    if organization:
+        if not _active_company_member(request, organization):
+            raise Http404
+        return _send_private_upload(organization.logo)
+    employee = Employee.objects.select_related('organization').filter(profile_photo=path).first()
+    if employee:
+        membership = request.user.organization_memberships.filter(
+            organization=employee.organization, is_active=True, organization__is_active=True,
+        ).first()
+        if not membership:
+            raise Http404
+        if membership.role not in {'owner', 'hr_admin'} and employee.user_id != request.user.pk:
+            raise Http404
+        return _send_private_upload(employee.profile_photo)
+    document = EmployeeDocument.objects.select_related('employee__organization').filter(file=path).first()
+    if document:
+        organization = document.employee.organization
+        membership = request.user.organization_memberships.filter(
+            organization=organization, is_active=True, organization__is_active=True,
+        ).first()
+        if not membership or membership.role == 'viewer':
+            raise Http404
+        if membership.role not in {'owner', 'hr_admin'} and document.employee.user_id != request.user.pk:
+            raise Http404
+        return _send_private_upload(document.file, as_attachment=True)
+    raise Http404
+
+
 @login_required
 def organization_branding(request):
     from .branding import accent_vars, dominant_color
@@ -5031,12 +5288,8 @@ def organization_branding(request):
         nav_inputs_from_organization,
         resolve_nav_theme,
     )
-    organization = get_active_organization(request)
-    membership = OrganizationMembership.objects.filter(
-        user=request.user, organization=organization, is_active=True
-    ).first()
-    role = membership.role if membership else ''
-    if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
+    organization, membership = _active_branding_membership(request, {'owner', 'hr_admin'})
+    if not membership:
         raise PermissionDenied
     stored_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
 
@@ -5273,9 +5526,9 @@ def _handle_company_letterhead_post(request, organization):
 @login_required
 def company_letterhead_image(request):
     """Serve only the active company's private, re-encoded letterhead image."""
-    organization = get_active_organization(request)
-    if not organization:
-        return HttpResponse(status=404)
+    organization, membership = _active_branding_membership(request, {'owner', 'hr_admin', 'manager', 'payroll_officer', 'employee'})
+    if not membership:
+        raise PermissionDenied
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
     slot = request.GET.get('slot', '1')
     if slot not in {'1', '2'}:
@@ -5294,9 +5547,9 @@ def company_letterhead_image(request):
 
 @login_required
 def company_letterhead_sample_pdf(request):
-    organization = get_active_organization(request)
-    if not organization:
-        return HttpResponse(status=404)
+    organization, membership = _active_branding_membership(request, {'owner', 'hr_admin'})
+    if not membership:
+        raise PermissionDenied
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
     if not asset:
         return HttpResponse(status=404)
@@ -5350,12 +5603,8 @@ def organization_nav_preview(request):
     """Return resolved sidebar tokens for the settings/wizard live preview."""
     from .nav_theme import nav_inputs_from_mapping, resolve_nav_theme
 
-    organization = get_active_organization(request)
-    membership = OrganizationMembership.objects.filter(
-        user=request.user, organization=organization, is_active=True
-    ).first()
-    role = membership.role if membership else ''
-    if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
+    organization, membership = _active_branding_membership(request, {'owner', 'hr_admin'})
+    if not membership:
         raise PermissionDenied
 
     data = request.GET.copy()

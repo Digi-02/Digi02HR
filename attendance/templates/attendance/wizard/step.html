@@ -203,7 +203,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="wiz-field{% if form.logo.errors %} err{% endif %}">
         <label>Logo (PNG/JPG/WebP)</label>
         {{ form.logo }}
-        {% if organization.logo %}<div class="wiz-logo-preview mt-2"><img src="{{ organization.logo.url }}" alt="Company logo"></div>{% endif %}
+        {% if organization.logo %}<div class="wiz-logo-preview mt-2"><img src="{% url 'organization_logo' organization.pk %}" alt="Company logo"></div>{% endif %}
         {% if form.logo.errors %}<div class="wiz-err">{{ form.logo.errors|striptags }}</div>{% endif %}
       </div>
       <div class="wiz-brand-row">

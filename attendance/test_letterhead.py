@@ -155,7 +155,7 @@ class LetterheadSecurityTests(TestCase):
         })
         asset = CompanyLetterhead.objects.get(organization=org)
         audit = AuditLog.objects.get(action='branding.letterhead_uploaded')
-        self.assertEqual(audit.metadata, {'format': 'jpeg', 'width': 210, 'height': 297})
+        self.assertEqual(audit.metadata, {'slot': '1', 'format': 'jpeg', 'width': 210, 'height': 297})
         self.assertRegex(asset.image.name.rsplit('/', 1)[-1], r'^[0-9a-f]{32}\.jpg$')
         with asset.image.open('rb') as fh:
             stored = Image.open(fh)
@@ -185,6 +185,48 @@ class LetterheadSecurityTests(TestCase):
         self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
         self.assertEqual(response['Cache-Control'], 'private, no-store')
         response.close()
+
+    def test_inactive_membership_with_linked_employee_cannot_use_digidoc_or_letterhead(self):
+        from attendance.models import Category, Employee
+        org = Organization.objects.create(name='InactiveCo', slug='inactiveco', setup_completed=True)
+        user = User.objects.create_user('inactive_employee', password='pw123456')
+        membership = OrganizationMembership.objects.create(user=user, organization=org, role='employee', is_active=False)
+        category = Category.objects.create(organization=org, name='Staff', code='STAFF', icon='bi-person', color='primary')
+        Employee.objects.create(organization=org, user=user, category=category, employee_id='INACTIVE-001', first_name='Inactive', last_name='Member', email='inactive@example.test', phone='08000000000', gender='FEMALE')
+        client = Client()
+        client.force_login(user)
+        for url in ('/digidoc/', '/settings/branding/', '/settings/branding/letterhead/image/', '/settings/branding/letterhead/sample.pdf'):
+            self.assertEqual(client.get(url, follow=True).status_code, 403, url)
+        membership.refresh_from_db()
+        self.assertFalse(membership.is_active)
+
+    def test_letterhead_views_require_management_role_except_image(self):
+        org, owner = setup_owner('RoleGateCo', 'role_gate_owner')
+        asset = CompanyLetterhead.objects.create(organization=org, image_format='png', image_width=210, image_height=297)
+        from django.core.files.base import ContentFile
+        asset.image.save('role-gate.png', ContentFile(image_bytes()), save=True)
+        manager = User.objects.create_user('role_gate_manager', password='pw123456')
+        OrganizationMembership.objects.create(user=manager, organization=org, role='manager')
+        client = Client()
+        client.force_login(manager)
+        image_response = client.get('/settings/branding/letterhead/image/')
+        self.assertEqual(image_response.status_code, 200)
+        image_response.close()
+        self.assertEqual(client.get('/settings/branding/letterhead/sample.pdf').status_code, 403)
+        self.assertEqual(client.get('/settings/branding/').status_code, 403)
+        client.force_login(owner)
+        sample_response = client.get('/settings/branding/letterhead/sample.pdf')
+        self.assertEqual(sample_response.status_code, 200)
+        sample_response.close()
+
+    def test_superuser_without_membership_cannot_open_company_letterhead_endpoints(self):
+        org, _owner = setup_owner('PlatformGateCo', 'platform_gate_owner')
+        user = User.objects.create_superuser('platform_gate', 'platform@example.test', 'pw123456')
+        client = Client()
+        client.force_login(user)
+        self.assertEqual(client.get('/settings/branding/', follow=True).status_code, 403)
+        self.assertEqual(client.get('/settings/branding/letterhead/image/', follow=True).status_code, 403)
+        self.assertEqual(client.get('/settings/branding/letterhead/sample.pdf', follow=True).status_code, 403)
 
     def test_upload_rate_limit_and_csrf(self):
         org, user = setup_owner('RateCo', 'rate_owner')

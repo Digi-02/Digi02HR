@@ -11,7 +11,7 @@
                 <div class="d-flex align-items-center gap-3">
                     <div class="profile-avatar-sm">
                         {% if employee.profile_photo %}
-                            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}">
+                            <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}">
                         {% else %}
                             <i class="bi bi-person-circle"></i>
                         {% endif %}
@@ -40,7 +40,7 @@
                 <div class="card-body p-4 text-center">
                     <div class="profile-avatar-lg mx-auto mb-3">
                         {% if employee.profile_photo %}
-                            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}">
+                            <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}">
                         {% else %}
                             <i class="bi bi-person-circle"></i>
                         {% endif %}

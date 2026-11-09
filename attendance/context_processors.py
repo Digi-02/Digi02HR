@@ -46,12 +46,13 @@ def global_context(request):
     }
 
     if request.user.is_authenticated:
-        context["is_employee_self_service_only"] = is_employee_self_service_user(request.user)
-        context["user_has_hr_access"] = user_has_hr_access(request.user)
-        context["user_has_manager_access"] = user_has_manager_access(request.user)
-        context["user_has_payroll_access"] = user_has_payroll_access(request.user)
-        context["user_has_viewer_access"] = user_has_viewer_access(request.user)
         context["active_organization"] = get_active_organization(request)
+        context["is_employee_self_service_only"] = is_employee_self_service_user(request.user)
+        active_org = context["active_organization"]
+        context["user_has_hr_access"] = user_has_hr_access(request.user, active_org)
+        context["user_has_manager_access"] = user_has_manager_access(request.user, active_org)
+        context["user_has_payroll_access"] = user_has_payroll_access(request.user, active_org)
+        context["user_has_viewer_access"] = user_has_viewer_access(request.user, active_org)
         context["user_organizations"] = get_user_organizations(request.user)
         try:
             from .branding import accent_vars

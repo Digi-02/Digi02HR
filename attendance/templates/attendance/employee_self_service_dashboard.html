@@ -12,7 +12,7 @@
                 <div class="d-flex align-items-center gap-3">
                     <div class="employee-avatar employee-avatar-sm">
                         {% if employee.profile_photo %}
-                            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="employee-photo">
+                            <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}" class="employee-photo">
                         {% else %}
                             <i class="bi bi-person-circle"></i>
                         {% endif %}
@@ -49,7 +49,7 @@
                 <div class="card-body p-4 text-center">
                     <div class="employee-avatar mx-auto mb-3">
                         {% if employee.profile_photo %}
-                            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="employee-photo">
+                            <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}" class="employee-photo">
                         {% else %}
                             <i class="bi bi-person-circle"></i>
                         {% endif %}

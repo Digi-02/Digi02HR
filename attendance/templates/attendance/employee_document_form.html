@@ -59,7 +59,7 @@
                         {{ form.file }}
                         {% if form.file.errors %}<div class="text-danger small mt-1">{{ form.file.errors.0 }}</div>{% endif %}
                         {% if document and document.file %}
-                        <small class="text-muted d-block mt-2">Current file: <a href="{{ document.file.url }}" target="_blank" rel="noopener">Open file</a></small>
+                        <small class="text-muted d-block mt-2">Current file: <a href="{% url 'employee_document_download' document.pk %}" target="_blank" rel="noopener">Open file</a></small>
                         {% endif %}
                     </div>
                     <div class="form-field">

@@ -2,6 +2,30 @@
 from django.shortcuts import render, redirect
 
 
+class ActiveOrganizationMembershipMiddleware:
+    """Keep authenticated company pages behind an active membership."""
+
+    EXEMPT_PREFIXES = (
+        '/platform/', '/login/', '/logout/', '/welcome/', '/password-reset/',
+        '/password-change/', '/reset/', '/set-password/', '/static/',
+        '/api/v1/technical-command/', '/o/', '/no-active-company/',
+    )
+    EXEMPT_EXACT = {'/', '/no-active-company'}
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            path = request.path or '/'
+            exempt = path in self.EXEMPT_EXACT or any(path.startswith(p) for p in self.EXEMPT_PREFIXES)
+            if not exempt:
+                from .organization import get_active_organization
+                if get_active_organization(request) is None:
+                    return redirect('no_active_company')
+        return self.get_response(request)
+
+
 class SuspendedOrganizationMiddleware:
     """Users of a suspended company see a clear page instead of the app."""
 
@@ -11,7 +35,7 @@ class SuspendedOrganizationMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated and not request.user.is_superuser:
+        if request.user.is_authenticated:
             path = request.path or '/'
             if not path.startswith(self.EXEMPT_PREFIXES):
                 try:
@@ -54,7 +78,7 @@ class SetupWizardMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated and not request.user.is_superuser:
+        if request.user.is_authenticated:
             path = request.path or '/'
             is_exempt = path in self.EXEMPT_EXACT or any(
                 path.startswith(p) for p in self.EXEMPT_PREFIXES

@@ -34,25 +34,19 @@ def get_default_organization():
 def get_user_organizations(user):
     if not user.is_authenticated:
         return Organization.objects.none()
-    if user.is_superuser:
-        return Organization.objects.filter(is_active=True).order_by('name')
-    organizations = Organization.objects.filter(
+    return Organization.objects.filter(
         memberships__user=user,
         memberships__is_active=True,
         is_active=True,
-    )
-    if hasattr(user, 'employee_profile') and user.employee_profile.organization.is_active:
-        organizations = organizations | Organization.objects.filter(pk=user.employee_profile.organization_id, is_active=True)
-    return organizations.distinct().order_by('name')
+    ).distinct().order_by('name')
 
 
 def user_has_hr_access(user, organization=None):
     if not user.is_authenticated:
         return False
-    if user.is_staff or user.is_superuser:
-        return True
     memberships = user.organization_memberships.filter(
         is_active=True,
+        organization__is_active=True,
         role__in=HR_ROLES,
     )
     if organization is not None:
@@ -60,13 +54,27 @@ def user_has_hr_access(user, organization=None):
     return memberships.exists()
 
 
+DIGIDOC_ROLES = {'owner', 'hr_admin', 'manager', 'payroll_officer', 'employee'}
+
+
+def user_has_digidoc_access(user, organization=None):
+    """DigiDoc access is granted only by an active, explicit membership."""
+    if not user.is_authenticated:
+        return False
+    memberships = user.organization_memberships.filter(is_active=True, organization__is_active=True, role__in=DIGIDOC_ROLES)
+    if organization is not None:
+        memberships = memberships.filter(organization=organization)
+    if memberships.filter(role__in=HR_ROLES).exists():
+        return True
+    return memberships.filter(organization__allow_staff_digidoc=True).exists()
+
+
 def user_has_payroll_access(user, organization=None):
     if not user.is_authenticated:
         return False
-    if user.is_staff or user.is_superuser:
-        return True
     memberships = user.organization_memberships.filter(
         is_active=True,
+        organization__is_active=True,
         role__in=PAYROLL_ROLES,
     )
     if organization is not None:
@@ -77,11 +85,10 @@ def user_has_payroll_access(user, organization=None):
 def user_has_viewer_access(user, organization=None):
     if not user.is_authenticated:
         return False
-    if user.is_staff or user.is_superuser:
-        return True
     memberships = user.organization_memberships.filter(
         is_active=True,
-        role__in=VIEWER_ROLES,
+        organization__is_active=True,
+        role='viewer',
     )
     if organization is not None:
         memberships = memberships.filter(organization=organization)
@@ -96,6 +103,16 @@ def user_has_manager_access(user, organization=None):
     employee = getattr(user, 'employee_profile', None)
     if not employee:
         return False
+    memberships = user.organization_memberships.filter(
+        organization_id=employee.organization_id,
+        is_active=True,
+        organization__is_active=True,
+        role='manager',
+    )
+    if organization is not None:
+        memberships = memberships.filter(organization=organization)
+    if not memberships.exists():
+        return False
     direct_reports = employee.direct_reports.filter(is_active=True)
     if organization is not None:
         direct_reports = direct_reports.filter(organization=organization)
@@ -104,6 +121,12 @@ def user_has_manager_access(user, organization=None):
 
 def is_employee_self_service_user(user):
     if not user.is_authenticated or not hasattr(user, 'employee_profile'):
+        return False
+    if not user.organization_memberships.filter(
+        organization_id=user.employee_profile.organization_id,
+        is_active=True,
+        organization__is_active=True,
+    ).exists():
         return False
     return not (
         user_has_hr_access(user)
@@ -114,17 +137,10 @@ def is_employee_self_service_user(user):
 
 
 def ensure_default_membership(user):
+    """Legacy helper: never provision company access from Django staff flags."""
     if not user.is_authenticated:
         return None
-    if not (user.is_staff or user.is_superuser):
-        return None
-    organization = get_default_organization()
-    OrganizationMembership.objects.get_or_create(
-        user=user,
-        organization=organization,
-        defaults={'role': 'owner' if user.is_superuser else 'hr_admin'},
-    )
-    return organization
+    return get_user_organizations(user).first()
 
 
 def ensure_default_categories(organization):
@@ -203,6 +219,9 @@ def setup_default_organization_records(organization):
 
 
 def get_active_organization(request):
+    if not request.user.is_authenticated or request.user.is_superuser:
+        request.session.pop('active_organization_id', None)
+        return None
     organizations = get_user_organizations(request.user)
     organization_id = request.session.get('active_organization_id')
 
@@ -210,10 +229,9 @@ def get_active_organization(request):
         organization = organizations.filter(pk=organization_id).first()
         if organization:
             return organization
+        request.session.pop('active_organization_id', None)
 
     organization = organizations.first()
-    if organization is None:
-        organization = ensure_default_membership(request.user)
 
     if organization:
         request.session['active_organization_id'] = organization.pk

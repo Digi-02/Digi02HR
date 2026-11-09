@@ -87,13 +87,29 @@
   const letterheadToggle = document.getElementById('dd-letterhead-menu');
   letterheadToggle.addEventListener('click', () => {
     const checkbox = document.getElementById('dd-letterhead');
+    const source = document.getElementById('dd-letterhead-source');
     if (checkbox.disabled) return;
-    checkbox.checked = !checkbox.checked;
-    letterheadToggle.textContent = checkbox.checked ? 'Remove letterhead' : 'Letterhead';
+    const alreadyCompany = source.value === 'company' && checkbox.checked;
+    source.value = 'company';
+    editor.dataset.preserveCompanySnapshot = 'false';
+    checkbox.checked = !alreadyCompany;
+    letterheadToggle.textContent = checkbox.checked ? 'Remove letterhead' : 'Use company letterhead';
     checkbox.dispatchEvent(new Event('change', { bubbles: true }));
   });
   document.getElementById('dd-letterhead').addEventListener('change', event => {
-    letterheadToggle.textContent = event.target.checked ? 'Remove letterhead' : 'Letterhead';
+    letterheadToggle.textContent = event.target.checked && document.getElementById('dd-letterhead-source').value === 'company' ? 'Remove letterhead' : 'Use company letterhead';
+  });
+  document.getElementById('dd-use-personal-letterhead').addEventListener('click', () => {
+    const selected = document.getElementById('dd-personal-letterhead').value;
+    if (!selected) return;
+    document.getElementById('dd-letterhead-source').value = 'personal';
+    document.getElementById('dd-letterhead').checked = true;
+    document.getElementById('dd-letterhead-first').value = '1';
+    document.getElementById('dd-letterhead-other').value = '1';
+    document.getElementById('dd-letterhead').dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  document.getElementById('dd-personal-letterhead').addEventListener('change', () => {
+    if (document.getElementById('dd-letterhead-source').value === 'personal') document.getElementById('dd-letterhead').dispatchEvent(new Event('change', { bubbles: true }));
   });
 
   function updateCurrentPage() {

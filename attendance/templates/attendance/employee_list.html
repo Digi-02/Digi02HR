@@ -97,7 +97,7 @@
                             <td>
                                 <div class="d-flex align-items-center">
                                     {% if employee.profile_photo %}
-                                        <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
+                                        <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
                                     {% else %}
                                         <div class="bg-light p-2 rounded me-3 border">
                                             <i class="bi bi-person"></i>

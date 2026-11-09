@@ -1,6 +1,5 @@
 # core/urls.py
 
-from django.contrib import admin
 from django.urls import path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
@@ -9,7 +8,7 @@ from attendance import views
 from attendance import shell as shell_views
 from attendance import wizard as wizard_views
 from attendance import digidoc as digidoc_views
-from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api
+from attendance.integration_api import technical_command_attendance_today_api, technical_command_people_api, technical_command_employee_photo
 
 from django.contrib.auth import views as auth_views
 from django.contrib.auth import get_user_model
@@ -83,6 +82,7 @@ urlpatterns = [
     path('platform/companies/', platform_views.company_list, name='platform_companies'),
     path('platform/companies/create/', platform_views.company_create, name='platform_company_create'),
     path('platform/companies/<int:pk>/', platform_views.company_detail, name='platform_company_detail'),
+    path('platform/companies/<int:organization_id>/logo/', views.platform_organization_logo, name='platform_organization_logo'),
     path('platform/companies/<int:pk>/action/', platform_views.company_action, name='platform_company_action'),
     path('platform/requests/', platform_views.access_requests, name='platform_access_requests'),
     path('platform/requests/<int:pk>/action/', platform_views.access_request_action, name='platform_access_request_action'),
@@ -110,13 +110,12 @@ urlpatterns = [
     path('password-change/done/', auth_views.PasswordChangeDoneView.as_view(
         template_name='registration/password_change_done.html'), name='password_change_done'),
     path('api/v1/technical-command/people/', technical_command_people_api, name='technical_command_people_api'),
+    path('api/v1/technical-command/people/<int:employee_id>/photo/', technical_command_employee_photo, name='technical_command_employee_photo'),
     path('api/v1/technical-command/attendance/today/', technical_command_attendance_today_api, name='technical_command_attendance_today_api'),
-    # Admin (only for superusers)
-    path('admin/', admin.site.urls),
-    
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('no-active-company/', views.no_active_company, name='no_active_company'),
     
     # Public kiosk
     path('', views.kiosk_view, name='kiosk'),
@@ -139,11 +138,17 @@ urlpatterns = [
     path('organizations/add/', views.organization_create, name='organization_create'),
     path('organizations/<int:pk>/edit/', views.organization_edit, name='organization_edit'),
     path('organizations/<int:pk>/switch/', views.organization_switch, name='organization_switch'),
+    path('organizations/<int:organization_id>/logo/', views.organization_logo, name='organization_logo'),
+    path('employees/<int:employee_id>/profile-photo/', views.organization_profile_photo, name='organization_profile_photo'),
+    path('employee-documents/<int:document_id>/file/', views.employee_document_download, name='employee_document_download'),
     path('settings/', views.organization_settings, name='organization_settings'),
     path('settings/branding/', views.organization_branding, name='organization_branding'),
     path('settings/branding/nav-preview/', views.organization_nav_preview, name='organization_nav_preview'),
     path('settings/branding/letterhead/image/', views.company_letterhead_image, name='company_letterhead_image'),
     path('settings/branding/letterhead/sample.pdf', views.company_letterhead_sample_pdf, name='company_letterhead_sample_pdf'),
+    path('settings/my-letterhead/', views.my_letterhead, name='my_letterhead'),
+    path('settings/my-letterhead/<uuid:letterhead_id>/image/', views.personal_letterhead_image, name='personal_letterhead_image'),
+    path('settings/personal-letterheads/', views.personal_letterhead_admin, name='personal_letterhead_admin'),
     path('open-source-notices/', views.open_source_notices, name='open_source_notices'),
     path('settings/departments/', views.organization_departments, name='organization_departments'),
     path('settings/categories/', views.organization_categories, name='organization_categories'),
@@ -164,9 +169,12 @@ urlpatterns = [
     path('documents/', views.employee_documents, name='employee_documents'),
     path('digidoc/', digidoc_views.digidoc_list, name='digidoc_list'),
     path('digidoc/create/', digidoc_views.digidoc_create, name='digidoc_create'),
+    path('digidoc/<uuid:document_id>/claim/', digidoc_views.digidoc_claim, name='digidoc_claim'),
     path('digidoc/images/upload/', digidoc_views.digidoc_image_upload, name='digidoc_image_upload'),
     path('digidoc/images/<uuid:asset_id>/', digidoc_views.digidoc_image, name='digidoc_image'),
     path('digidoc/<uuid:document_id>/thumbnail.png', digidoc_views.digidoc_thumbnail, name='digidoc_thumbnail'),
+    path('digidoc/<uuid:document_id>/letterhead/<str:slot>.png', digidoc_views.digidoc_letterhead_image, name='digidoc_letterhead_image'),
+    path('digidoc/<uuid:document_id>/personal-letterhead.png', digidoc_views.digidoc_personal_letterhead_image, name='digidoc_personal_letterhead_image'),
     path('digidoc/<uuid:document_id>/', digidoc_views.digidoc_editor, name='digidoc_editor'),
     path('digidoc/<uuid:document_id>/save/', digidoc_views.digidoc_save, name='digidoc_save'),
     path('digidoc/<uuid:document_id>/preview/', digidoc_views.digidoc_preview, name='digidoc_preview'),
@@ -252,8 +260,8 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += [
     re_path(r"^static/(?P<path>.*)$", static_serve, {"document_root": settings.STATIC_ROOT}),
-    re_path(r"^media/(?P<path>.*)$", static_serve, {"document_root": settings.MEDIA_ROOT}),
+    re_path(r"^media/(?P<path>.*)$", views.legacy_private_media, name='legacy_private_media'),
 ]

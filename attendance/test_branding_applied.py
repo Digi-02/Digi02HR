@@ -3,6 +3,7 @@ from io import BytesIO
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
+from django.urls import reverse
 from PIL import Image
 
 from attendance.models import Organization, OrganizationMembership
@@ -15,7 +16,7 @@ def make_png(color='red', size=(100, 60)):
 
 
 def make_org_with_owner(name, slug, username):
-    org = Organization.objects.create(name=name, slug=slug)
+    org = Organization.objects.create(name=name, slug=slug, setup_completed=True)
     user = User.objects.create_user(username, email=f'{username}@example.com', password='pw123456')
     OrganizationMembership.objects.create(user=user, organization=org, role='owner')
     return org, user
@@ -48,7 +49,7 @@ class BrandingAppliedTests(TestCase):
         org.refresh_from_db()
         self.assertTrue(bool(org.logo))
         html = c.get('/dashboard/').content.decode('utf-8')
-        self.assertIn(org.logo.url, html)
+        self.assertIn(reverse('organization_logo', args=[org.pk]), html)
         self.assertIn('brand-logo-full', html)
 
     def test_replace_and_remove_logo(self):
@@ -71,7 +72,7 @@ class BrandingAppliedTests(TestCase):
             'nav_highlight_color': '#0A0A0A', 'logo': second})
         org.refresh_from_db()
         self.assertNotEqual(org.logo.name, first_name)
-        self.assertIn(org.logo.url, c.get('/dashboard/').content.decode('utf-8'))
+        self.assertIn(reverse('organization_logo', args=[org.pk]), c.get('/dashboard/').content.decode('utf-8'))
         # Remove
         c.post('/settings/branding/', {
             'name': 'SwapCo', 'brand_color': '#0A0A0A', 'timezone': 'Africa/Lagos',

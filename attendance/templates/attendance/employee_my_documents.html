@@ -87,7 +87,7 @@
                             </td>
                             <td>{{ document.uploaded_at|date:"M j, Y" }}</td>
                             <td class="text-end">
-                                <a href="{{ document.file.url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+                                <a href="{% url 'employee_document_download' document.pk %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
                                     <i class="bi bi-box-arrow-up-right me-1"></i> Open
                                 </a>
                                 <a href="{% url 'employee_my_document_edit' document.pk %}" class="btn btn-sm btn-outline-secondary">

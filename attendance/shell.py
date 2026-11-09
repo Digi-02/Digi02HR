@@ -14,12 +14,14 @@ from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_POST
 
-from .models import FavoritePage
+from .models import FavoritePage, OrganizationMembership
 from .organization import (
     get_active_organization,
     user_has_hr_access,
     user_has_manager_access,
     user_has_payroll_access,
+    user_has_viewer_access,
+    user_has_digidoc_access,
 )
 
 
@@ -53,7 +55,7 @@ NAV_SECTIONS = (
                 icon="bi-person-vcard",
                 url_name="employee_self_service_dashboard",
                 match=("employee_self_service_dashboard",),
-                access=("self_service",),
+                access=("self_service", "viewer"),
                 keywords="me home overview employee",
             ),
             NavItem(
@@ -86,7 +88,7 @@ NAV_SECTIONS = (
                 icon="bi-grid-1x2",
                 url_name="dashboard",
                 match=("dashboard", "category_dashboard", "manager_dashboard", "manager_team"),
-                access=("hr", "manager"),
+                access=("hr", "manager", "viewer"),
                 keywords="home dashboard overview",
             ),
         ),
@@ -132,7 +134,7 @@ NAV_SECTIONS = (
                 icon="bi-journal-pen",
                 url_name="digidoc_list",
                 match=("digidoc_list", "digidoc_editor"),
-                access=("hr",),
+                access=("digidoc",),
                 keywords="documents editor letters reports",
             ),
             NavItem(
@@ -336,6 +338,15 @@ NAV_SECTIONS = (
                 keywords="logo colour color theme navigation",
             ),
             NavItem(
+                key="my_letterhead",
+                label="My Letterhead",
+                icon="bi-file-earmark-richtext",
+                url_name="my_letterhead",
+                match=("my_letterhead",),
+                access=("personal_letterhead",),
+                keywords="personal letterhead document",
+            ),
+            NavItem(
                 key="kiosk",
                 label="Kiosk view",
                 icon="bi-qr-code",
@@ -351,17 +362,24 @@ NAV_SECTIONS = (
 
 
 def _access_flags(user, organization):
+    if organization is None:
+        return {"self_service": False, "hr": False, "manager": False, "payroll": False, "viewer": False, "digidoc": False, "personal_letterhead": False}
+    employee = getattr(user, "employee_profile", None)
+    active_profile_membership = bool(
+        user.is_authenticated and employee and organization
+        and employee.organization_id == organization.pk
+        and OrganizationMembership.objects.filter(
+            user=user, organization=organization, is_active=True,
+        ).exists()
+    )
     return {
-        "self_service": bool(
-            getattr(user, "employee_profile", None)
-            and (
-                organization is None
-                or user.employee_profile.organization_id == organization.pk
-            )
-        ),
+        "self_service": active_profile_membership,
         "hr": user_has_hr_access(user, organization),
         "manager": user_has_manager_access(user, organization),
         "payroll": user_has_payroll_access(user, organization),
+        "viewer": user_has_viewer_access(user, organization),
+        "digidoc": user_has_digidoc_access(user, organization),
+        "personal_letterhead": bool(user.is_authenticated and organization and OrganizationMembership.objects.filter(user=user, organization=organization, is_active=True, role__in={"owner", "hr_admin", "manager", "payroll_officer", "employee"}, can_use_personal_letterhead=True).exists()),
     }
 
 
@@ -382,6 +400,8 @@ def build_navigation(user, organization):
         visible_items = []
         for item in section.items:
             if item.access and not any(flags.get(access) for access in item.access):
+                continue
+            if item.key == "my_documents" and flags["viewer"]:
                 continue
             if item.key == "my_dashboard" and (flags["hr"] or flags["manager"]):
                 continue

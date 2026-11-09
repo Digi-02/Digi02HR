@@ -8,7 +8,7 @@
 <div class="col-lg-6"><div class="card"><div class="card-header"><h5 class="mb-0">Company info</h5></div><div class="card-body">
 <p><strong>Contact:</strong> {{ org.email|default:"-" }} · {{ org.phone|default:"-" }}</p>
 <p><strong>Timezone:</strong> {{ org.timezone }} · <strong>Brand:</strong> <code>{{ org.brand_color }}</code>
-{% if org.logo %}<br><img src="{{ org.logo.url }}" alt="Company logo" height="48" class="mt-2">{% else %}<span class="text-muted">(no logo)</span>{% endif %}</p>
+{% if org.logo %}<br><img src="{% url 'platform_organization_logo' org.pk %}" alt="Company logo" height="48" class="mt-2">{% else %}<span class="text-muted">(no logo)</span>{% endif %}</p>
 <p><strong>Employees:</strong> {{ employees }}</p>
 <p><strong>Users by role:</strong><br>{% for r in roles %}<span class="badge badge-mid me-1">{{ r.role }}: {{ r.total }}</span>{% empty %}<span class="text-muted">No users yet.</span>{% endfor %}</p>
 <p><strong>Owner:</strong> {% if owner %}{{ owner.get_full_name|default:owner.username }} ({{ owner.email }}){% else %}<span class="text-muted">No owner assigned.</span>{% endif %}</p>

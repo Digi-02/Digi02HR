@@ -1,0 +1,15 @@
+{% extends 'attendance/base.html' %}
+
+{% block title %}No active company | DIGI HR{% endblock %}
+{% block page_title %}No active company{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <div class="card border-0 shadow-sm mx-auto" style="max-width: 620px">
+    <div class="card-body p-4 p-md-5 text-center">
+      <h1 class="h4 mb-3">You do not have access to an active company</h1>
+      <p class="text-muted mb-4">Ask your company owner or HR administrator to restore your active membership. Your employee profile alone cannot grant access.</p>
+      <a class="btn btn-outline-secondary" href="{% url 'logout' %}">Sign out</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

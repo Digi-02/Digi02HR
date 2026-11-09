@@ -1,8 +1,11 @@
 import hmac
+import mimetypes
 from django.conf import settings
 from django.core.paginator import EmptyPage, Paginator
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
@@ -61,10 +64,25 @@ def _positive_int(value, name, default, maximum=None):
 def _photo_url(request, employee):
     if not employee.profile_photo:
         return None
+    return request.build_absolute_uri(reverse('technical_command_employee_photo', args=[employee.pk]))
+
+
+@require_GET
+def technical_command_employee_photo(request, employee_id):
+    organization, auth_error = _authenticated_organization(request)
+    if auth_error:
+        return auth_error
+    employee = get_object_or_404(Employee, pk=employee_id, organization=organization)
+    if not employee.profile_photo:
+        return error_response('photo_not_found', 'The profile photo is unavailable.', 404)
     try:
-        return request.build_absolute_uri(employee.profile_photo.url)
-    except ValueError:
-        return None
+        file_object = employee.profile_photo.open('rb')
+    except (OSError, ValueError):
+        return error_response('photo_not_found', 'The profile photo is unavailable.', 404)
+    response = FileResponse(file_object, content_type=mimetypes.guess_type(employee.profile_photo.name)[0] or 'application/octet-stream')
+    response['Cache-Control'] = 'private, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 def _serialize_employee(request, employee):

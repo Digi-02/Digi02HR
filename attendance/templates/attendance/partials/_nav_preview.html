@@ -22,7 +22,7 @@
     <div class="nav-preview__brand">
         <span class="nav-preview__mark{% if organization.logo_is_light %} is-dark{% endif %}">
             {% if organization.logo %}
-            <img src="{{ organization.logo.url }}" alt="">
+            <img src="{% url 'organization_logo' organization.pk %}" alt="">
             {% else %}
             {{ organization.name|default:"DIGI HR"|slice:":1"|upper }}
             {% endif %}

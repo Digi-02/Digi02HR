@@ -71,15 +71,26 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertContains(response, 'data-label="DigiDoc"')
         self.assertContains(response, 'aria-current="page"')
 
-    def test_people_roles_without_documents_access_are_denied(self):
+    def test_manager_membership_gets_digidoc_without_direct_reports(self):
         user = User.objects.create_user("digidoc_manager", password="test-pass-123")
         OrganizationMembership.objects.create(user=user, organization=self.organization, role="manager")
         client = Client()
         client.force_login(user)
         response = client.get(reverse("digidoc_list"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
         sections, pages = build_navigation(user, self.organization)
-        self.assertNotIn("digidoc", pages)
+        self.assertIn("digidoc", pages)
+        for role in ("owner", "hr_admin", "payroll_officer", "employee"):
+            role_user = User.objects.create_user(f"role_matrix_{role}", password="test-pass-123")
+            OrganizationMembership.objects.create(user=role_user, organization=self.organization, role=role)
+            role_client = Client()
+            role_client.force_login(role_user)
+            self.assertEqual(role_client.get(reverse("digidoc_list")).status_code, 200, role)
+        viewer = User.objects.create_user("role_matrix_viewer", password="test-pass-123")
+        OrganizationMembership.objects.create(user=viewer, organization=self.organization, role="viewer")
+        viewer_client = Client()
+        viewer_client.force_login(viewer)
+        self.assertEqual(viewer_client.get(reverse("digidoc_list")).status_code, 403)
 
     def test_document_library_uses_preview_cards_and_working_filters(self):
         first = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Quarterly report", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
@@ -90,15 +101,92 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Recent documents")
         self.assertContains(response, "Quarterly report")
-        self.assertContains(response, "Policy draft")
+        self.assertNotContains(response, "Policy draft")
         self.assertContains(response, reverse("digidoc_thumbnail", args=[first.pk]))
         self.assertContains(response, "dd-document-grid")
         owned = self.client.get(reverse("digidoc_list"), {"owner": "me", "sort": "title"})
         self.assertContains(owned, "Quarterly report")
         self.assertNotContains(owned, "Policy draft")
         by_owner = self.client.get(reverse("digidoc_list"), {"owner": str(other.pk)})
-        self.assertContains(by_owner, "Policy draft")
-        self.assertNotContains(by_owner, "Quarterly report")
+        self.assertNotContains(by_owner, "Policy draft")
+        self.assertContains(by_owner, "Quarterly report")
+
+    def test_other_hr_author_cannot_open_or_export_document(self):
+        hr_a = User.objects.create_user("hr_author_a", password="test-pass-123")
+        OrganizationMembership.objects.create(user=hr_a, organization=self.organization, role="hr_admin")
+        author = User.objects.create_user("hr_author_b", password="test-pass-123")
+        OrganizationMembership.objects.create(user=author, organization=self.organization, role="hr_admin")
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=author, title="Private B")
+        self.client.force_login(hr_a)
+        for route in ("digidoc_editor", "digidoc_preview", "digidoc_thumbnail", "digidoc_pdf"):
+            response = self.client.get(reverse(route, args=[document.pk]))
+            self.assertEqual(response.status_code, 403, route)
+        self.assertEqual(self.client.post(reverse("digidoc_delete", args=[document.pk])).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("digidoc_list")), "Private B")
+
+    def test_orphan_is_read_only_to_hr_and_can_be_claimed(self):
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=None, title="Legacy orphan")
+        response = self.client.get(reverse("digidoc_list"))
+        self.assertContains(response, "DigiDoc documents are now private")
+        self.assertContains(response, "Take ownership")
+        editor = self.client.get(reverse("digidoc_editor", args=[document.pk]))
+        self.assertEqual(editor.status_code, 200)
+        self.assertContains(editor, 'data-read-only="true"')
+        self.assertEqual(self.client.post(reverse("digidoc_save", args=[document.pk]), data="{}", content_type="application/json").status_code, 403)
+        self.assertEqual(self.client.post(reverse("digidoc_delete", args=[document.pk])).status_code, 403)
+        hr = User.objects.create_user("orphan_hr_admin", password="test-pass-123")
+        OrganizationMembership.objects.create(user=hr, organization=self.organization, role="hr_admin")
+        hr_client = Client()
+        hr_client.force_login(hr)
+        self.assertContains(hr_client.get(reverse("digidoc_list")), "Legacy orphan")
+        self.assertEqual(hr_client.post(reverse("digidoc_save", args=[document.pk]), data="{}", content_type="application/json").status_code, 403)
+        self.client.post(reverse("digidoc_claim", args=[document.pk]))
+        document.refresh_from_db()
+        self.assertEqual(document.created_by, self.owner)
+
+    def test_superuser_without_membership_cannot_access_normal_digidoc_views(self):
+        user = User.objects.create_superuser("platform_only", "platform@example.test", "test-pass-123")
+        client = Client()
+        client.force_login(user)
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Owner document")
+        self.assertEqual(client.get(reverse("digidoc_list"), follow=True).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_editor", args=[document.pk]), follow=True).status_code, 403)
+
+    def test_saved_letterhead_snapshot_survives_replace_and_removal(self):
+        from attendance.models import Category
+        from PIL import Image
+        from django.core.files.base import ContentFile
+        from pypdf import PdfReader
+        image = BytesIO()
+        Image.new("RGB", (210, 297), "navy").save(image, format="PNG")
+        letterhead = CompanyLetterhead.objects.create(organization=self.organization, image_format="png", image_width=210, image_height=297)
+        letterhead.image.save("saved-letterhead.png", ContentFile(image.getvalue()), save=True)
+        self.client.post(reverse("digidoc_create"))
+        document = DigiDocDocument.objects.filter(created_by=self.owner).latest("created_at")
+        self.assertTrue(document.letterhead_snapshot)
+        original = _render_pdf_isolated(document)
+        image.seek(0)
+        Image.new("RGB", (210, 297), "red").save(image, format="PNG")
+        letterhead.image.save("replacement.png", ContentFile(image.getvalue()), save=True)
+        replaced = _render_pdf_isolated(document)
+        editor = self.client.get(reverse("digidoc_editor", args=[document.pk]))
+        self.assertContains(editor, reverse("digidoc_letterhead_image", args=[document.pk, "1"]))
+        saved_art = self.client.get(reverse("digidoc_letterhead_image", args=[document.pk, "1"]))
+        self.assertEqual(saved_art.status_code, 200)
+        self.assertEqual(Image.open(BytesIO(saved_art.content)).getpixel((10, 10)), Image.open(BytesIO(base64.b64decode(document.letterhead_snapshot["1"]["data"]))).getpixel((10, 10)))
+        saved_art.close()
+        CompanyLetterhead.objects.filter(pk=letterhead.pk).delete()
+        saved_after_revoke = self.client.post(reverse("digidoc_save", args=[document.pk]), data=json.dumps({
+            "title": document.title, "content": document.content_json, "letterhead_enabled": True,
+            "letterhead_page_mode": document.letterhead_page_mode, "letterhead_first_slot": "1",
+            "letterhead_other_slot": "1", "version": document.version,
+        }), content_type="application/json")
+        self.assertEqual(saved_after_revoke.status_code, 200)
+        document.refresh_from_db()
+        revoked = _render_pdf_isolated(document)
+        for pdf in (original, replaced, revoked):
+            self.assertTrue(pdf.startswith(b"%PDF-"))
+            self.assertTrue(PdfReader(BytesIO(pdf)).pages[0].images)
 
     def test_document_thumbnail_is_private_scoped_and_cached(self):
         document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})

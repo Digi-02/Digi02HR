@@ -111,7 +111,7 @@
                             <td>{{ document.uploaded_at|date:"M j, Y" }}</td>
                             <td class="text-end">
                                 <div class="table-actions">
-                                    <a href="{{ document.file.url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Open</a>
+                                    <a href="{% url 'employee_document_download' document.pk %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Open</a>
                                     <a href="{% url 'employee_document_edit' document.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                                     <a href="{% url 'employee_document_delete' document.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
                                 </div>

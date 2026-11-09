@@ -139,7 +139,7 @@ class EmployeeForm(forms.ModelForm):
                 'class': 'form-select',
                 'id': 'category-select'
             }),
-            'profile_photo': forms.ClearableFileInput(attrs={
+            'profile_photo': forms.FileInput(attrs={
                 'class': 'form-control',
                 'accept': 'image/*'
             }),
@@ -1335,7 +1335,7 @@ class EmployeeDocumentForm(forms.ModelForm):
         widgets = {
             'document_type': forms.Select(attrs={'class': 'form-select'}),
             'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Document title'}),
-            'file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'file': forms.FileInput(attrs={'class': 'form-control'}),
             'issue_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'expiry_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Optional notes'}),
@@ -1502,7 +1502,7 @@ class OrganizationBrandingForm(forms.ModelForm):
                   'nav_hover_fg', 'nav_active_icon_bg', 'nav_active_icon_fg']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'logo': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
+            'logo': forms.FileInput(attrs={'class': 'form-control', 'accept': '.png,.jpg,.jpeg,.webp'}),
         }
 
     def clean_timezone(self):

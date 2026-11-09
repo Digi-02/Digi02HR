@@ -9,7 +9,7 @@
       <h5>Company branding</h5>
       <p>Shape the workspace your team sees every day. Logo, brand colour, timezone and sidebar navigation for {{ organization.name }}.</p>
     </div>
-    <span class="branding-head__badge"><span class="branding-head__dot"></span>Light workspace</span>
+    <div><a class="btn btn-outline-secondary" href="{% url 'personal_letterhead_admin' %}">Personal letterheads</a><span class="branding-head__badge"><span class="branding-head__dot"></span>Light workspace</span></div>
   </div>
 
   <form method="post" enctype="multipart/form-data" id="brandForm"
@@ -65,7 +65,7 @@
                 {% if organization.logo %}
                 <div class="brand-logo-preview">
                   <span class="brand-logo-preview__tile{% if organization.logo_is_light %} is-dark{% endif %}">
-                    <img src="{{ organization.logo.url }}" alt="{{ organization.name }} logo">
+                    <img src="{% url 'organization_logo' organization.pk %}" alt="{{ organization.name }} logo">
                   </span>
                   <label class="form-check remove-logo-check">
                     {{ form.remove_logo }}<span>Remove current logo</span>

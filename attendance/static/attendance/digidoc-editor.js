@@ -3,10 +3,18 @@
   const root = document.getElementById('digidoc');
   if (!root) return;
   const sheet = document.getElementById('dd-sheet');
+  if (root.dataset.readOnly === 'true') {
+    sheet.contentEditable = 'false';
+    root.querySelectorAll('button, input, select, textarea').forEach(control => {
+      if (!control.hasAttribute('disabled')) control.disabled = true;
+    });
+  }
   const status = document.getElementById('dd-status');
   const title = document.getElementById('dd-title');
   const letterheadFirst = document.getElementById('dd-letterhead-first');
   const letterheadOther = document.getElementById('dd-letterhead-other');
+  const letterheadSource = document.getElementById('dd-letterhead-source');
+  const personalLetterheadSelect = document.getElementById('dd-personal-letterhead');
   const initial = JSON.parse(document.getElementById('dd-initial').textContent);
   const allowedTags = {P:'paragraph', H1:'heading', H2:'heading', H3:'heading', UL:'bulletList', OL:'orderedList', LI:'listItem', TABLE:'table', TBODY:'table', TR:'tableRow', TD:'tableCell', TH:'tableCell', BR:'hardBreak', HR:'horizontalRule', IMG:'image'};
   function makeImageFrame(assetId, alt, src, attrs={}) {
@@ -68,6 +76,17 @@
   }
   function syncLetterheadPages() {
     const enabled = document.getElementById('dd-letterhead').checked;
+    let firstUrl = root.dataset.companyLetterheadUrl, secondUrl = root.dataset.companyLetterheadSecondUrl;
+    if (letterheadSource.value === 'personal') {
+      const selected = personalLetterheadSelect.value;
+      firstUrl = selected ? `/settings/my-letterhead/${encodeURIComponent(selected)}/image/` : root.dataset.activePersonalLetterheadUrl;
+      secondUrl = firstUrl;
+    } else if (root.dataset.preserveCompanySnapshot === 'true' && root.dataset.activeCompanyLetterheadUrl) {
+      firstUrl = root.dataset.activeCompanyLetterheadUrl;
+      secondUrl = firstUrl;
+    }
+    if (firstUrl) sheet.style.setProperty('--dd-letterhead-image-1', `url('${firstUrl}')`);
+    if (secondUrl) sheet.style.setProperty('--dd-letterhead-image-2', `url('${secondUrl}')`);
     sheet.classList.toggle('dd-letterhead', enabled);
     sheet.dataset.letterheadFirst = letterheadFirst.value;
     sheet.dataset.letterheadOther = letterheadOther.value;
@@ -309,7 +328,7 @@
         joined.push(node);
       }
     });
-    return {title:title.value,content:{type:'doc',content:joined.length?joined:[{type:'paragraph',content:[]}]},letterhead_enabled:document.getElementById('dd-letterhead').checked,letterhead_page_mode:letterheadOther.value==='none'?'first':'every',letterhead_first_slot:letterheadFirst.value,letterhead_other_slot:letterheadOther.value,version:Number(root.dataset.version)};
+    return {title:title.value,content:{type:'doc',content:joined.length?joined:[{type:'paragraph',content:[]}]},letterhead_enabled:document.getElementById('dd-letterhead').checked,letterhead_page_mode:letterheadOther.value==='none'?'first':'every',letterhead_first_slot:letterheadFirst.value,letterhead_other_slot:letterheadOther.value,letterhead_source:letterheadSource.value,personal_letterhead_id:personalLetterheadSelect.value||null,version:Number(root.dataset.version)};
   }
   let historyCurrent=null,historyRestoring=false;
   const undoHistory=[],redoHistory=[];
@@ -340,6 +359,7 @@
     title.value=state.title||'';
     const fileTitle=document.getElementById('dd-file-title');if(fileTitle)fileTitle.value=title.value;
     document.getElementById('dd-letterhead').checked=Boolean(state.letterhead_enabled);
+    letterheadSource.value=state.letterhead_source||'company';personalLetterheadSelect.value=state.personal_letterhead_id||'';
     letterheadFirst.value=state.letterhead_first_slot||'1';letterheadOther.value=state.letterhead_other_slot||'none';
     sheet.replaceChildren();const page=createPage();
     ((state.content&&state.content.content)||[]).forEach(node=>renderNode(node,page));

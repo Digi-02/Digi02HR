@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 import uuid
+from .storage import PrivateLetterheadStorage
 
 
 def private_letterhead_path(instance, filename):
@@ -16,6 +17,11 @@ def private_letterhead_path(instance, filename):
 
     extension = 'jpg' if instance.image_format == 'jpeg' else 'png'
     return f"letterheads/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
+
+
+def private_personal_letterhead_path(instance, filename):
+    extension = 'jpg' if instance.image_format == 'jpeg' else 'png'
+    return f"personal_letterheads/{instance.organization_id}/{instance.user_id}/{uuid.uuid4().hex}.{extension}"
 
 
 def private_digidoc_image_path(instance, filename):
@@ -114,7 +120,7 @@ class Organization(models.Model):
     industry = models.CharField(max_length=100, blank=True)
     company_size = models.CharField(max_length=30, blank=True)
     country = models.CharField(max_length=100, blank=True)
-    logo = models.ImageField(upload_to=organization_logo_path, blank=True, null=True)
+    logo = models.ImageField(upload_to=organization_logo_path, storage=PrivateLetterheadStorage(), blank=True, null=True)
     logo_is_light = models.BooleanField(
         default=False,
         help_text='Whether the logo artwork is light (needs a dark tile). Set automatically on upload.',
@@ -193,6 +199,8 @@ class Organization(models.Model):
     setup_completed = models.BooleanField(default=False)
     setup_completed_steps = models.JSONField(default=list, blank=True)
     setup_current_step = models.PositiveSmallIntegerField(default=1)
+    personal_letterhead_default_enabled = models.BooleanField(default=False)
+    allow_staff_digidoc = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -253,7 +261,11 @@ class DigiDocDocument(models.Model):
     letterhead_page_mode = models.CharField(max_length=8, choices=PAGE_MODE_CHOICES, default='every')
     letterhead_first_slot = models.CharField(max_length=4, default='1')
     letterhead_other_slot = models.CharField(max_length=4, default='1')
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='digidoc_documents')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='digidoc_documents', null=True, blank=True)
+    letterhead_snapshot = models.JSONField(default=dict, blank=True)
+    personal_letterhead_snapshot = models.JSONField(default=dict, blank=True)
+    personal_letterhead_id = models.UUIDField(null=True, blank=True)
+    letterhead_source = models.CharField(max_length=10, choices=[('company', 'Company'), ('personal', 'Personal')], default='company')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
     version = models.PositiveIntegerField(default=1)
@@ -296,14 +308,45 @@ class OrganizationMembership(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='memberships')
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='hr_admin')
     is_active = models.BooleanField(default=True)
+    can_use_personal_letterhead = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('user', 'organization')
         ordering = ['organization__name', 'user__username']
 
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.can_use_personal_letterhead:
+            organization = self.organization if 'organization' in self._state.fields_cache else Organization.objects.filter(pk=self.organization_id).only('personal_letterhead_default_enabled').first()
+            if organization and organization.personal_letterhead_default_enabled and self.role not in {'owner', 'hr_admin', 'viewer'}:
+                self.can_use_personal_letterhead = True
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.user.username} - {self.organization.name}"
+
+
+class PersonalLetterhead(models.Model):
+    """Private, re-encoded letterhead artwork owned by one organization user."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='personal_letterheads')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='personal_letterheads')
+    label = models.CharField(max_length=100, blank=True)
+    from .storage import PrivateLetterheadStorage
+    image = models.FileField(upload_to=private_personal_letterhead_path, storage=PrivateLetterheadStorage())
+    image_format = models.CharField(max_length=4, choices=[('png', 'PNG'), ('jpeg', 'JPEG')])
+    image_width = models.PositiveIntegerField()
+    image_height = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class PersonalLetterheadUpload(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 
 class FavoritePage(models.Model):
@@ -543,7 +586,7 @@ class Employee(models.Model):
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='employees')
     
     # === Personal Information ===
-    profile_photo = models.ImageField(upload_to=employee_profile_photo_path, blank=True, null=True)
+    profile_photo = models.ImageField(upload_to=employee_profile_photo_path, storage=PrivateLetterheadStorage(), blank=True, null=True)
     title = models.CharField(max_length=10, choices=TITLE_CHOICES, blank=True)
     first_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True)
@@ -871,7 +914,7 @@ class EmployeeDocument(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='documents')
     document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPE_CHOICES, default='other')
     title = models.CharField(max_length=150)
-    file = models.FileField(upload_to=employee_document_path)
+    file = models.FileField(upload_to=employee_document_path, storage=PrivateLetterheadStorage())
     issue_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)

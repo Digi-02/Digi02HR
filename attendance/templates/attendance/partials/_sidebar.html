@@ -6,7 +6,7 @@
         <a class="app-brand" href="{{ shell_home_url|default:'/' }}"
            aria-label="{{ active_organization.name|default:'DIGI HR' }} home">
             {% if active_organization and active_organization.logo %}
-            <span class="brand-logo-full{% if active_organization.logo_is_light %} dark-tile{% endif %}"><img src="{{ active_organization.logo.url }}" alt="{{ active_organization.name }} logo"></span>
+            <span class="brand-logo-full{% if active_organization.logo_is_light %} dark-tile{% endif %}"><img src="{% url 'organization_logo' active_organization.pk %}" alt="{{ active_organization.name }} logo"></span>
             <span class="brand-initials brand-initials--rail" aria-hidden="true">{{ shell_organization_initials|default:"DH" }}</span>
             {% elif active_organization %}
             <span class="brand-initials">{{ shell_organization_initials|default:"DH" }}</span>

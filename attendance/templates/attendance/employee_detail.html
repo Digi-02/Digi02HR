@@ -14,7 +14,7 @@
                     <div class="text-center mb-4">
                         <div class="employee-avatar mx-auto mb-3">
                             {% if employee.profile_photo %}
-                                <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="employee-photo">
+                                <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}" class="employee-photo">
                             {% else %}
                                 <i class="bi bi-person-circle"></i>
                             {% endif %}
@@ -352,7 +352,7 @@
                                     <td>{% if document.expiry_date %}{{ document.expiry_date|date:"M d, Y" }}{% else %}-{% endif %}</td>
                                     <td class="text-end">
                                         <div class="d-flex justify-content-end gap-2 flex-wrap">
-                                            <a href="{{ document.file.url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+                                            <a href="{% url 'employee_document_download' document.pk %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
                                                 <i class="bi bi-box-arrow-up-right me-1"></i> Open
                                             </a>
                                             <a href="{% url 'employee_document_edit' document.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>

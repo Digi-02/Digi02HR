@@ -64,7 +64,7 @@ class ShellDefaultTests(TestCase):
         self.assertIn('Favorites', html)
         self.assertNotIn('side-block--recent', html)
         self.assertIn('data-recent-list', html)
-        self.assertIn('Dashboards', html)
+        self.assertIn('Main', html)
         self.assertIn('data-page-key="overview"', html)
         self.assertIn('aria-current="page"', html)
         self.assertIn('--nav-fg-muted: #6B6B6B;', html)
