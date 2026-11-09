@@ -21,7 +21,7 @@ PLATFORM_URLS = [
 
 
 def make_owner(username='biz_owner', org_name='BizCo', slug='bizco'):
-    org = Organization.objects.create(name=org_name, slug=slug)
+    org = Organization.objects.create(name=org_name, slug=slug, setup_completed=True)
     user = User.objects.create_user(username, email=f'{username}@example.com', password='pw123456')
     OrganizationMembership.objects.create(user=user, organization=org, role='owner')
     return user, org
@@ -118,7 +118,7 @@ class CompanyCreateTests(TestCase):
         self.assertIn('ngozi@newco.example', mail.outbox[0].to)
         self.assertTrue(PlatformAuditLog.objects.filter(action='company.created', organization=org).exists())
         # Owner follows the invite link and sets a password
-        m = re.search(r'/reset/(\S+)/(\S+)/', mail.outbox[0].body)
+        m = re.search(r'/set-password/(\S+)/(\S+)/', mail.outbox[0].body)
         self.assertIsNotNone(m)
         uidb64, token = m.group(1), m.group(2)
         anon = Client()

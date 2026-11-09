@@ -2,7 +2,7 @@
 {% with current=page_obj.number total=page_obj.paginator.num_pages param=page_param|default:'page' %}
 <nav class="table-pagination" aria-label="Table pagination">
     <div class="pagination-summary">
-        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+        Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
     </div>
     <ul class="pagination mb-0">
         {% if page_obj.has_previous %}

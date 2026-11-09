@@ -81,7 +81,7 @@ class DashboardRedesignTests(TestCase):
         response = self.client.get(reverse('category_dashboard', kwargs={'code': 'STAFF'}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Employees present - 7 days', response.content.decode())
+        self.assertIn('Employees present · 7 days', response.content.decode())
         self.assertIn('Peak 0', response.content.decode())
 
     def test_manager_kpi_pages_render_the_shared_trend_component(self):
@@ -89,5 +89,5 @@ class DashboardRedesignTests(TestCase):
             with self.subTest(route=route_name):
                 response = self.client.get(reverse(route_name))
                 self.assertEqual(response.status_code, 200)
-                self.assertIn('Employees present - 7 days', response.content.decode())
+                self.assertIn('Employees present · 7 days', response.content.decode())
 

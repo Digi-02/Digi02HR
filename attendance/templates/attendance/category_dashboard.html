@@ -110,6 +110,11 @@
         </div>
     </div>
 
+    <section class="row g-3 mb-4" aria-label="Recent category activity trends">
+        <div class="col-12 col-lg-6">{% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.present trend_label='Employees present · 7 days' %}</div>
+        <div class="col-12 col-lg-6">{% include 'attendance/partials/_metric_trend.html' with trend=metric_trends.late trend_label='Late employees · 7 days' %}</div>
+    </section>
+
     <div class="row g-4">
         <div class="col-xl-8">
             <div class="card border-0 mb-4">

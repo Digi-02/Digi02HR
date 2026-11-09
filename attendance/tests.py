@@ -174,7 +174,9 @@ class BirthdayMessagingTests(TestCase):
 class TenantAuthorizationRegressionTests(TestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name='Primary', slug='primary')
-        self.other_organization = Organization.objects.create(name='Other', slug='other')
+        self.other_organization = Organization.objects.create(name='Other', slug='other', setup_completed=True)
+        self.organization.setup_completed = True
+        self.organization.save(update_fields=['setup_completed'])
         self.user = User.objects.create_user(username='tenant-admin', password='pass12345')
         OrganizationMembership.objects.create(
             user=self.user,
@@ -343,6 +345,7 @@ class OnboardingInvitationTests(TestCase):
         self.organization = Organization.objects.create(
             name='Digi02 Test',
             slug='digi02-test-onboarding',
+            setup_completed=True,
         )
         self.category = Category.objects.create(
             organization=self.organization,

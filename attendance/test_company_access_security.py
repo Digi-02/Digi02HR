@@ -136,9 +136,16 @@ class ViewerCapabilityTests(TestCase):
         self.assertEqual(profile.status_code, 200)
         self.assertContains(dashboard, 'Dashboard')
         self.assertContains(profile, 'Vera Viewer')
-        self.assertNotContains(dashboard, 'Employees')
-        self.assertNotContains(dashboard, 'Payroll runs')
-        self.assertNotContains(dashboard, 'DigiDoc')
+        nav_labels = [
+            item['label']
+            for section in dashboard.context['shell_sections']
+            for item in section['items']
+        ]
+        self.assertIn('Dashboard', nav_labels)
+        self.assertIn('My profile', nav_labels)
+        self.assertNotIn('Employees', nav_labels)
+        self.assertNotIn('Payroll runs', nav_labels)
+        self.assertNotIn('DigiDoc', nav_labels)
 
     def test_viewer_cannot_reach_sensitive_pages_or_write_routes(self):
         protected = [

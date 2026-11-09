@@ -45,7 +45,9 @@
   <section class="overview-kpis" aria-label="Key workforce metrics">
     {% for kpi in dashboard_kpis %}
     <a class="overview-kpi overview-kpi--{{ kpi.style }}" href="{{ kpi.href }}" aria-label="{{ kpi.label }}: {{ kpi.value }}">
-      <span class="overview-kpi__copy"><span class="overview-kpi__label">{{ kpi.label }}</span><strong class="overview-kpi__value">{{ kpi.value }}</strong></span>
+      <div class="overview-kpi__copy"><span class="overview-kpi__label">{{ kpi.label }}</span><strong class="overview-kpi__value">{{ kpi.value }}</strong>
+        {% if kpi.trend %}{% include 'attendance/partials/_metric_trend.html' with trend=kpi.trend trend_label=kpi.trend_label %}{% endif %}
+      </div>
       <span class="overview-kpi__icon"><span class="material-symbols-rounded" aria-hidden="true">{{ kpi.icon }}</span></span>
     </a>
     {% endfor %}

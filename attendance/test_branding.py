@@ -6,7 +6,7 @@ from attendance.branding import accent_vars, contrast_text, normalize_hex
 
 
 def make_org(name='Acme'):
-    return Organization.objects.create(name=name, slug=name.lower())
+    return Organization.objects.create(name=name, slug=name.lower(), setup_completed=True)
 
 
 class BrandingTests(TestCase):
@@ -56,13 +56,25 @@ class BrandingTests(TestCase):
         session['active_organization_id'] = b.pk
         session.save()
         # The branding view resolves the org from memberships, so B is
-        # unreachable; posting must not change B.
+        # unreachable; posting can only resolve to the company the user
+        # actually belongs to and must never modify B.
         resp = c.post('/settings/branding/', {
             'name': 'CompA', 'brand_color': '#FF0000', 'timezone': 'Africa/Lagos',
         })
         b.refresh_from_db()
         self.assertEqual(b.brand_color, '#0A0A0A')
         self.assertEqual(b.name, 'CompB')
+        a.refresh_from_db()
+        self.assertEqual(a.brand_color, '#FF0000')
+        self.assertEqual(a.name, 'CompA')
+        # Once the session selects a company the user actually belongs to,
+        # the same valid update succeeds.
+        session = c.session
+        session['active_organization_id'] = a.pk
+        session.save()
+        resp = c.post('/settings/branding/', {
+            'name': 'CompA', 'brand_color': '#FF0000', 'timezone': 'Africa/Lagos',
+        })
         a.refresh_from_db()
         self.assertEqual(a.brand_color, '#FF0000')
         self.assertIn(resp.status_code, (200, 302))
