@@ -68,7 +68,7 @@ class DashboardRedesignTests(TestCase):
         checkin_kpi = response.context['dashboard_kpis'][1]
         self.assertIn('1 total', checkin_kpi['trend']['summary'])
         self.assertEqual(len(checkin_kpi['trend']['points']), 7)
-        self.assertIn('Employees present · 7 days', html)
+        self.assertNotIn('overview-kpi__trend', html)
 
     def test_metric_trend_renders_measured_zero_activity(self):
         trend = build_metric_trend([], end_date=organization_today(self.organization))

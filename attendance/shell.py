@@ -22,6 +22,7 @@ from .organization import (
     user_has_payroll_access,
     user_has_viewer_access,
     user_has_digidoc_access,
+    user_has_work_mail_access,
 )
 
 
@@ -219,9 +220,18 @@ NAV_SECTIONS = (
                 label="Mail",
                 icon="bi-envelope-paper",
                 url_name="mail_dashboard",
-                match=("mail_dashboard", "mail_compose", "mail_inbox_message"),
-                access=("hr",),
+                match=("mail_dashboard", "mail_compose", "mail_inbox_message", "my_work_email", "mail_attachment"),
+                access=("work_mail",),
                 keywords="email inbox messages compose",
+            ),
+            NavItem(
+                key="invitation_tracker",
+                label="Invitation tracker",
+                icon="bi-envelope-check",
+                url_name="onboarding_mail_tracker",
+                match=("onboarding_mail_tracker",),
+                access=("hr",),
+                keywords="onboarding invitation status email tracker",
             ),
         ),
     ),
@@ -363,7 +373,7 @@ NAV_SECTIONS = (
 
 def _access_flags(user, organization):
     if organization is None:
-        return {"self_service": False, "hr": False, "manager": False, "payroll": False, "viewer": False, "digidoc": False, "personal_letterhead": False}
+        return {"self_service": False, "hr": False, "manager": False, "payroll": False, "viewer": False, "digidoc": False, "personal_letterhead": False, "work_mail": False}
     employee = getattr(user, "employee_profile", None)
     active_profile_membership = bool(
         user.is_authenticated and employee and organization
@@ -379,6 +389,7 @@ def _access_flags(user, organization):
         "payroll": user_has_payroll_access(user, organization),
         "viewer": user_has_viewer_access(user, organization),
         "digidoc": user_has_digidoc_access(user, organization),
+        "work_mail": user_has_work_mail_access(user, organization),
         "personal_letterhead": bool(user.is_authenticated and organization and OrganizationMembership.objects.filter(user=user, organization=organization, is_active=True, role__in={"owner", "hr_admin", "manager", "payroll_officer", "employee"}, can_use_personal_letterhead=True).exists()),
     }
 

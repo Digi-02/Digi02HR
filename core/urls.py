@@ -5,6 +5,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
 from attendance import views
+from attendance import mailbox_views
 from attendance import shell as shell_views
 from attendance import wizard as wizard_views
 from attendance import digidoc as digidoc_views
@@ -186,9 +187,13 @@ urlpatterns = [
     path('employees/<int:employee_pk>/documents/upload/', views.employee_document_upload, name='employee_document_upload_for_employee'),
     path('documents/<int:pk>/edit/', views.employee_document_edit, name='employee_document_edit'),
     path('documents/<int:pk>/delete/', views.employee_document_delete, name='employee_document_delete'),
-    path('mail/', views.mail_dashboard, name='mail_dashboard'),
-    path('mail/compose/', views.mail_compose, name='mail_compose'),
-    path('mail/inbox/<str:uid>/', views.mail_inbox_message, name='mail_inbox_message'),
+    path('mail/', mailbox_views.mail_dashboard, name='mail_dashboard'),
+    path('mail/settings/', mailbox_views.my_work_email, name='my_work_email'),
+    path('mail/compose/', mailbox_views.mail_compose, name='mail_compose'),
+    path('mail/inbox/<str:uid>/', mailbox_views.mail_inbox_message, name='mail_inbox_message'),
+    path('mail/action/<str:uid>/', mailbox_views.mail_action, name='mail_action'),
+    path('mail/attachment/<str:uid>/<int:part>/', mailbox_views.mail_attachment, name='mail_attachment'),
+    path('onboarding/mail-tracker/', views.onboarding_mail_tracker, name='onboarding_mail_tracker'),
     path('onboarding/', views.onboarding_tasks, name='onboarding_tasks'),
     path('onboarding/invite-applicant/', views.applicant_invite, name='applicant_invite'),
     path('onboarding/invite-employee/', views.existing_employee_onboarding_invite, name='existing_employee_onboarding_invite'),

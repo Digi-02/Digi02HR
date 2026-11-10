@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import json
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
@@ -307,13 +308,10 @@ DEFAULT_FROM_EMAIL = _env_str_any(
     default="Digi02 HR <noreply@digi02hr.local>",
 )
 
-IMAP_HOST = _env_str_any(["DJANGO_IMAP_HOST", "IMAP_HOST", "DJANGO_EMAIL_HOST", "EMAIL_HOST"], default="")
-IMAP_PORT = _env_int_any(["DJANGO_IMAP_PORT", "IMAP_PORT"], default=993)
-IMAP_HOST_USER = _env_str_any(["DJANGO_IMAP_HOST_USER", "IMAP_HOST_USER", "DJANGO_EMAIL_HOST_USER", "EMAIL_HOST_USER"], default="")
-IMAP_HOST_PASSWORD = _env_str_any(
-    ["DJANGO_IMAP_HOST_PASSWORD", "IMAP_HOST_PASSWORD", "DJANGO_EMAIL_HOST_PASSWORD", "EMAIL_HOST_PASSWORD"],
-    default="",
-)
-IMAP_USE_SSL = _env_bool_any(["DJANGO_IMAP_USE_SSL", "IMAP_USE_SSL"], default=True)
-IMAP_MAILBOX = _env_str_any(["DJANGO_IMAP_MAILBOX", "IMAP_MAILBOX"], default="INBOX")
-IMAP_TIMEOUT = _env_int_any(["DJANGO_IMAP_TIMEOUT", "IMAP_TIMEOUT"], default=10)
+try:
+    MAILBOX_ENCRYPTION_KEYS = json.loads(os.getenv('MAILBOX_ENCRYPTION_KEYS', '{}'))
+except json.JSONDecodeError as exc:
+    raise ImproperlyConfigured('MAILBOX_ENCRYPTION_KEYS must be a JSON object keyed by key ID.') from exc
+if not isinstance(MAILBOX_ENCRYPTION_KEYS, dict):
+    raise ImproperlyConfigured('MAILBOX_ENCRYPTION_KEYS must be a JSON object keyed by key ID.')
+MAILBOX_ENCRYPTION_CURRENT_KEY_ID = os.getenv('MAILBOX_ENCRYPTION_CURRENT_KEY_ID', '')

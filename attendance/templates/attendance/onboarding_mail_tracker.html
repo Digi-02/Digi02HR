@@ -1,0 +1,239 @@
+{% extends 'attendance/base.html' %}
+
+{% block title %}Invitation tracker | HR Management{% endblock %}
+{% block page_title %}Invitation tracker{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="mail-metrics-grid mb-4">
+        <div class="card border-0 h-100">
+            <div class="card-body">
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">All Emails</small>
+                        <h3 class="mt-2 mb-0">{{ invitation_counts.total }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 h-100">
+            <div class="card-body">
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Sent</small>
+                        <h3 class="mt-2 mb-0 text-info">{{ invitation_counts.sent }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 h-100">
+            <div class="card-body">
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Opened</small>
+                        <h3 class="mt-2 mb-0 text-warning">{{ invitation_counts.opened }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card border-0 h-100">
+            <div class="card-body">
+                <div class="metric-card-layout">
+                    <div class="metric-card-layout__copy">
+                        <small class="text-muted text-uppercase fw-semibold">Responded</small>
+                        <h3 class="mt-2 mb-0 text-success">{{ invitation_counts.responded }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 toolbar-card mb-4">
+        <div class="card-body">
+            <form method="get" class="mail-filter-grid">
+                <div class="search-control">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" name="q" value="{{ search_query }}" class="form-control" placeholder="Search name, email, or employee ID">
+                    </div>
+                </div>
+                <select name="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel me-1"></i> Filter
+                </button>
+                {% if search_query or selected_status or selected_type %}
+                <a href="{% url 'onboarding_mail_tracker' %}" class="btn btn-outline-secondary">Reset</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0">
+        <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <div>
+                    <h5 class="mb-1"><i class="bi bi-envelope-check me-2"></i>Onboarding invitation tracker</h5>
+                    <small class="text-muted">Track sent invitation links and whether people opened or completed them.</small>
+                </div>
+                <div class="responsive-actions">
+                    <a href="{% url 'applicant_invite' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-envelope-plus me-1"></i> Invite Applicant
+                    </a>
+                    <a href="{% url 'existing_employee_onboarding_invite' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-person-gear me-1"></i> Invite Employee
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Recipient</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Sent</th>
+                            <th>Opened</th>
+                            <th>Responded</th>
+                            <th>Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invitation in invitations %}
+                        <tr>
+                            <td>
+                                <strong>{{ invitation.recipient_name }}</strong>
+                                <div class="small text-muted">{{ invitation.email }}</div>
+                            </td>
+                            <td>{{ invitation.get_invitation_type_display }}</td>
+                            <td>
+                                <span class="badge mail-status-pill mail-status-{{ invitation.status }}">
+                                    {{ invitation.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ invitation.sent_at|date:"M j, Y H:i"|default:"-" }}</td>
+                            <td>{{ invitation.opened_at|date:"M j, Y H:i"|default:"-" }}</td>
+                            <td>{{ invitation.submitted_at|date:"M j, Y H:i"|default:"-" }}</td>
+                            <td>{{ invitation.expires_at|date:"M j, Y H:i"|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                No mail records found
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include 'attendance/partials/pagination.html' with page_obj=mail_page_obj page_param='mail_page' pagination_query=mail_pagination_query %}
+        </div>
+    </div>
+
+
+<style>
+    .mail-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1.5rem;
+    }
+
+    .mail-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(240px, 1.5fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr) auto auto;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .mail-status-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 24px;
+        padding: 5px 11px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .mail-status-draft,
+    .mail-status-cancelled {
+        background: #F4F4F5;
+        border-color: #E5E5E5;
+        color: #525252;
+    }
+
+    .mail-status-sent {
+        background: #EFF6FF;
+        border-color: #DBEAFE;
+        color: #1D4ED8;
+    }
+
+    .mail-status-opened {
+        background: #FFFBEB;
+        border-color: #FDE68A;
+        color: #B45309;
+    }
+
+    .mail-status-submitted,
+    .mail-status-accepted {
+        background: #F0FDF4;
+        border-color: #BBF7D0;
+        color: #16A34A;
+    }
+
+    .mail-status-expired {
+        background: #FEF2F2;
+        border-color: #FECACA;
+        color: #DC2626;
+    }
+
+    .inbox-message {
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+    }
+
+    .inbox-message:first-child {
+        padding-top: 0;
+    }
+
+    .inbox-message:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    @media (max-width: 1199.98px) {
+        .mail-metrics-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .mail-filter-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .mail-metrics-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+    }
+</style>
+{% endblock %}

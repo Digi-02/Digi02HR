@@ -109,7 +109,7 @@ class Command(BaseCommand):
                     body=birthday_text_message(employee, organization, settings_obj),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[employee.email],
-                    reply_to=[settings.IMAP_HOST_USER] if getattr(settings, 'IMAP_HOST_USER', '') else None,
+                    reply_to=[settings.EMAIL_HOST_USER] if getattr(settings, 'EMAIL_HOST_USER', '') else None,
                 )
                 message.attach_alternative(birthday_html_message(employee, organization, settings_obj), 'text/html')
                 message.send(fail_silently=False)

@@ -22,6 +22,7 @@ from .models import (
     OnboardingStage,
     OnboardingTask,
     PayrollRun,
+    WorkMailbox,
 )
 from .nav_theme import (
     NAV_ACTIVE_STYLE_CHOICES,
@@ -729,6 +730,36 @@ class DepartmentForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class WorkMailboxConfigForm(forms.ModelForm):
+    username = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    password = forms.CharField(
+        required=False, strip=False,
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+        help_text='Use your mailbox password or provider app password. It is encrypted before storage.',
+    )
+
+    class Meta:
+        model = WorkMailbox
+        fields = ('email_address', 'username', 'imap_host', 'imap_port', 'imap_security', 'smtp_host', 'smtp_port', 'smtp_security')
+        widgets = {
+            'email_address': forms.EmailInput(attrs={'class': 'form-control'}),
+            'imap_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'imap.example.com'}),
+            'imap_port': forms.NumberInput(attrs={'class': 'form-control'}),
+            'imap_security': forms.Select(attrs={'class': 'form-select'}),
+            'smtp_host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'smtp.example.com'}),
+            'smtp_port': forms.NumberInput(attrs={'class': 'form-control'}),
+            'smtp_security': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('username') and cleaned.get('email_address'):
+            cleaned['username'] = cleaned['email_address']
+        if not self.instance.pk and not cleaned.get('password'):
+            self.add_error('password', 'Enter the mailbox password or app password.')
+        return cleaned
 
 
 class CategoryForm(forms.ModelForm):
@@ -1512,7 +1543,7 @@ class OrganizationBrandingForm(forms.ModelForm):
         return value
 
     def clean_dashboard_appearance(self):
-        return self.cleaned_data.get('dashboard_appearance') or self.instance.dashboard_appearance or 'brand'
+        return self.cleaned_data.get('dashboard_appearance') or self.instance.dashboard_appearance or 'white'
 
     def clean_logo(self):
         from PIL import Image

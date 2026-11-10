@@ -133,7 +133,7 @@ class Organization(models.Model):
         ('white', 'White and neutral'),
     ]
     dashboard_appearance = models.CharField(
-        max_length=12, choices=DASHBOARD_APPEARANCE_CHOICES, default='brand'
+        max_length=12, choices=DASHBOARD_APPEARANCE_CHOICES, default='white'
     )
     timezone = models.CharField(max_length=50, default='Africa/Lagos', validators=[validate_iana_timezone])
     NAV_STYLE_CHOICES = [
@@ -311,6 +311,33 @@ class OrganizationMembership(models.Model):
     can_use_personal_letterhead = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class MembershipQuerySet(models.QuerySet):
+        def update(self, **kwargs):
+            if kwargs.get('is_active') is False:
+                pairs = list(self.values_list('user_id', 'organization_id'))
+                updated = super().update(**kwargs)
+                from .mailbox_lifecycle import revoke_for_membership
+                for user_id, organization_id in pairs:
+                    revoke_for_membership(user_id, organization_id)
+                return updated
+            return super().update(**kwargs)
+
+        def bulk_update(self, objs, fields, batch_size=None):
+            objs = list(objs)
+            revocations = []
+            if 'is_active' in fields:
+                for membership in objs:
+                    if not membership.is_active:
+                        revocations.append((membership.user_id, membership.organization_id))
+            count = super().bulk_update(objs, fields, batch_size=batch_size)
+            if revocations:
+                from .mailbox_lifecycle import revoke_for_membership
+                for user_id, organization_id in revocations:
+                    revoke_for_membership(user_id, organization_id)
+            return count
+
+    objects = models.Manager.from_queryset(MembershipQuerySet)()
+
     class Meta:
         unique_together = ('user', 'organization')
         ordering = ['organization__name', 'user__username']
@@ -324,6 +351,36 @@ class OrganizationMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.organization.name}"
+
+
+class WorkMailbox(models.Model):
+    """One encrypted, personally owned IMAP/SMTP connection per user and company."""
+
+    SECURITY_CHOICES = [('ssl', 'SSL/TLS'), ('starttls', 'STARTTLS')]
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='work_mailboxes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='work_mailboxes')
+    email_address = models.EmailField(max_length=254)
+    username = models.CharField(max_length=254)
+    password_ciphertext = models.TextField(blank=True)
+    encryption_key_id = models.CharField(max_length=64, blank=True)
+    imap_host = models.CharField(max_length=253)
+    imap_port = models.PositiveIntegerField(default=993)
+    imap_security = models.CharField(max_length=10, choices=SECURITY_CHOICES, default='ssl')
+    smtp_host = models.CharField(max_length=253)
+    smtp_port = models.PositiveIntegerField(default=465)
+    smtp_security = models.CharField(max_length=10, choices=SECURITY_CHOICES, default='ssl')
+    is_connected = models.BooleanField(default=True)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['organization', 'user'], name='unique_work_mailbox_org_user')]
+        ordering = ['email_address']
+
+    def __str__(self):
+        return f"{self.email_address} ({self.organization_id})"
 
 
 class PersonalLetterhead(models.Model):
@@ -515,6 +572,36 @@ class Department(models.Model):
         return self.name
 
 
+class EmployeeQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if kwargs.get('is_active') is False or kwargs.get('employment_status') == 'terminated':
+            pairs = list(self.exclude(user_id__isnull=True).values_list('user_id', 'organization_id'))
+            updated = super().update(**kwargs)
+            from .mailbox_lifecycle import revoke_for_employee
+            for user_id, organization_id in pairs:
+                revoke_for_employee(user_id, organization_id)
+            return updated
+        return super().update(**kwargs)
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        objs = list(objs)
+        revocations = []
+        if {'is_active', 'employment_status'} & set(fields):
+            for employee in objs:
+                if employee.user_id and (not employee.is_active or employee.employment_status == 'terminated'):
+                    revocations.append((employee.user_id, employee.organization_id))
+        count = super().bulk_update(objs, fields, batch_size=batch_size)
+        if revocations:
+            from .mailbox_lifecycle import revoke_for_employee
+            for user_id, organization_id in revocations:
+                revoke_for_employee(user_id, organization_id)
+        return count
+
+
+class EmployeeManager(models.Manager.from_queryset(EmployeeQuerySet)):
+    pass
+
+
 class Employee(models.Model):
     """Unified model for Staff, Interns, and Students"""
     
@@ -582,6 +669,7 @@ class Employee(models.Model):
     # === Identification ===
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='employees')
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_profile')
+    objects = EmployeeManager()
     employee_id = models.CharField(max_length=20, help_text="Auto-generated ID")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='employees')
     

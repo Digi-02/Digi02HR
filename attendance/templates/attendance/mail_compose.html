@@ -1,52 +1,19 @@
 {% extends 'attendance/base.html' %}
-
-{% block title %}Compose Mail | HR Management{% endblock %}
-{% block page_title %}Compose Mail{% endblock %}
-
+{% block title %}Compose email | DIGI HR{% endblock %}
+{% block page_title %}Compose email{% endblock %}
 {% block content %}
-<div class="container-fluid p-0">
-    <div class="card border-0">
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <div>
-                    <h5 class="mb-1"><i class="bi bi-send me-2"></i>New Mail</h5>
-                    <small class="text-muted">Sending from {{ from_email }}.</small>
-                </div>
-                <a href="{% url 'mail_dashboard' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i> Back to Mail
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            <form method="post" class="mail-compose-form">
-                {% csrf_token %}
-                <div>
-                    <label class="form-label">To</label>
-                    <input type="email" name="to" class="form-control" value="{{ form_data.to }}" placeholder="recipient@example.com" required>
-                </div>
-                <div>
-                    <label class="form-label">Subject</label>
-                    <input type="text" name="subject" class="form-control" value="{{ form_data.subject }}" required>
-                </div>
-                <div>
-                    <label class="form-label">Message</label>
-                    <textarea name="body" class="form-control" rows="10" required>{{ form_data.body }}</textarea>
-                </div>
-                <div class="responsive-actions justify-content-end">
-                    <a href="{% url 'mail_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-send me-1"></i> Send Mail
-                    </button>
-                </div>
-            </form>
-        </div>
+<div class="row justify-content-center"><div class="col-12 col-xl-9">
+  <form method="post" enctype="multipart/form-data" class="card border-0">
+    {% csrf_token %}<div class="card-header bg-white d-flex justify-content-between align-items-center"><h1 class="h6 mb-0">New message</h1><span class="small text-muted">From {{ mailbox.email_address }}</span></div>
+    <div class="card-body">
+      <div class="mb-3"><label for="mailTo" class="form-label">To</label><input id="mailTo" name="to" class="form-control" type="text" autocomplete="off" value="{{ form_data.to }}" placeholder="name@example.com, another@example.com"></div>
+      <div class="mb-3"><label for="mailCc" class="form-label">CC</label><input id="mailCc" name="cc" class="form-control" type="text" autocomplete="off" value="{{ form_data.cc }}"></div>
+      <div class="mb-3"><label for="mailSubject" class="form-label">Subject</label><input id="mailSubject" name="subject" class="form-control" value="{{ form_data.subject }}" maxlength="998"></div>
+      <div class="mb-3"><label for="mailBody" class="form-label">Message</label><textarea id="mailBody" name="body" class="form-control" rows="14">{{ form_data.body }}</textarea></div>
+      <div class="mb-3"><label for="mailAttachments" class="form-label">Attachments</label><input id="mailAttachments" name="attachments" class="form-control" type="file" multiple><div class="form-text">Maximum 15 MB total per message.</div></div>
+      <input type="hidden" name="in_reply_to" value="{{ form_data.in_reply_to }}"><input type="hidden" name="references" value="{{ form_data.references }}">
     </div>
-</div>
-
-<style>
-    .mail-compose-form {
-        display: grid;
-        gap: 1rem;
-    }
-</style>
+    <div class="card-footer bg-white d-flex justify-content-between"><a href="{% url 'mail_dashboard' %}" class="btn btn-outline-secondary">Cancel</a><div class="d-flex gap-2"><button class="btn btn-outline-primary" name="action" value="draft">Save draft</button><button class="btn btn-primary" name="action" value="send"><i class="bi bi-send me-1"></i>Send</button></div></div>
+  </form>
+</div></div>
 {% endblock %}

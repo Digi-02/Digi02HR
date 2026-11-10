@@ -55,6 +55,19 @@ def user_has_hr_access(user, organization=None):
 
 
 DIGIDOC_ROLES = {'owner', 'hr_admin', 'manager', 'payroll_officer', 'employee'}
+WORK_MAIL_ROLES = {'owner', 'hr_admin', 'manager', 'payroll_officer', 'employee'}
+
+
+def user_has_work_mail_access(user, organization=None):
+    """Mail is sensitive; allow only an active company member, never staff flags or viewers."""
+    if not user.is_authenticated:
+        return False
+    memberships = user.organization_memberships.filter(
+        is_active=True, organization__is_active=True, role__in=WORK_MAIL_ROLES,
+    )
+    if organization is not None:
+        memberships = memberships.filter(organization=organization)
+    return memberships.exists()
 
 
 def user_has_digidoc_access(user, organization=None):

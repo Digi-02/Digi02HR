@@ -1,79 +1,20 @@
 {% extends 'attendance/base.html' %}
-
-{% block title %}Inbox Message | HR Management{% endblock %}
-{% block page_title %}Inbox Message{% endblock %}
-
+{% block title %}{{ message.subject|default:'Message' }} | Mail{% endblock %}
+{% block page_title %}Message{% endblock %}
 {% block content %}
-<div class="container-fluid p-0">
-    <div class="card border-0">
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <div>
-                    <h5 class="mb-1"><i class="bi bi-envelope-open me-2"></i>Inbox Message</h5>
-                    <small class="text-muted">Read message from the configured mailbox.</small>
-                </div>
-                <a href="{% url 'mail_dashboard' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i> Back to Mail
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            {% if inbox_error %}
-            <div class="alert alert-warning mb-0">
-                <i class="bi bi-exclamation-triangle me-2"></i>{{ inbox_error }}
-            </div>
-            {% elif message %}
-            <div class="mail-message-meta">
-                <div><span>Subject</span><strong>{{ message.subject }}</strong></div>
-                <div><span>From</span><strong>{{ message.from }}</strong></div>
-                <div><span>To</span><strong>{{ message.to|default:"-" }}</strong></div>
-                <div><span>Date</span><strong>{{ message.date|default:"-" }}</strong></div>
-            </div>
-            <hr>
-            <pre class="mail-message-body">{{ message.body|default:"No readable text content found." }}</pre>
-            <div class="responsive-actions justify-content-end mt-4">
-                <a href="{% url 'mail_compose' %}?to={{ message.from|urlencode }}&subject=Re:%20{{ message.subject|urlencode }}" class="btn btn-primary">
-                    <i class="bi bi-reply me-1"></i> Reply
-                </a>
-            </div>
-            {% else %}
-            <div class="text-center py-5 text-muted">
-                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
-                Message not found
-            </div>
-            {% endif %}
-        </div>
+<div class="row justify-content-center"><div class="col-12 col-xl-10">
+  <div class="mb-3"><a href="{% url 'mail_dashboard' %}?folder={{ folder|urlencode }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to {{ folder }}</a></div>
+  {% if mail_error %}<div class="alert alert-warning">{{ mail_error }}</div>{% endif %}
+  {% if message %}<article class="card border-0">
+    <div class="card-header bg-white"><h1 class="h5 mb-3">{{ message.subject }}</h1><dl class="row small mb-0"><dt class="col-sm-2">From</dt><dd class="col-sm-10">{{ message.from }}</dd><dt class="col-sm-2">To</dt><dd class="col-sm-10">{{ message.to }}</dd>{% if message.cc %}<dt class="col-sm-2">CC</dt><dd class="col-sm-10">{{ message.cc }}</dd>{% endif %}<dt class="col-sm-2">Date</dt><dd class="col-sm-10">{{ message.date }}</dd></dl></div>
+    <div class="card-body"><div class="d-flex flex-wrap gap-2 mb-3">
+      <a class="btn btn-sm btn-primary" href="{% url 'mail_compose' %}?to={{ message.from|urlencode }}&subject=Re%3A%20{{ message.subject|urlencode }}&in_reply_to={{ message.message_id|urlencode }}&references={{ message.message_id|urlencode }}">Reply</a>
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'mail_compose' %}?to={{ message.from|urlencode }}&cc={{ message.to|urlencode }}&subject=Re%3A%20{{ message.subject|urlencode }}&in_reply_to={{ message.message_id|urlencode }}&references={{ message.message_id|urlencode }}">Reply all</a>
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'mail_compose' %}?subject=Fwd%3A%20{{ message.subject|urlencode }}&body={{ message.body|urlencode }}">Forward</a>
     </div>
-</div>
-
-<style>
-    .mail-message-meta {
-        display: grid;
-        gap: 0.75rem;
-    }
-
-    .mail-message-meta div {
-        display: grid;
-        grid-template-columns: 90px minmax(0, 1fr);
-        gap: 1rem;
-    }
-
-    .mail-message-meta span {
-        color: var(--muted-color);
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        font-weight: 700;
-    }
-
-    .mail-message-body {
-        white-space: pre-wrap;
-        word-break: break-word;
-        background: #f8fafc;
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        border-radius: 8px;
-        color: #0f172a;
-        font-family: inherit;
-        padding: 1rem;
-    }
-</style>
+    {% if message.attachments %}<h2 class="h6">Attachments</h2><ul>{% for attachment in message.attachments %}<li><a href="{% url 'mail_attachment' message.uid attachment.part %}?folder={{ folder|urlencode }}">{{ attachment.filename }}</a> <small class="text-muted">{{ attachment.content_type }}</small></li>{% endfor %}</ul>{% endif %}
+    <hr><div class="mail-body">{{ message.body|linebreaksbr }}</div></div>
+  </article>{% endif %}
+</div></div>
+<style>.mail-body{white-space:normal;overflow-wrap:anywhere;line-height:1.65}</style>
 {% endblock %}

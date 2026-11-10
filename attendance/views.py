@@ -12,21 +12,17 @@ from django.db.models import Q, Count
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.core.exceptions import PermissionDenied
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail
 from django.conf import settings
 from django.core.cache import cache
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.db.models.deletion import ProtectedError
-from email.header import decode_header
-from email.utils import parseaddr
 from html.parser import HTMLParser
 from datetime import datetime, time, timedelta, date
 from functools import wraps
 import csv
 import mimetypes
-import imaplib
-import email
 import html
 import re
 
@@ -287,27 +283,6 @@ def send_onboarding_invitation_email(request, invitation):
     invitation.save(update_fields=['status', 'sent_at', 'updated_at'])
 
 
-def decode_email_header(value):
-    if not value:
-        return ''
-    decoded_parts = []
-    for part, encoding in decode_header(value):
-        if isinstance(part, bytes):
-            decoded_parts.append(part.decode(encoding or 'utf-8', errors='replace'))
-        else:
-            decoded_parts.append(part)
-    return ''.join(decoded_parts)
-
-
-def format_email_address(value):
-    decoded_value = decode_email_header(value)
-    name, address = parseaddr(decoded_value)
-    name = name.strip().strip('"')
-    if name and address and name.lower() != address.lower():
-        return f'{name} <{address}>'
-    return address or decoded_value
-
-
 class EmailHTMLTextExtractor(HTMLParser):
     block_tags = {'br', 'div', 'p', 'tr', 'table', 'li', 'ul', 'ol', 'blockquote'}
 
@@ -339,117 +314,6 @@ def html_to_text(value):
     extractor.feed(value or '')
     extractor.close()
     return extractor.text()
-
-
-def decode_message_part(part):
-    payload = part.get_payload(decode=True)
-    if not payload:
-        return ''
-    charset = part.get_content_charset() or 'utf-8'
-    return payload.decode(charset, errors='replace').strip()
-
-
-def message_text_preview(message):
-    html_body = ''
-    if message.is_multipart():
-        for part in message.walk():
-            if part.get_content_type() == 'text/plain' and not part.get_content_disposition():
-                text_body = decode_message_part(part)
-                if text_body:
-                    return text_body
-            if part.get_content_type() == 'text/html' and not part.get_content_disposition():
-                html_body = html_body or decode_message_part(part)
-        return html_to_text(html_body)
-
-    body = decode_message_part(message)
-    if message.get_content_type() == 'text/html':
-        return html_to_text(body)
-    return body
-
-
-def close_imap_mailbox(mail):
-    if mail is None:
-        return
-    try:
-        mail.logout()
-    except (imaplib.IMAP4.error, OSError, TimeoutError):
-        pass
-
-
-def open_imap_mailbox():
-    if not settings.IMAP_HOST or not settings.IMAP_HOST_USER or not settings.IMAP_HOST_PASSWORD:
-        return None, 'IMAP is not configured yet.'
-
-    try:
-        if settings.IMAP_USE_SSL:
-            mail = imaplib.IMAP4_SSL(settings.IMAP_HOST, settings.IMAP_PORT, timeout=settings.IMAP_TIMEOUT)
-        else:
-            mail = imaplib.IMAP4(settings.IMAP_HOST, settings.IMAP_PORT, timeout=settings.IMAP_TIMEOUT)
-        mail.login(settings.IMAP_HOST_USER, settings.IMAP_HOST_PASSWORD)
-        status, _ = mail.select(settings.IMAP_MAILBOX, readonly=True)
-        if status != 'OK':
-            close_imap_mailbox(mail)
-            return None, f'Could not open mailbox {settings.IMAP_MAILBOX}.'
-        return mail, ''
-    except (imaplib.IMAP4.error, OSError, TimeoutError) as exc:
-        return None, f'Inbox connection failed: {exc}'
-
-
-def fetch_recent_mail(limit=10):
-    mail, error = open_imap_mailbox()
-    if error:
-        return [], error
-
-    try:
-        status, data = mail.uid('search', None, 'ALL')
-        if status != 'OK' or not data or not data[0]:
-            return [], ''
-
-        message_ids = data[0].split()[-limit:]
-        inbox_messages = []
-        for message_id in reversed(message_ids):
-            status, message_data = mail.uid('fetch', message_id, '(RFC822)')
-            if status != 'OK' or not message_data or not message_data[0]:
-                continue
-            raw_message = message_data[0][1]
-            message = email.message_from_bytes(raw_message)
-            preview = message_text_preview(message)
-            inbox_messages.append({
-                'uid': message_id.decode('ascii', errors='ignore'),
-                'from': format_email_address(message.get('From')),
-                'subject': decode_email_header(message.get('Subject')) or '(No subject)',
-                'date': message.get('Date', ''),
-                'preview': preview[:220],
-            })
-        return inbox_messages, ''
-    except (imaplib.IMAP4.error, OSError, TimeoutError) as exc:
-        return [], f'Inbox connection failed: {exc}'
-    finally:
-        close_imap_mailbox(mail)
-
-
-def fetch_mail_message(uid):
-    mail, error = open_imap_mailbox()
-    if error:
-        return None, error
-
-    try:
-        status, message_data = mail.uid('fetch', str(uid).encode('ascii'), '(RFC822)')
-        if status != 'OK' or not message_data or not message_data[0]:
-            return None, 'Message could not be found.'
-        message = email.message_from_bytes(message_data[0][1])
-        return {
-            'uid': uid,
-            'from': format_email_address(message.get('From')),
-            'to': format_email_address(message.get('To')),
-            'subject': decode_email_header(message.get('Subject')) or '(No subject)',
-            'date': message.get('Date', ''),
-            'body': message_text_preview(message),
-        }, ''
-    except (imaplib.IMAP4.error, OSError, TimeoutError) as exc:
-        return None, f'Inbox connection failed: {exc}'
-    finally:
-        close_imap_mailbox(mail)
 
 
 def paginate_queryset(request, queryset, *, per_page=25, page_param='page'):
@@ -2152,9 +2016,8 @@ def employee_document_delete(request, pk):
 
 @login_required
 @hr_required
-def mail_dashboard(request):
-    """Track outbound onboarding mail and candidate/employee responses."""
-
+def onboarding_mail_tracker(request):
+    """Track onboarding invitations; this page never opens an IMAP account."""
     organization = get_active_organization(request)
     search_query = request.GET.get('q', '').strip()
     selected_status = request.GET.get('status', '').strip()
@@ -2167,14 +2030,9 @@ def mail_dashboard(request):
     if selected_type not in valid_types:
         selected_type = ''
 
-    invitations = OnboardingInvitation.objects.filter(
-        organization=organization,
-    ).select_related(
-        'applicant',
-        'employee',
-        'invited_by',
+    invitations = OnboardingInvitation.objects.filter(organization=organization).select_related(
+        'applicant', 'employee', 'invited_by',
     )
-
     if search_query:
         invitations = invitations.filter(
             Q(email__icontains=search_query) |
@@ -2184,112 +2042,29 @@ def mail_dashboard(request):
             Q(employee__last_name__icontains=search_query) |
             Q(employee__employee_id__icontains=search_query)
         )
-
     if selected_status:
         invitations = invitations.filter(status=selected_status)
     if selected_type:
         invitations = invitations.filter(invitation_type=selected_type)
 
-    organization_invitations = OnboardingInvitation.objects.filter(organization=organization)
-    from .models import organization_today
-    trend_end = organization_today(organization)
-    invitation_counts = {
-        'total': organization_invitations.count(),
-        'sent': organization_invitations.filter(status='sent').count(),
-        'opened': organization_invitations.filter(status='opened').count(),
-        'responded': organization_invitations.filter(status__in=['submitted', 'accepted']).count(),
+    all_invitations = OnboardingInvitation.objects.filter(organization=organization)
+    counts = {
+        'total': all_invitations.count(),
+        'sent': all_invitations.filter(status='sent').count(),
+        'opened': all_invitations.filter(status='opened').count(),
+        'responded': all_invitations.filter(status__in=['submitted', 'accepted']).count(),
     }
-    metric_trends = {
-        'total': build_queryset_trend(organization_invitations, 'created_at', organization=organization, end_date=trend_end),
-        'sent': build_queryset_trend(organization_invitations.filter(status='sent'), 'created_at', organization=organization, end_date=trend_end),
-        'opened': build_queryset_trend(organization_invitations.filter(status='opened'), 'created_at', organization=organization, end_date=trend_end),
-        'responded': build_queryset_trend(organization_invitations.filter(status__in=['submitted', 'accepted']), 'created_at', organization=organization, end_date=trend_end),
-    }
-    mail_page, mail_pagination_query = paginate_queryset(
-        request,
-        invitations.order_by('-created_at'),
-        per_page=25,
-        page_param='mail_page',
+    page, pagination_query = paginate_queryset(
+        request, invitations.order_by('-created_at'), per_page=25, page_param='mail_page',
     )
-    inbox_messages, inbox_error = fetch_recent_mail(limit=10)
-
-    context = {
-        'organization': organization,
-        'invitations': mail_page,
-        'mail_page_obj': mail_page,
-        'mail_pagination_query': mail_pagination_query,
-        'inbox_messages': inbox_messages,
-        'inbox_error': inbox_error,
-        'invitation_counts': invitation_counts,
-        'metric_trends': metric_trends,
+    return render(request, 'attendance/onboarding_mail_tracker.html', {
+        'organization': organization, 'invitations': page, 'mail_page_obj': page,
+        'mail_pagination_query': pagination_query, 'invitation_counts': counts,
         'status_choices': OnboardingInvitation.STATUS_CHOICES,
         'type_choices': OnboardingInvitation.INVITATION_TYPE_CHOICES,
-        'search_query': search_query,
-        'selected_status': selected_status,
-        'selected_type': selected_type,
-        'page_title': 'Mail',
-    }
-    return render(request, 'attendance/mail_dashboard.html', context)
-
-
-@login_required
-@hr_required
-def mail_inbox_message(request, uid):
-    message, inbox_error = fetch_mail_message(uid)
-    context = {
-        'message': message,
-        'inbox_error': inbox_error,
-        'page_title': 'Inbox Message',
-    }
-    return render(request, 'attendance/mail_inbox_message.html', context)
-
-
-@login_required
-@hr_required
-def mail_compose(request):
-    initial_to = request.GET.get('to', '').strip()
-    initial_subject = request.GET.get('subject', '').strip()
-    form_data = {
-        'to': initial_to,
-        'subject': initial_subject,
-        'body': '',
-    }
-
-    if request.method == 'POST':
-        form_data = {
-            'to': request.POST.get('to', '').strip(),
-            'subject': request.POST.get('subject', '').strip(),
-            'body': request.POST.get('body', '').strip(),
-        }
-        errors = []
-        if not form_data['to']:
-            errors.append('Recipient email is required.')
-        if not form_data['subject']:
-            errors.append('Subject is required.')
-        if not form_data['body']:
-            errors.append('Message body is required.')
-
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-        else:
-            email_message = EmailMessage(
-                subject=form_data['subject'],
-                body=form_data['body'],
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[address.strip() for address in form_data['to'].split(',') if address.strip()],
-                reply_to=[settings.IMAP_HOST_USER] if settings.IMAP_HOST_USER else None,
-            )
-            email_message.send(fail_silently=False)
-            messages.success(request, f"Mail sent to {form_data['to']}.")
-            return redirect('mail_dashboard')
-
-    context = {
-        'form_data': form_data,
-        'from_email': settings.DEFAULT_FROM_EMAIL,
-        'page_title': 'Compose Mail',
-    }
-    return render(request, 'attendance/mail_compose.html', context)
+        'search_query': search_query, 'selected_status': selected_status,
+        'selected_type': selected_type, 'page_title': 'Invitation tracker',
+    })
 
 
 @login_required
