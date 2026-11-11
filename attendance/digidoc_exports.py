@@ -3,9 +3,30 @@
 from io import BytesIO
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
+import html
 import re
 import unicodedata
 from PIL import Image, ImageOps
+
+
+PAGE_SIZE_TWIPS = {
+    "A4": (11906, 16838), "A5": (8391, 11906), "A3": (16838, 23811),
+    "Letter": (12240, 15840), "Legal": (12240, 20160),
+}
+DEFAULT_MARGINS_CM = {"top_cm": 2.5, "right_cm": 2.5, "bottom_cm": 2.5, "left_cm": 2.5}
+
+
+def _layout_attrs(content):
+    attrs = content.get("attrs", {})
+    size = attrs.get("page_size", "A4")
+    orientation = attrs.get("orientation", "portrait")
+    margins = {**DEFAULT_MARGINS_CM, **attrs.get("margins", {})}
+    if orientation == "landscape":
+        width, height = PAGE_SIZE_TWIPS[size]
+        page = (height, width)
+    else:
+        page = PAGE_SIZE_TWIPS[size]
+    return size, orientation, margins, page
 
 
 def _safe_alt(value):
@@ -68,13 +89,27 @@ def _plain_inline(nodes, assets=None):
 
 def _text_paragraphs(nodes, assets=None):
     paragraphs = []
+
+    def list_lines(node, depth=0):
+        kind = node["type"]
+        checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
+        start = node.get("attrs", {}).get("start", 1)
+        for index, item in enumerate(node.get("content", [])):
+            children = item.get("content", [])
+            text_parts = [_plain_inline(child.get("content", []), assets) for child in children if child["type"] in {"paragraph", "heading"}]
+            marker = "[ ] " if checklist else ("• " if kind == "bulletList" else f"{start + index}. ")
+            paragraphs.append("  " * depth + marker + " ".join(part for part in text_parts if part))
+            for child in children:
+                if child["type"] in {"bulletList", "orderedList"}:
+                    list_lines(child, depth + 1)
+
     for node in nodes:
         kind = node["type"]
         if kind in {"paragraph", "heading", "tableCell"}:
+            attrs = node.get("attrs", {})
+            paragraphs.extend([""] * min(5, attrs.get("space_before_pt", 0) // 24))
             paragraphs.append(_plain_inline(node.get("content", []), assets))
-            if node.get("attrs", {}).get("space_before_pt") or node.get("attrs", {}).get("space_after_pt"):
-                # Spacing is represented by at most five blank lines in plain text.
-                pass
+            paragraphs.extend([""] * min(5, attrs.get("space_after_pt", 0) // 24))
         elif kind == "image":
             alt = _safe_alt(node.get("attrs", {}).get("alt", ""))
             label = f"[Image: {alt}]" if alt else "[Image]"
@@ -84,11 +119,7 @@ def _text_paragraphs(nodes, assets=None):
             after = min(5, node.get("attrs", {}).get("space_after_pt", 0) // 40)
             paragraphs.append(("\n" * before) + label + ("\n" * after))
         elif kind in {"bulletList", "orderedList"}:
-            checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-            for index, item in enumerate(node.get("content", []), 1):
-                line = " ".join(_plain_inline(child.get("content", []), assets) for child in item.get("content", []))
-                marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{index}. ")
-                paragraphs.append(marker + line)
+            list_lines(node)
         elif kind == "table":
             for row in node.get("content", []):
                 paragraphs.append("\t".join(_plain_inline(cell.get("content", [])) for cell in row.get("content", [])))
@@ -150,7 +181,7 @@ def rtf_text(content, assets=None):
             elif kind == "image": pieces.append(rtf_image(node))
         return "".join(pieces)
 
-    def blocks(nodes):
+    def blocks(nodes, list_depth=0):
         result = []
         for node in nodes:
             kind = node["type"]
@@ -160,11 +191,17 @@ def rtf_text(content, assets=None):
             elif kind == "image":
                 result.append(rtf_image(node))
             elif kind in {"doc", "listItem"}:
-                result.extend(blocks(node.get("content", [])))
+                result.extend(blocks(node.get("content", []), list_depth))
             elif kind in {"bulletList", "orderedList"}:
-                for index, item in enumerate(node.get("content", []), 1):
-                    marker = "[ ] " if kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist" else ("- " if kind == "bulletList" else f"{index}. ")
-                    result.append(escape(marker) + " ".join(inline(child.get("content", [])) for child in item.get("content", [])))
+                start = node.get("attrs", {}).get("start", 1)
+                checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
+                for index, item in enumerate(node.get("content", [])):
+                    marker = "[ ] " if checklist else ("• " if kind == "bulletList" else f"{start + index}. ")
+                    item_nodes = item.get("content", [])
+                    paragraphs = [child for child in item_nodes if child["type"] in {"paragraph", "heading"}]
+                    text = " ".join(inline(child.get("content", [])) for child in paragraphs)
+                    result.append(f"\\li{720 * (list_depth + 1)}\\fi-360\\tx{720 * (list_depth + 1)}" + escape(marker + text))
+                    result.extend(blocks([child for child in item_nodes if child["type"] in {"bulletList", "orderedList"}], list_depth + 1))
             elif kind == "hardBreak": result.append("\\page ")
             elif kind == "horizontalRule": result.append(escape("—" * 32))
         return result
@@ -178,7 +215,7 @@ def rtf_text(content, assets=None):
 def _validate_rtf(data):
     if not isinstance(data, bytes) or len(data) > 25 * 1024 * 1024 or not data.startswith(b"{\\rtf1"):
         raise ValueError("Invalid RTF document")
-    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"f", b"viewkind", b"uc", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal"}
+    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"f", b"viewkind", b"uc", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"li", b"fi", b"tx", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal"}
     control_scan = re.sub(rb"\\\\", b"", data)
     for match in re.finditer(rb"\\([A-Za-z]+)(-?\d+)? ?", control_scan):
         if match.group(1).lower() not in allowed:
@@ -202,10 +239,18 @@ def _validate_rtf(data):
     if depth != 0: raise ValueError("Invalid RTF groups")
 
 
-def _docx_run(parent, text, marks=()):
-    run = ET.SubElement(parent, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r")
-    props = ET.SubElement(run, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr")
+def _docx_run(parent, text, marks=(), link_rels=None, link_counter=None):
+    w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    relationship_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
     types = {mark["type"]: mark.get("attrs", {}) for mark in marks}
+    run_parent = parent
+    if "link" in types and link_rels is not None and link_counter is not None:
+        link_counter[0] += 1
+        rid = f"rIdLink{link_counter[0]}"
+        link_rels.append((rid, types["link"]["href"]))
+        run_parent = ET.SubElement(parent, f"{{{w}}}hyperlink", {f"{{{relationship_ns}}}id": rid})
+    run = ET.SubElement(run_parent, f"{{{w}}}r")
+    props = ET.SubElement(run, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr")
     for name, tag in (("bold", "b"), ("italic", "i"), ("underline", "u"), ("strike", "strike")):
         if name in types:
             attrs = {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "single"} if name == "underline" else {}
@@ -271,7 +316,7 @@ def _docx_image(parent, node, assets, media, image_rels, counter):
     ET.SubElement(geom, f"{{{a}}}avLst")
 
 
-def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image_rels=None, counter=None):
+def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image_rels=None, counter=None, num_id=None, level=0, link_rels=None, link_counter=None):
     w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     para = ET.SubElement(parent, f"{{{w}}}p")
     if node:
@@ -281,8 +326,16 @@ def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image
             ET.SubElement(props, f"{{{w}}}pStyle", {f"{{{w}}}val": f"Heading{node['level']}"})
         if attrs.get("align"):
             ET.SubElement(props, f"{{{w}}}jc", {f"{{{w}}}val": {"justify": "both"}.get(attrs["align"], attrs["align"])})
-        if attrs.get("indent"):
-            ET.SubElement(props, f"{{{w}}}ind", {f"{{{w}}}left": str(attrs["indent"] * 360)})
+        ind = {}
+        left_cm = attrs.get("left_indent_cm", attrs.get("indent", 0) * 1.27)
+        if left_cm:
+            ind[f"{{{w}}}left"] = str(round(left_cm * 567))
+        if attrs.get("right_indent_cm"):
+            ind[f"{{{w}}}right"] = str(round(attrs["right_indent_cm"] * 567))
+        if attrs.get("first_line_indent_cm"):
+            ind[f"{{{w}}}firstLine"] = str(round(attrs["first_line_indent_cm"] * 567))
+        if ind:
+            ET.SubElement(props, f"{{{w}}}ind", ind)
         if attrs.get("line_spacing"):
             line = {"single": "240", "1.15": "276", "1.5": "360", "double": "480"}[attrs["line_spacing"]]
             ET.SubElement(props, f"{{{w}}}spacing", {f"{{{w}}}line": line, f"{{{w}}}lineRule": "auto"})
@@ -292,13 +345,17 @@ def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image
                 spacing = ET.SubElement(props, f"{{{w}}}spacing")
             spacing.set(f"{{{w}}}before", str(attrs.get("space_before_pt", 0) * 20))
             spacing.set(f"{{{w}}}after", str(attrs.get("space_after_pt", 0) * 20))
+        if num_id is not None:
+            num_pr = ET.SubElement(props, f"{{{w}}}numPr")
+            ET.SubElement(num_pr, f"{{{w}}}ilvl", {f"{{{w}}}val": str(level)})
+            ET.SubElement(num_pr, f"{{{w}}}numId", {f"{{{w}}}val": str(num_id)})
         if len(props) == 0:
             para.remove(props)
         if prefix:
-            _docx_run(para, prefix)
+            _docx_run(para, prefix, link_rels=link_rels, link_counter=link_counter)
         for child in node.get("content", []):
             if child["type"] == "text":
-                _docx_run(para, child.get("text", ""), child.get("marks", []))
+                _docx_run(para, child.get("text", ""), child.get("marks", []), link_rels, link_counter)
             elif child["type"] == "hardBreak":
                 run = ET.SubElement(para, f"{{{w}}}r")
                 ET.SubElement(run, f"{{{w}}}br")
@@ -324,25 +381,28 @@ def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image
     return para
 
 
-def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counter=None):
+def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counter=None, numbering=None, level=0, link_rels=None, link_counter=None):
     w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     for node in nodes:
         kind = node["type"]
         if kind in {"paragraph", "heading"}:
-            _docx_paragraph(parent, node, assets=assets, media=media, image_rels=image_rels, counter=counter)
+            _docx_paragraph(parent, node, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
         elif kind in {"bulletList", "orderedList"}:
             checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-            for index, item in enumerate(node.get("content", []), 1):
+            list_kind = "checklist" if checklist else ("decimal" if kind == "orderedList" else "bullet")
+            num_id = _docx_new_num(numbering, list_kind, node.get("attrs", {}).get("start"))
+            for item in node.get("content", []):
                 children = item.get("content", [])
-                marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{index}. ")
-                if children:
-                    for child_index, child in enumerate(children):
-                        if child["type"] in {"paragraph", "heading"}:
-                            _docx_paragraph(parent, child, marker if child_index == 0 else "", assets, media, image_rels, counter)
-                        else:
-                            _docx_blocks(parent, [child], assets, media, image_rels, counter)
-                else:
-                    _docx_paragraph(parent, {"type": "paragraph", "content": []}, marker, assets, media, image_rels, counter)
+                first_paragraph = next((index for index, child in enumerate(children) if child["type"] in {"paragraph", "heading"}), None)
+                if first_paragraph is None:
+                    _docx_paragraph(parent, {"type": "paragraph", "content": []}, assets=assets, media=media, image_rels=image_rels, counter=counter, num_id=num_id, level=level, link_rels=link_rels, link_counter=link_counter)
+                for index, child in enumerate(children):
+                    if child["type"] in {"paragraph", "heading"}:
+                        _docx_paragraph(parent, child, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter,
+                                        num_id=num_id if index == first_paragraph else None,
+                                        level=level)
+                    elif child["type"] in {"bulletList", "orderedList"}:
+                        _docx_blocks(parent, [child], assets, media, image_rels, counter, numbering, level + 1, link_rels, link_counter)
         elif kind == "table":
             table = ET.SubElement(parent, f"{{{w}}}tbl")
             props = ET.SubElement(table, f"{{{w}}}tblPr")
@@ -353,16 +413,54 @@ def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counte
                 tr = ET.SubElement(table, f"{{{w}}}tr")
                 for cell in row.get("content", []):
                     tc = ET.SubElement(tr, f"{{{w}}}tc")
-                    _docx_paragraph(tc, {"type":"paragraph", "content":cell.get("content", [])}, assets=assets, media=media, image_rels=image_rels, counter=counter)
+                    _docx_paragraph(tc, {"type":"paragraph", "content":cell.get("content", [])}, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
         elif kind == "hardBreak":
             p = ET.SubElement(parent, f"{{{w}}}p")
             run = ET.SubElement(p, f"{{{w}}}r")
             ET.SubElement(run, f"{{{w}}}br", {f"{{{w}}}type": "page"})
         elif kind == "horizontalRule":
-            _docx_paragraph(parent, {"type": "paragraph", "content": [{"type": "text", "text": "─" * 32}]})
+            _docx_paragraph(parent, {"type": "paragraph", "content": [{"type": "text", "text": "─" * 32}]}, link_rels=link_rels, link_counter=link_counter)
         elif kind == "image":
             alt = node.get("attrs", {}).get("alt", "")
-            _docx_paragraph(parent, {"type": "paragraph", "attrs":node.get("attrs", {}), "content": [{"type": "image", "attrs":node.get("attrs", {})}]}, assets=assets, media=media, image_rels=image_rels, counter=counter)
+            _docx_paragraph(parent, {"type": "paragraph", "attrs":node.get("attrs", {}), "content": [{"type": "image", "attrs":node.get("attrs", {})}]}, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
+
+
+def _docx_new_num(numbering, list_kind, start=None):
+    w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    numbering["next_num"] += 1
+    num_id = numbering["next_num"]
+    num = ET.SubElement(numbering["root"], f"{{{w}}}num", {f"{{{w}}}numId": str(num_id)})
+    ET.SubElement(num, f"{{{w}}}abstractNumId", {f"{{{w}}}val": str(numbering["abstract"][list_kind])})
+    if start is not None:
+        override = ET.SubElement(num, f"{{{w}}}lvlOverride", {f"{{{w}}}ilvl": "0"})
+        ET.SubElement(override, f"{{{w}}}startOverride", {f"{{{w}}}val": str(start)})
+    return num_id
+
+
+def _docx_numbering():
+    w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    root = ET.Element(f"{{{w}}}numbering")
+    abstract = {"bullet": 1, "decimal": 2, "checklist": 3}
+    bullet_chars = ("•", "◦", "▪", "▫", "‣", "⁃", "•", "◦", "▪")
+    for list_kind, abstract_id in abstract.items():
+        item = ET.SubElement(root, f"{{{w}}}abstractNum", {f"{{{w}}}abstractNumId": str(abstract_id)})
+        ET.SubElement(item, f"{{{w}}}multiLevelType", {f"{{{w}}}val": "multilevel"})
+        for level in range(9):
+            lvl = ET.SubElement(item, f"{{{w}}}lvl", {f"{{{w}}}ilvl": str(level)})
+            ET.SubElement(lvl, f"{{{w}}}start", {f"{{{w}}}val": "1"})
+            fmt = "decimal" if list_kind == "decimal" else "bullet"
+            ET.SubElement(lvl, f"{{{w}}}numFmt", {f"{{{w}}}val": fmt})
+            text = f"%{level + 1}." if list_kind == "decimal" else ("☐" if list_kind == "checklist" else bullet_chars[level])
+            ET.SubElement(lvl, f"{{{w}}}lvlText", {f"{{{w}}}val": text})
+            ET.SubElement(lvl, f"{{{w}}}lvlJc", {f"{{{w}}}val": "left"})
+            ppr = ET.SubElement(lvl, f"{{{w}}}pPr")
+            ET.SubElement(ppr, f"{{{w}}}tabs")
+            ET.SubElement(ppr[-1], f"{{{w}}}tab", {f"{{{w}}}val": "num", f"{{{w}}}pos": str((level + 1) * 720)})
+            ET.SubElement(ppr, f"{{{w}}}ind", {f"{{{w}}}left": str((level + 1) * 720), f"{{{w}}}hanging": "360"})
+            if list_kind in {"bullet", "checklist"}:
+                rpr = ET.SubElement(lvl, f"{{{w}}}rPr")
+                ET.SubElement(rpr, f"{{{w}}}rFonts", {f"{{{w}}}ascii": "Segoe UI Symbol", f"{{{w}}}hAnsi": "Segoe UI Symbol"})
+    return {"root": root, "abstract": abstract, "next_num": 0}
 
 
 def docx(content, assets=None):
@@ -372,17 +470,28 @@ def docx(content, assets=None):
     ET.register_namespace("w", w)
     root = ET.Element(f"{{{w}}}document")
     body = ET.SubElement(root, f"{{{w}}}body")
-    media, image_rels, counter = {}, [], [0]
-    _docx_blocks(body, content.get("content", []), assets, media, image_rels, counter)
+    media, image_rels, link_rels, counter, link_counter = {}, [], [], [0], [0]
+    numbering = _docx_numbering()
+    _docx_blocks(body, content.get("content", []), assets, media, image_rels, counter, numbering, link_rels=link_rels, link_counter=link_counter)
+    page_size, orientation, margins, page_dimensions = _layout_attrs(content)
     sect = ET.SubElement(body, f"{{{w}}}sectPr")
-    ET.SubElement(sect, f"{{{w}}}pgSz", {f"{{{w}}}w": "11906", f"{{{w}}}h": "16838"})
-    ET.SubElement(sect, f"{{{w}}}pgMar", {f"{{{w}}}top": "1134", f"{{{w}}}right": "1134", f"{{{w}}}bottom": "1134", f"{{{w}}}left": "1134", f"{{{w}}}header": "720", f"{{{w}}}footer": "720", f"{{{w}}}gutter": "0"})
+    width, height = page_dimensions
+    size_attrs = {f"{{{w}}}w": str(width), f"{{{w}}}h": str(height)}
+    if orientation == "landscape":
+        size_attrs[f"{{{w}}}orient"] = "landscape"
+    ET.SubElement(sect, f"{{{w}}}pgSz", size_attrs)
+    margin_attrs = {f"{{{w}}}{edge}": str(round(margins[f"{edge}_cm"] * 567)) for edge in ("top", "right", "bottom", "left")}
+    margin_attrs.update({f"{{{w}}}header": "720", f"{{{w}}}footer": "720", f"{{{w}}}gutter": "0"})
+    ET.SubElement(sect, f"{{{w}}}pgMar", margin_attrs)
     content_types = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'''
     rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'''
     styles = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style></w:styles>'''
     content_types = content_types.replace(b"</Types>", b'<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
+    content_types = content_types.replace(b"</Types>", b'<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>')
     rel_items = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>']
+    rel_items.append('<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>')
     rel_items.extend(f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="{target}"/>' for rid, target in image_rels)
+    rel_items.extend(f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="{html.escape(target, quote=True)}" TargetMode="External"/>' for rid, target in link_rels)
     word_rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + "".join(rel_items) + "</Relationships>").encode("utf-8")
     buffer = BytesIO()
     with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
@@ -390,6 +499,7 @@ def docx(content, assets=None):
         archive.writestr("_rels/.rels", rels)
         archive.writestr("word/document.xml", ET.tostring(root, encoding="utf-8", xml_declaration=True))
         archive.writestr("word/styles.xml", styles)
+        archive.writestr("word/numbering.xml", ET.tostring(numbering["root"], encoding="utf-8", xml_declaration=True))
         archive.writestr("word/_rels/document.xml.rels", word_rels)
         for name, data in media.items():
             archive.writestr(f"word/media/{name}", data)
@@ -413,6 +523,20 @@ def odt(content, assets=None):
         ET.register_namespace(prefix, uri)
     root = ET.Element(f"{{{ns['office']}}}document-content", {f"{{{ns['office']}}}version": "1.3"})
     automatic = ET.SubElement(root, f"{{{ns['office']}}}automatic-styles")
+    list_style_names = {"bulletList": "DigiDocBullets", "orderedList": "DigiDocNumbers", "checklist": "DigiDocChecklist"}
+    for list_kind, style_name in list_style_names.items():
+        style = ET.SubElement(automatic, f"{{{ns['text']}}}list-style", {f"{{{ns['style']}}}name": style_name})
+        for level in range(1, 10):
+            if list_kind == "orderedList":
+                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-number", {
+                    f"{{{ns['text']}}}level": str(level), f"{{{ns['style']}}}num-format": "1",
+                    f"{{{ns['style']}}}num-suffix": ".", f"{{{ns['text']}}}start-value": "1",
+                })
+            else:
+                glyph = "☐" if list_kind == "checklist" else ("•", "◦", "▪", "▫", "‣", "⁃", "•", "◦", "▪")[level - 1]
+                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-bullet", {
+                    f"{{{ns['text']}}}level": str(level), f"{{{ns['text']}}}bullet-char": glyph,
+                })
     body = ET.SubElement(root, f"{{{ns['office']}}}body")
     text_body = ET.SubElement(body, f"{{{ns['office']}}}text")
 
@@ -463,8 +587,13 @@ def odt(content, assets=None):
             prop = {}
             if attrs.get("align"):
                 prop[f"{{{ns['fo']}}}text-align"] = attrs["align"]
-            if attrs.get("indent"):
-                prop[f"{{{ns['fo']}}}margin-left"] = f"{attrs['indent'] * 0.5}in"
+            left_cm = attrs.get("left_indent_cm", attrs.get("indent", 0) * 1.27)
+            if left_cm:
+                prop[f"{{{ns['fo']}}}margin-left"] = f"{left_cm:.2f}cm"
+            if attrs.get("right_indent_cm"):
+                prop[f"{{{ns['fo']}}}margin-right"] = f"{attrs['right_indent_cm']:.2f}cm"
+            if attrs.get("first_line_indent_cm"):
+                prop[f"{{{ns['fo']}}}text-indent"] = f"{attrs['first_line_indent_cm']:.2f}cm"
             if attrs.get("line_spacing"):
                 prop[f"{{{ns['fo']}}}line-height"] = {"single": "100%", "1.15": "115%", "1.5": "150%", "double": "200%"}[attrs["line_spacing"]]
             if attrs.get("space_before_pt"):
@@ -500,10 +629,16 @@ def odt(content, assets=None):
                         if "fontSize" in marks: text_props[f"{{{ns['fo']}}}font-size"] = f"{marks['fontSize']['value']}pt"
                         if "fontFamily" in marks: text_props[f"{{{ns['fo']}}}font-family"] = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New"}.get(marks["fontFamily"]["value"], marks["fontFamily"]["value"])
                         ET.SubElement(span_style, f"{{{ns['style']}}}text-properties", text_props)
-                        span = ET.SubElement(element, f"{{{ns['text']}}}span", {f"{{{ns['text']}}}style-name": span_name})
+                        span_parent = element
+                        if "link" in marks:
+                            span_parent = ET.SubElement(element, f"{{{ns['text']}}}a", {f"{{{ns['xlink']}}}href": marks["link"]["href"]})
+                        span = ET.SubElement(span_parent, f"{{{ns['text']}}}span", {f"{{{ns['text']}}}style-name": span_name})
                         span.text = child.get("text", "")
                     else:
-                        text_node = ET.SubElement(element, f"{{{ns['text']}}}span")
+                        text_parent = element
+                        if "link" in marks:
+                            text_parent = ET.SubElement(element, f"{{{ns['text']}}}a", {f"{{{ns['xlink']}}}href": marks["link"]["href"]})
+                        text_node = ET.SubElement(text_parent, f"{{{ns['text']}}}span")
                         text_node.text = child.get("text", "")
                 elif child["type"] == "hardBreak":
                     ET.SubElement(element, f"{{{ns['text']}}}line-break")
@@ -521,23 +656,27 @@ def odt(content, assets=None):
                     image_frame(element, child)
         return element
 
-    def blocks(parent, nodes):
+    def blocks(parent, nodes, list_level=0):
         for node in nodes:
             kind = node["type"]
             if kind in {"paragraph", "heading"}:
                 para(parent, node)
             elif kind in {"bulletList", "orderedList"}:
                 checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-                list_el = ET.SubElement(parent, f"{{{ns['text']}}}list")
-                for item in node.get("content", []):
-                    li = ET.SubElement(list_el, f"{{{ns['text']}}}list-item")
+                style_name = list_style_names["checklist" if checklist else kind]
+                list_el = ET.SubElement(parent, f"{{{ns['text']}}}list", {f"{{{ns['text']}}}style-name": style_name})
+                for item_index, item in enumerate(node.get("content", [])):
+                    item_attrs = {}
+                    if kind == "orderedList" and item_index == 0 and node.get("attrs", {}).get("start") is not None:
+                        item_attrs[f"{{{ns['text']}}}start-value"] = str(node["attrs"]["start"])
+                    li = ET.SubElement(list_el, f"{{{ns['text']}}}list-item", item_attrs)
                     children = item.get("content", [])
                     if children:
                         for child_index, child in enumerate(children):
                             if child["type"] in {"paragraph", "heading"}:
                                 para(li, child, "[ ] " if checklist and child_index == 0 else "")
                             else:
-                                blocks(li, [child])
+                                blocks(li, [child], list_level + 1)
                     else:
                         para(li, prefix="[ ] " if checklist else "")
             elif kind == "table":
@@ -560,6 +699,24 @@ def odt(content, assets=None):
     default_style = ET.SubElement(common_styles, f"{{{ns['style']}}}default-style", {f"{{{ns['style']}}}family": "paragraph"})
     ET.SubElement(default_style, f"{{{ns['style']}}}paragraph-properties", {f"{{{ns['fo']}}}margin-top": "0in", f"{{{ns['fo']}}}margin-bottom": "0.08in"})
     ET.SubElement(default_style, f"{{{ns['style']}}}text-properties", {f"{{{ns['fo']}}}font-family": "Arial", f"{{{ns['fo']}}}font-size": "10pt"})
+    _size, orientation, margins, page_twips = _layout_attrs(content)
+    page_width, page_height = page_twips
+    page_width_cm, page_height_cm = page_width / 567, page_height / 567
+    automatic_styles = ET.SubElement(styles_root, f"{{{ns['office']}}}automatic-styles")
+    page_layout = ET.SubElement(automatic_styles, f"{{{ns['style']}}}page-layout", {f"{{{ns['style']}}}name": "pm1"})
+    ET.SubElement(page_layout, f"{{{ns['style']}}}page-layout-properties", {
+        f"{{{ns['fo']}}}page-width": f"{page_width_cm:.2f}cm",
+        f"{{{ns['fo']}}}page-height": f"{page_height_cm:.2f}cm",
+        f"{{{ns['style']}}}print-orientation": orientation,
+        f"{{{ns['fo']}}}margin-top": f"{margins['top_cm']:.2f}cm",
+        f"{{{ns['fo']}}}margin-right": f"{margins['right_cm']:.2f}cm",
+        f"{{{ns['fo']}}}margin-bottom": f"{margins['bottom_cm']:.2f}cm",
+        f"{{{ns['fo']}}}margin-left": f"{margins['left_cm']:.2f}cm",
+    })
+    master_styles = ET.SubElement(styles_root, f"{{{ns['office']}}}master-styles")
+    ET.SubElement(master_styles, f"{{{ns['style']}}}master-page", {
+        f"{{{ns['style']}}}name": "Standard", f"{{{ns['style']}}}page-layout-name": "pm1",
+    })
     styles_xml = ET.tostring(styles_root, encoding="utf-8", xml_declaration=True)
     picture_entries = "".join(f'<manifest:file-entry manifest:full-path="{name}" manifest:media-type="image/{"jpeg" if name.endswith("jpeg") else "png"}"/>' for name in pictures)
     manifest = f'''<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>{picture_entries}</manifest:manifest>'''

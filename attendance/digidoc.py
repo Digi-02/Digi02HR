@@ -2,6 +2,8 @@
 
 import html
 import json
+import logging
+import math
 import re
 import secrets
 import unicodedata
@@ -33,19 +35,21 @@ from django.utils.html import json_script
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, A5, A3, letter as LETTER, legal as LEGAL, landscape as page_landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
-from reportlab.platypus import Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image as PdfImage, ListFlowable, ListItem, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .digidoc_exports import docx as export_docx, odt as export_odt, plain_text as export_text, rtf_text as export_rtf
 from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, OrganizationMembership, PersonalLetterhead
 from .organization import DIGIDOC_ROLES, HR_ROLES
 from .shell import shell_context
+
+logger = logging.getLogger(__name__)
 
 
 MAX_JSON_BYTES = 2 * 1024 * 1024
@@ -53,6 +57,7 @@ MAX_DEPTH = 20
 MAX_NODES = 10000
 MAX_TITLE = 200
 MAX_PAGES = 50
+MAX_MARKS = 9
 MAX_FLOATING_IMAGES = 20
 ALLOWED_TYPES = {"doc", "paragraph", "heading", "text", "hardBreak", "horizontalRule", "bulletList", "orderedList", "listItem", "table", "tableRow", "tableCell", "image"}
 ALLOWED_MARKS = {"bold", "italic", "underline", "strike", "link", "fontFamily", "fontSize", "textColor", "highlight"}
@@ -65,6 +70,12 @@ FONT_FAMILIES = {
 FONT_SIZE_VALUES = {8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48}
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LINE_SPACING = {"single", "1.15", "1.5", "double"}
+PAGE_SIZES = {"A4", "A5", "A3", "Letter", "Legal"}
+PAGE_SIZE_POINTS = {"A4": A4, "A5": A5, "A3": A3, "Letter": LETTER, "Legal": LEGAL}
+PAGE_ORIENTATIONS = {"portrait", "landscape"}
+MARGIN_KEYS = {"top_cm", "right_cm", "bottom_cm", "left_cm"}
+PARAGRAPH_SPACING_KEYS = {"space_before_pt", "space_after_pt"}
+PARAGRAPH_INDENT_KEYS = {"left_indent_cm", "right_indent_cm", "first_line_indent_cm"}
 CHILDREN = {
     "doc": {"paragraph", "heading", "bulletList", "orderedList", "table", "image", "hardBreak", "horizontalRule"},
     "paragraph": {"text", "hardBreak", "image"}, "heading": {"text", "hardBreak"},
@@ -172,7 +183,7 @@ def validate_document_json(value):
     page_breaks = [0]
     floating_images = [0]
 
-    def visit(node, depth=0):
+    def visit(node, depth=0, list_depth=0):
         count[0] += 1
         if count[0] > MAX_NODES or depth > MAX_DEPTH or not isinstance(node, dict):
             raise ValidationError("The document structure is too large or deeply nested.")
@@ -180,11 +191,13 @@ def validate_document_json(value):
         if not isinstance(kind, str) or kind not in ALLOWED_TYPES:
             raise ValidationError("Unsupported document element.")
         allowed_keys = {"type", "content"}
+        if kind == "doc":
+            allowed_keys.add("attrs")
         if kind == "text":
             allowed_keys |= {"text", "marks"}
         if kind == "heading":
             allowed_keys |= {"level", "content", "attrs"}
-        if kind in {"paragraph", "tableCell", "bulletList"}:
+        if kind in {"paragraph", "tableCell", "bulletList", "orderedList"}:
             allowed_keys |= {"attrs"}
         if kind == "image":
             allowed_keys |= {"attrs"}
@@ -197,7 +210,7 @@ def validate_document_json(value):
                 raise ValidationError("Text is too long.")
             cleaned["text"] = "".join(ch for ch in text if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})
             marks = node.get("marks", [])
-            if not isinstance(marks, list) or len(marks) > 8:
+            if not isinstance(marks, list) or len(marks) > MAX_MARKS:
                 raise ValidationError("Invalid text formatting.")
             clean_marks = []
             for mark in marks:
@@ -238,6 +251,8 @@ def validate_document_json(value):
             if page_breaks[0] >= MAX_PAGES:
                 raise ValidationError("A document can contain up to 50 pages.")
         attrs = node.get("attrs")
+        if "attrs" in node and attrs is None:
+            raise ValidationError("Element properties must be an object.")
         if kind == "image" and attrs is None:
             raise ValidationError("Image references are required.")
         if attrs is not None:
@@ -312,10 +327,39 @@ def validate_document_json(value):
                     "space_before_pt": space_before_pt,
                     "space_after_pt": space_after_pt,
                 }
+            elif kind == "doc":
+                allowed_attrs = {"page_size", "orientation", "margins"}
+                if set(attrs) - allowed_attrs:
+                    raise ValidationError("Unsupported page layout property.")
+                clean_attrs = {}
+                if "page_size" in attrs:
+                    if not isinstance(attrs["page_size"], str) or attrs["page_size"] not in PAGE_SIZES:
+                        raise ValidationError("Unsupported page size.")
+                    clean_attrs["page_size"] = attrs["page_size"]
+                if "orientation" in attrs:
+                    if not isinstance(attrs["orientation"], str) or attrs["orientation"] not in PAGE_ORIENTATIONS:
+                        raise ValidationError("Unsupported page orientation.")
+                    clean_attrs["orientation"] = attrs["orientation"]
+                if "margins" in attrs:
+                    margins = attrs["margins"]
+                    if not isinstance(margins, dict) or set(margins) != MARGIN_KEYS:
+                        raise ValidationError("Invalid page margins.")
+                    clean_margins = {}
+                    for field, value in margins.items():
+                        if type(value) not in {int, float} or not math.isfinite(value) or not 0.5 <= value <= 5.5:
+                            raise ValidationError("Page margins must be between 0.5 and 5.5 cm.")
+                        clean_margins[field] = round(float(value), 2)
+                    clean_attrs["margins"] = clean_margins
+                cleaned["attrs"] = clean_attrs
             else:
-                allowed_attrs = {"align", "indent", "line_spacing"}
-                if kind == "bulletList":
-                    allowed_attrs.add("list_style")
+                if kind in {"paragraph", "heading", "tableCell"}:
+                    allowed_attrs = {"align", "indent", "line_spacing"} | PARAGRAPH_SPACING_KEYS | PARAGRAPH_INDENT_KEYS
+                elif kind == "bulletList":
+                    allowed_attrs = {"list_style"}
+                elif kind == "orderedList":
+                    allowed_attrs = {"start"}
+                else:
+                    allowed_attrs = set()
                 if set(attrs) - allowed_attrs:
                     raise ValidationError("Unsupported element property.")
                 clean_attrs = {}
@@ -335,6 +379,22 @@ def validate_document_json(value):
                     if not isinstance(attrs["line_spacing"], str) or attrs["line_spacing"] not in LINE_SPACING:
                         raise ValidationError("Unsupported line spacing.")
                     clean_attrs["line_spacing"] = attrs["line_spacing"]
+                if "start" in attrs:
+                    if type(attrs["start"]) is not int or not 1 <= attrs["start"] <= 9999:
+                        raise ValidationError("Ordered list start must be from 1 to 9999.")
+                    clean_attrs["start"] = attrs["start"]
+                for field in PARAGRAPH_SPACING_KEYS:
+                    if field in attrs:
+                        if type(attrs[field]) is not int or not 0 <= attrs[field] <= 200:
+                            raise ValidationError("Paragraph spacing must be an integer from 0 to 200 pt.")
+                        clean_attrs[field] = attrs[field]
+                for field in PARAGRAPH_INDENT_KEYS:
+                    if field in attrs:
+                        value = attrs[field]
+                        low = -2.54 if field == "first_line_indent_cm" else 0
+                        if type(value) not in {int, float} or not math.isfinite(value) or not low <= value <= 10:
+                            raise ValidationError("Paragraph indents are outside the allowed range.")
+                        clean_attrs[field] = round(float(value), 2)
                 cleaned["attrs"] = clean_attrs
         children = node.get("content", [])
         if not isinstance(children, list) or len(children) > MAX_NODES:
@@ -347,7 +407,10 @@ def validate_document_json(value):
                 raise ValidationError("A table can have up to 100 rows.")
             if kind == "tableRow" and len(children) > 20:
                 raise ValidationError("A table row can have up to 20 cells.")
-            cleaned["content"] = [visit(child, depth + 1) for child in children]
+            next_list_depth = list_depth + (1 if kind in {"bulletList", "orderedList"} else 0)
+            if next_list_depth > 9:
+                raise ValidationError("Lists can be nested up to 9 levels.")
+            cleaned["content"] = [visit(child, depth + 1, next_list_depth) for child in children]
         elif children:
             raise ValidationError("This element cannot have child content.")
         return cleaned
@@ -583,6 +646,9 @@ def digidoc_save(request, document_id):
             valid_slots.update((doc.letterhead_snapshot or {}).keys())
         if type(enabled) is not bool or mode not in {"every", "first"} or first_slot not in valid_slots or other_slot not in valid_slots:
             raise ValidationError("Invalid letterhead settings.")
+        layout_attrs = content.get("attrs", {})
+        if enabled and (layout_attrs.get("page_size", "A4") != "A4" or layout_attrs.get("orientation", "portrait") != "portrait"):
+            raise ValidationError("Letterheads are available on A4 portrait pages only.")
         if enabled and source == "company" and not ((current_letterhead and current_letterhead.image) or doc.letterhead_snapshot):
             raise ValidationError("This company has no saved letterhead.")
         if enabled and source == "personal" and not personal_letterhead:
@@ -733,13 +799,23 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
         raise ValidationError("The selected letterhead is unavailable.")
     if doc.letterhead_enabled and any(slot != "none" and (slot not in letterhead_assets or slot not in letterhead_data) for slot in (first_slot, other_slot)):
         raise ValidationError("The selected letterhead is unavailable.")
-    margins = (25, 20, 25, 20)
+    document_attrs = content.get("attrs", {})
+    page_size_name = document_attrs.get("page_size", "A4")
+    orientation = document_attrs.get("orientation", "portrait")
+    page_size = PAGE_SIZE_POINTS[page_size_name]
+    if orientation == "landscape":
+        page_size = page_landscape(page_size)
+    margins_cm = document_attrs.get("margins", {"top_cm": 2.5, "right_cm": 2.5, "bottom_cm": 2.5, "left_cm": 2.5})
+    margins = tuple(margins_cm[field] * 10 for field in ("top_cm", "right_cm", "bottom_cm", "left_cm"))
     letterhead = letterhead_assets.get("1") or next(iter(letterhead_assets.values()), None)
     if letterhead:
-        margins = (letterhead.margin_top_mm + 4, letterhead.margin_right_mm, letterhead.margin_bottom_mm + 4, letterhead.margin_left_mm)
+        if page_size_name != "A4" or orientation != "portrait":
+            raise ValidationError("Letterheads are available on A4 portrait pages only.")
+        margins = tuple(max(value, required) for value, required in zip(
+            margins, (letterhead.margin_top_mm + 4, letterhead.margin_right_mm, letterhead.margin_bottom_mm + 4, letterhead.margin_left_mm)))
     buffer = BytesIO()
     top, right, bottom, left = margins
-    pdf = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=left*mm, rightMargin=right*mm, topMargin=top*mm, bottomMargin=bottom*mm, title=_clean_title(doc.title), pageCompression=1)
+    pdf = SimpleDocTemplate(buffer, pagesize=page_size, leftMargin=left*mm, rightMargin=right*mm, topMargin=top*mm, bottomMargin=bottom*mm, title=_clean_title(doc.title), pageCompression=1)
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="DigiDocH1", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=20, leading=25, spaceBefore=8, spaceAfter=8))
     styles.add(ParagraphStyle(name="DigiDocH2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=16, leading=20, spaceBefore=7, spaceAfter=6))
@@ -802,6 +878,26 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             result.append(Paragraph(_paragraph_html({"type": "paragraph", "content": segment}) or "&#160;", style))
         return result
 
+    def build_list_flow(node, level=0):
+        kind = node["type"]
+        checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
+        items = []
+        for item in node.get("content", []):
+            item_flows = []
+            for child in item.get("content", []):
+                if child["type"] in {"paragraph", "heading"}:
+                    item_flows.extend(paragraph_flows(child, styles["BodyText"]))
+                elif child["type"] in {"bulletList", "orderedList"}:
+                    item_flows.append(build_list_flow(child, level + 1))
+            if checklist:
+                item_flows.insert(0, Paragraph("[ ]", styles["BodyText"]))
+            items.append(ListItem(item_flows or [Paragraph("&#160;", styles["BodyText"])]))
+        bullet_type = "1" if kind == "orderedList" else "bullet"
+        start = node.get("attrs", {}).get("start", 1) if kind == "orderedList" else "bulletchar"
+        return ListFlowable(items, bulletType=bullet_type, start=start, leftIndent=18 * (level + 1),
+                            bulletFormat="%s." if kind == "orderedList" else None,
+                            bulletFontName="Helvetica", bulletFontSize=9, bulletDedent=10)
+
     def blocks(nodes):
         for node in nodes:
             kind = node["type"]
@@ -824,7 +920,9 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                     "DigiDocBlock", parent=base_style, fontName=base_style.fontName,
                     fontSize=base_size, leading=round(base_size * leading_ratio, 1),
                     alignment=alignments.get(attrs.get("align"), TA_LEFT),
-                    leftIndent=attrs.get("indent", 0) * 18,
+                    leftIndent=attrs.get("left_indent_cm", attrs.get("indent", 0) * 1.27) * 28.3465,
+                    rightIndent=attrs.get("right_indent_cm", 0) * 28.3465,
+                    firstLineIndent=attrs.get("first_line_indent_cm", 0) * 28.3465,
                     spaceBefore=attrs.get("space_before_pt", 0),
                     spaceAfter=attrs.get("space_after_pt", 7),
                 )
@@ -834,11 +932,7 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 from reportlab.platypus import HRFlowable
                 flow.extend([HRFlowable(width="100%", thickness=0.8, color="#9aa2ad", spaceBefore=6, spaceAfter=10), Spacer(1, 2)])
             elif kind in {"bulletList", "orderedList"}:
-                checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-                for ix, item in enumerate(node.get("content", []), 1):
-                    raw = "".join(_paragraph_html(child) for child in item.get("content", []))
-                    marker = "[ ] " if checklist else ("- " if kind == "bulletList" else f"{ix}. ")
-                    flow.append(Paragraph(marker + (raw or "&#160;"), styles["BodyText"]))
+                flow.append(build_list_flow(node))
             elif kind == "table":
                 rows = []
                 for row in node.get("content", []):
@@ -1124,6 +1218,7 @@ def digidoc_export(request, document_id, file_format):
     except ValidationError as exc:
         return HttpResponse(exc.messages[0], status=400)
     except Exception:
+        logger.exception("DigiDoc %s export failed for document %s", file_format, document_id)
         return HttpResponse("The document could not be exported.", status=400)
     if isinstance(data, str):
         data = data.encode("utf-8")

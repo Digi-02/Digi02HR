@@ -5,19 +5,66 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from attendance.digidoc import _render_pdf_isolated, validate_document_json
-from attendance.digidoc_exports import _validate_rtf, plain_text
+from attendance.digidoc import _build_pdf, _render_pdf_isolated, validate_document_json
+from attendance.digidoc_exports import _validate_rtf, docx as export_docx, odt as export_odt, plain_text, rtf_text as export_rtf
 from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, Organization, OrganizationMembership
 from attendance.shell import build_navigation
 from PIL import Image
 from io import BytesIO
 import json
 import base64
+import os
+import posixpath
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 import re
 from zipfile import ZipFile
 from xml.etree import ElementTree
 from unittest.mock import patch
+from docx import Document
+from types import SimpleNamespace
+
+
+def _assert_docx_integrity(test_case, data, *, libreoffice=True):
+    with ZipFile(BytesIO(data)) as archive:
+        test_case.assertIsNone(archive.testzip())
+        names = set(archive.namelist())
+        for name in names:
+            if name.endswith((".xml", ".rels")):
+                ElementTree.fromstring(archive.read(name))
+        rel_ns = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
+        for rels_name in (name for name in names if name.endswith(".rels")):
+            base = posixpath.dirname(posixpath.dirname(rels_name)) if "/_rels/" in rels_name else ""
+            for relation in ElementTree.fromstring(archive.read(rels_name)).findall("r:Relationship", rel_ns):
+                if relation.get("TargetMode") == "External":
+                    continue
+                target = posixpath.normpath(posixpath.join(base, relation.get("Target", "")))
+                test_case.assertIn(target, names, f"Broken DOCX relationship {rels_name}: {target}")
+    reopened = Document(BytesIO(data))
+    test_case.assertIsNotNone(reopened)
+    if not libreoffice:
+        return reopened
+    candidates = [shutil.which("soffice"), shutil.which("libreoffice")]
+    program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+    candidates.extend((os.path.join(program_files, "LibreOffice", "program", "soffice.exe"),
+                       os.path.join(program_files, "LibreOffice", "program", "soffice.com")))
+    soffice = next((candidate for candidate in candidates if candidate and os.path.isfile(candidate)), None)
+    if not soffice:
+        return reopened
+    with tempfile.TemporaryDirectory(prefix="digidoc-docx-") as work:
+        source = Path(work) / "validation.docx"
+        source.write_bytes(data)
+        profile = (Path(work) / "lo-profile").as_uri()
+        result = subprocess.run(
+            [soffice, "--headless", "--nologo", "--nodefault", "--nofirststartwizard",
+             f"-env:UserInstallation={profile}", "--convert-to", "pdf", "--outdir", work, str(source)],
+            capture_output=True, text=True, timeout=120,
+        )
+        test_case.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        test_case.assertTrue((Path(work) / "validation.pdf").is_file(), result.stderr or result.stdout)
+    return reopened
 
 
 class DigiDocPhaseTwoTests(TestCase):
@@ -36,6 +83,24 @@ class DigiDocPhaseTwoTests(TestCase):
             if asset.image:
                 asset.image.delete(save=False)
         super().tearDown()
+
+    def test_page_layout_spacing_and_indent_values_are_strict(self):
+        def doc(attrs=None, paragraph_attrs=None):
+            root = {"type": "doc", "attrs": attrs or {}, "content": [{"type": "paragraph", "attrs": paragraph_attrs or {}, "content": []}]}
+            validate_document_json(root)
+            return root
+
+        doc({"page_size": "A3", "orientation": "landscape", "margins": {"top_cm": 1.0, "right_cm": 2.0, "bottom_cm": 1.0, "left_cm": 2.0}}, {"space_before_pt": 200, "space_after_pt": 0, "left_indent_cm": 10, "right_indent_cm": 0, "first_line_indent_cm": -2.54})
+        invalid = [
+            ({"page_size": "Tabloid"}, {}), ({"orientation": "diagonal"}, {}),
+            ({"margins": {"top_cm": float("nan"), "right_cm": 1, "bottom_cm": 1, "left_cm": 1}}, {}),
+            ({}, {"space_before_pt": 201}), ({}, {"space_after_pt": True}),
+            ({}, {"left_indent_cm": 10.01}), ({}, {"right_indent_cm": -0.1}),
+            ({}, {"first_line_indent_cm": -2.55}),
+        ]
+        for layout, paragraph in invalid:
+            with self.subTest(layout=layout, paragraph=paragraph), self.assertRaises(ValidationError):
+                doc(layout, paragraph)
 
     def test_nav_registry_places_digidoc_in_people_for_hr_roles(self):
         sections, pages = build_navigation(self.owner, self.organization)
@@ -439,6 +504,7 @@ class DigiDocPhaseTwoTests(TestCase):
             with self.subTest(file_format=file_format):
                 download = self.client.get(reverse("digidoc_export", args=[document.pk, file_format]))
                 self.assertEqual(download.status_code, 200, download.content[:200])
+                self.assertEqual(download["Content-Type"], {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "odt": "application/vnd.oasis.opendocument.text", "rtf": "application/rtf", "txt": "text/plain; charset=utf-8"}[file_format])
                 self.assertIn(f"filename=\"Export_check.{file_format}\"", download["Content-Disposition"])
                 self.assertIn(reverse("digidoc_export", args=[document.pk, file_format]).encode(), editor.content)
                 if file_format in {"docx", "odt"}:
@@ -448,11 +514,136 @@ class DigiDocPhaseTwoTests(TestCase):
                     xml = ElementTree.fromstring(archive.read(xml_name))
                     self.assertIn("Exported bold text", "".join(xml.itertext()))
                     self.assertIn("Table cell", "".join(xml.itertext()))
+                    if file_format == "docx":
+                        _assert_docx_integrity(self, download.content)
                 elif file_format == "rtf":
                     self.assertTrue(download.content.startswith(b"{\\rtf1"))
                     self.assertIn(b"Exported bold text", download.content)
                 else:
                     self.assertIn("Exported bold text", download.content.decode("utf-8"))
+
+    def test_docx_lists_use_numbering_definitions_and_preserve_nesting_and_restarts(self):
+        paragraph = lambda value: {"type": "paragraph", "content": [{"type": "text", "text": value}]}
+        item = lambda *children: {"type": "listItem", "content": list(children)}
+        content = {"type": "doc", "content": [
+            paragraph("Before"),
+            {"type": "bulletList", "content": [
+                item(paragraph("bullet one"), {"type": "bulletList", "content": [item(paragraph("nested bullet"))]}),
+                item(paragraph("bullet two")),
+            ]},
+            {"type": "orderedList", "attrs": {"start": 4}, "content": [item(paragraph("number four")), item(paragraph("number five"))]},
+            {"type": "orderedList", "content": [item(paragraph("restarted number"))]},
+            paragraph("After"),
+        ]}
+        data = export_docx(content)
+        archive = ZipFile(BytesIO(data))
+        _assert_docx_integrity(self, data)
+        self.assertIsNone(archive.testzip())
+        self.assertIn("word/numbering.xml", archive.namelist())
+        document = ElementTree.fromstring(archive.read("word/document.xml"))
+        numbering = ElementTree.fromstring(archive.read("word/numbering.xml"))
+        namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraphs = document.findall(".//w:p", namespace)
+        list_paragraphs = [node for node in paragraphs if "bullet" in "".join(node.itertext()).lower() or "number" in "".join(node.itertext()).lower()]
+        self.assertEqual(len(list_paragraphs), 6)
+        levels = [int(node.find("w:pPr/w:numPr/w:ilvl", namespace).get("{" + namespace["w"] + "}val")) for node in list_paragraphs]
+        self.assertEqual(levels, [0, 1, 0, 0, 0, 0])
+        num_ids = [node.find("w:pPr/w:numPr/w:numId", namespace).get("{" + namespace["w"] + "}val") for node in list_paragraphs]
+        self.assertNotEqual(num_ids[3], num_ids[5])
+        self.assertTrue(numbering.findall(".//w:abstractNum/w:lvl/w:numFmt[@w:val='bullet']", namespace))
+        self.assertTrue(numbering.findall(".//w:abstractNum/w:lvl/w:numFmt[@w:val='decimal']", namespace))
+        text_export = plain_text(content)
+        self.assertIn("4. number four", text_export)
+        self.assertIn("  • nested bullet", text_export)
+        rtf_export = export_rtf(content)
+        self.assertIn(b"4. number four", rtf_export)
+        self.assertIn(b"\\li1440\\fi-360\\tx1440", rtf_export)
+        pdf = _build_pdf(SimpleNamespace(title="List check", content_json=content, letterhead_enabled=False), self.organization)
+        from pypdf import PdfReader
+        pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
+        self.assertIn("4.", pdf_text)
+        self.assertIn("number four", pdf_text)
+
+    def test_docx_download_reopens_complex_and_edge_case_documents(self):
+        image_buffer = BytesIO()
+        Image.new("RGB", (12, 12), "navy").save(image_buffer, format="PNG")
+        upload = self.client.post(reverse("digidoc_image_upload"), {
+            "image": SimpleUploadedFile("docx-image.png", image_buffer.getvalue(), content_type="image/png"),
+        })
+        self.assertEqual(upload.status_code, 200, upload.content)
+        asset_id = upload.json()["id"]
+        tiny_png = image_buffer.getvalue()
+        rich_text = {
+            "type": "text", "text": "Unicode café — 日本語 😀",
+            "marks": [
+                {"type": "bold"}, {"type": "italic"}, {"type": "underline"}, {"type": "strike"},
+                {"type": "link", "attrs": {"href": "https://example.test/path?q=hello&lang=en"}},
+                {"type": "fontFamily", "attrs": {"value": "Times-Roman"}},
+                {"type": "fontSize", "attrs": {"value": 18}},
+                {"type": "textColor", "attrs": {"color": "#336699"}},
+                {"type": "highlight", "attrs": {"color": "#FFFF00"}},
+            ],
+        }
+        comprehensive = {"type": "doc", "content": [
+            {"type": "paragraph", "content": [rich_text]},
+            {"type": "bulletList", "content": [
+                {"type": "listItem", "content": []},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "Parent item"}]},
+                    {"type": "orderedList", "attrs": {"start": 3}, "content": [
+                        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nested numbered item"}]}]},
+                    ]},
+                ]},
+            ]},
+            {"type": "table", "content": [{"type": "tableRow", "content": [
+                {"type": "tableCell", "content": [{"type": "text", "text": "Cell A"}]},
+                {"type": "tableCell", "content": [{"type": "text", "text": "Cell B"}]},
+            ]}]},
+            {"type": "image", "attrs": {"asset_id": asset_id, "alt": "Test image"}},
+        ]}
+        snapshot = {"1": {"data": base64.b64encode(tiny_png).decode("ascii"), "meta": {
+            "scale_mode": "fit", "margin_top_mm": 40, "margin_bottom_mm": 30,
+            "margin_left_mm": 20, "margin_right_mm": 20,
+        }}}
+        long_content = []
+        for page_index in range(49):
+            long_content.extend([
+                {"type": "paragraph", "content": [{"type": "text", "text": f"Long Unicode page {page_index + 1}: café — 日本語 😀 " + "x" * 1800}]},
+                {"type": "hardBreak"},
+            ])
+        long_content.append({"type": "paragraph", "content": [{"type": "text", "text": "Final page after forty-nine explicit breaks."}]})
+        cases = [
+            ("Complex document", comprehensive, True),
+            ("Empty document", {"type": "doc", "content": []}, False),
+            ("Empty list and table", {"type": "doc", "content": [
+                {"type": "table", "content": [{"type": "tableRow", "content": [{"type": "tableCell", "content": []}]}]},
+                {"type": "orderedList", "content": [{"type": "listItem", "content": []}]},
+            ]}, False),
+            ("Long Unicode document", {"type": "doc", "content": long_content}, False),
+        ]
+        for title, content, has_letterhead in cases:
+            with self.subTest(title=title):
+                document = DigiDocDocument.objects.create(
+                    organization=self.organization, created_by=self.owner, title=title,
+                    content_json=content, letterhead_enabled=has_letterhead,
+                    letterhead_snapshot=snapshot if has_letterhead else {},
+                )
+                response = self.client.get(reverse("digidoc_export", args=[document.pk, "docx"]))
+                self.assertEqual(response.status_code, 200, response.content[:300])
+                self.assertEqual(response["Content-Type"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                self.assertIn(f"filename=\"{title.replace(' ', '_')}.docx\"", response["Content-Disposition"])
+                reopened = _assert_docx_integrity(self, response.content)
+                if title == "Complex document":
+                    self.assertEqual(len(reopened.tables), 1)
+                    self.assertEqual(len(reopened.inline_shapes), 1)
+                    with ZipFile(BytesIO(response.content)) as archive:
+                        xml = ElementTree.fromstring(archive.read("word/document.xml"))
+                        word_ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                        for mark_tag in ("b", "i", "u", "strike", "sz", "color", "shd"):
+                            self.assertTrue(xml.findall(f".//w:{mark_tag}", word_ns), mark_tag)
+                        self.assertTrue(xml.findall(".//w:hyperlink", word_ns))
+                        relations = ElementTree.fromstring(archive.read("word/_rels/document.xml.rels"))
+                        self.assertTrue(any("https://example.test/path" in (relation.get("Target") or "") for relation in relations))
 
     def test_editor_flows_an_oversized_paragraph_onto_a_second_a4_page(self):
         from playwright.sync_api import sync_playwright
@@ -481,6 +672,100 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertEqual(page.locator("#dd-sheet").text_content(), long_text)
             first_height = pages.nth(0).evaluate("node => node.getBoundingClientRect().height")
             self.assertAlmostEqual(first_height, 1123, delta=2)
+            browser.close()
+
+    def test_inline_format_toggle_stays_under_50ms_on_fifty_pages(self):
+        from playwright.sync_api import sync_playwright
+
+        blocks = [{"type": "paragraph", "content": [{"type": "text", "text": "Page one formatting target"}]}]
+        for index in range(49):
+            blocks.extend([{"type": "hardBreak"}, {"type": "paragraph", "content": [{"type": "text", "text": f"Generated page {index + 2} content"}]}])
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="50-page format timing", content_json={"type": "doc", "content": blocks})
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        shell_js = Path("attendance/static/attendance/digidoc-shell.js").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=shell_js)
+            page.add_script_tag(content=editor_js)
+            self.assertEqual(page.locator(".dd-page").count(), 50)
+            timings = page.evaluate("""() => {
+              const target=document.querySelector('#dd-sheet .dd-page p');
+              const selection=window.getSelection();
+              const measure=command=>{
+                const button=document.querySelector(`[data-command="${command}"]`);
+                return Array.from({length:8},()=>{
+                  const range=document.createRange();range.selectNodeContents(target);
+                  selection.removeAllRanges();selection.addRange(range);
+                  const start=performance.now();button.click();return performance.now()-start;
+                });
+              };
+              return {bold:measure('bold'),italic:measure('italic')};
+            }""")
+            for kind, samples in timings.items():
+                median = (sorted(samples)[3] + sorted(samples)[4]) / 2
+                print(f"50-page {kind} toggle timings (ms): {samples}; median={median:.2f}; max={max(samples):.2f}")
+                self.assertLessEqual(max(samples), 50, f"{kind} toggle timings exceeded 50 ms: {samples}")
+            browser.close()
+
+    def test_layout_controls_apply_page_margin_spacing_and_letterhead_rules(self):
+        from playwright.sync_api import sync_playwright
+
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Layout controls", content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Select this paragraph"}]}]})
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        shell_js = Path("attendance/static/attendance/digidoc-shell.js").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.add_init_script("window.fetch=async()=>new Response(JSON.stringify({version:1,updated_at:'Saved'}),{status:200,headers:{'Content-Type':'application/json'}})")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=shell_js)
+            page.add_script_tag(content=editor_js)
+            page.add_script_tag(content=ribbon_js)
+            page.locator('[data-tab="layout"]').click()
+            page.locator("#dd-page-size").select_option("A3")
+            self.assertEqual(page.locator("#dd-sheet > .dd-page").evaluate("el => Math.round(el.getBoundingClientRect().width)"), 1123)
+            page.locator("#dd-orientation").select_option("landscape")
+            self.assertEqual(page.locator("#dd-sheet > .dd-page").evaluate("el => Math.round(el.getBoundingClientRect().width)"), 1587)
+            page.locator("#dd-margin-preset").select_option("Narrow")
+            self.assertEqual(page.locator("#dd-margin-left").input_value(), "1.27")
+            page.locator("#dd-margin-top").fill("3.2")
+            page.locator("#dd-margin-top").dispatch_event("change")
+            self.assertEqual(page.locator("#dd-margin-preset").input_value(), "Custom")
+            self.assertEqual(page.locator("#dd-sheet > .dd-page").evaluate("el => Math.round(parseFloat(getComputedStyle(el).paddingTop))"), 121)
+            page.evaluate("""() => {
+              const box=document.querySelector('#dd-sheet > .dd-page p'),selection=getSelection(),range=document.createRange();
+              range.selectNodeContents(box);selection.removeAllRanges();selection.addRange(range);
+              const company=document.querySelector('#dd-letterhead-menu');company.dataset.letterheadAvailable='true';company.disabled=false;
+              const letterhead=document.querySelector('#dd-letterhead');letterhead.disabled=false;letterhead.checked=true;
+              window.confirm=()=>false;
+            }""")
+            page.locator("#dd-page-size").select_option("Letter")
+            self.assertEqual(page.locator("#dd-page-size").input_value(), "A3")
+            self.assertTrue(page.locator("#dd-letterhead").is_checked())
+            page.evaluate("window.confirm=()=>true")
+            page.locator("#dd-page-size").select_option("Letter")
+            self.assertFalse(page.locator("#dd-letterhead").is_checked())
+            self.assertEqual(page.locator("#dd-page-size").input_value(), "Letter")
+            self.assertIn("A4 portrait", page.locator("#dd-letterhead-layout-note").text_content())
+            page.locator('[data-tab="layout"]').click()
+            page.locator("#dd-space-before").fill("200")
+            page.locator("#dd-space-before").dispatch_event("change")
+            self.assertEqual(page.locator("#dd-sheet p").first.get_attribute("data-space-before-pt"), "200")
+            page.locator("#dd-indent-left-cm").fill("2.4")
+            page.locator("#dd-indent-left-cm").dispatch_event("change")
+            self.assertEqual(page.locator("#dd-sheet p").first.get_attribute("data-indent-left-cm"), "2.4")
             browser.close()
 
     def test_editor_splits_a_paragraph_at_the_footer_instead_of_moving_it_whole(self):
@@ -882,5 +1167,27 @@ class DigiDocPhaseTwoTests(TestCase):
             page.locator("#dd-nav-toggle").click()
             self.assertTrue(page.locator("body").evaluate("el => el.classList.contains('dd-nav-open')"))
             page.locator("#sidebarClose").click()
+            page.locator('[data-tab="home"]').click()
+            for width, height in ((1440, 900), (390, 844)):
+                page.set_viewport_size({"width": width, "height": height})
+                page.locator("#dd-download-toggle").click()
+                menu = page.locator("#dd-download-menu")
+                bounds = menu.evaluate("el => { const r=el.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}; }")
+                self.assertGreaterEqual(bounds["left"], 0)
+                self.assertLessEqual(bounds["right"], width)
+                self.assertTrue(menu.locator('[role="menuitem"]').first.is_visible())
+                for index in range(menu.locator('[role="menuitem"]').count()):
+                    item = menu.locator('[role="menuitem"]').nth(index)
+                    self.assertTrue(item.evaluate("el => { const r=el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.left+Math.min(8,r.width/2),r.top+r.height/2)); }"))
+                page.screenshot(path=str(output / f"dropdown-after-{width}.png"), full_page=True)
+                page.keyboard.press("Escape")
+                self.assertFalse(page.locator("#dd-download").evaluate("el => el.open"))
+            page.locator("#dd-download-toggle").focus()
+            page.keyboard.press("ArrowDown")
+            self.assertEqual(page.evaluate("document.activeElement.textContent.trim()"), "PDF")
+            page.keyboard.press("End")
+            self.assertIn(".txt", page.evaluate("document.activeElement.textContent").lower())
+            page.keyboard.press("Escape")
+            self.assertTrue(page.locator("#dd-download-toggle").evaluate("el => el === document.activeElement"))
             self.assertEqual(page_errors, [])
             browser.close()

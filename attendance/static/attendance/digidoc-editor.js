@@ -16,6 +16,16 @@
   const letterheadSource = document.getElementById('dd-letterhead-source');
   const personalLetterheadSelect = document.getElementById('dd-personal-letterhead');
   const initial = JSON.parse(document.getElementById('dd-initial').textContent);
+  const pageSizeMm={A4:[210,297],A5:[148,210],A3:[297,420],Letter:[215.9,279.4],Legal:[215.9,355.6]};
+  const marginPresets={Normal:{top_cm:2.5,right_cm:2.5,bottom_cm:2.5,left_cm:2.5},Narrow:{top_cm:1.27,right_cm:1.27,bottom_cm:1.27,left_cm:1.27},Moderate:{top_cm:2.5,right_cm:1.91,bottom_cm:2.5,left_cm:1.91},Wide:{top_cm:2.5,right_cm:5.08,bottom_cm:2.5,left_cm:5.08}};
+  const savedLayout=initial.attrs||{};
+  const layoutState={page_size:savedLayout.page_size||'A4',orientation:savedLayout.orientation||'portrait',margins:{...marginPresets.Normal,...(savedLayout.margins||{})}};
+  const pageSizeControl=document.getElementById('dd-page-size');
+  const orientationControl=document.getElementById('dd-orientation');
+  const marginPresetControl=document.getElementById('dd-margin-preset');
+  const marginControls={top_cm:document.getElementById('dd-margin-top'),right_cm:document.getElementById('dd-margin-right'),bottom_cm:document.getElementById('dd-margin-bottom'),left_cm:document.getElementById('dd-margin-left')};
+  const letterheadLayoutNote=document.getElementById('dd-letterhead-layout-note');
+  const dynamicPageStyle=document.createElement('style');dynamicPageStyle.id='dd-dynamic-page-style';document.head.append(dynamicPageStyle);
   const allowedTags = {P:'paragraph', H1:'heading', H2:'heading', H3:'heading', UL:'bulletList', OL:'orderedList', LI:'listItem', TABLE:'table', TBODY:'table', TR:'tableRow', TD:'tableCell', TH:'tableCell', BR:'hardBreak', HR:'horizontalRule', IMG:'image'};
   function makeImageFrame(assetId, alt, src, attrs={}) {
     const width=Math.min(100,Math.max(10,Number(attrs.width_percent)||100));
@@ -60,6 +70,12 @@
     if (node.attrs && node.attrs.align) el.dataset.align = node.attrs.align;
     if (node.attrs && node.attrs.indent) el.dataset.indent = node.attrs.indent;
     if (node.attrs && node.attrs.line_spacing) el.dataset.lineSpacing = node.attrs.line_spacing;
+    if(node.type==='orderedList'&&node.attrs&&node.attrs.start)el.setAttribute('start',String(node.attrs.start));
+    if(node.attrs){
+      for(const [key,field,styleName,unit] of [['space_before_pt','spaceBeforePt','marginTop','pt'],['space_after_pt','spaceAfterPt','marginBottom','pt'],['left_indent_cm','indentLeftCm','marginLeft','cm'],['right_indent_cm','indentRightCm','marginRight','cm'],['first_line_indent_cm','indentFirstLineCm','textIndent','cm']]){
+        if(Object.prototype.hasOwnProperty.call(node.attrs,key)){el.dataset[field]=String(node.attrs[key]);el.style[styleName]=`${node.attrs[key]}${unit}`;}
+      }
+    }
     if (node.type === 'bulletList' && node.attrs && node.attrs.list_style === 'checklist') el.dataset.checklist = 'true';
     (node.content || []).forEach(child => renderNode(child, el));
     if (node.type === 'paragraph' && !el.childNodes.length) el.append(document.createElement('br'));
@@ -75,7 +91,7 @@
     return page;
   }
   function syncLetterheadPages() {
-    const enabled = document.getElementById('dd-letterhead').checked;
+    const enabled = document.getElementById('dd-letterhead').checked&&layoutState.page_size==='A4'&&layoutState.orientation==='portrait';
     let firstUrl = root.dataset.companyLetterheadUrl, secondUrl = root.dataset.companyLetterheadSecondUrl;
     if (letterheadSource.value === 'personal') {
       const selected = personalLetterheadSelect.value;
@@ -95,6 +111,41 @@
       if (enabled && slot !== 'none') page.dataset.letterheadSlot = slot;
       else delete page.dataset.letterheadSlot;
     });
+  }
+  function pageSupportsLetterhead(layout=layoutState){return layout.page_size==='A4'&&layout.orientation==='portrait';}
+  function syncLetterheadAvailability(){
+    const available=pageSupportsLetterhead();
+    if(letterheadLayoutNote){letterheadLayoutNote.hidden=available;letterheadLayoutNote.textContent=available?'':'Letterheads require A4 portrait. Switch back to A4 portrait to insert one.';}
+    const checkbox=document.getElementById('dd-letterhead');
+    const companyButton=document.getElementById('dd-letterhead-menu');
+    const companyAvailable=companyButton?.dataset.letterheadAvailable==='true';
+    if(companyButton){companyButton.disabled=!available||!companyAvailable||root.dataset.readOnly==='true';if(!available)companyButton.title='Letterheads are available on A4 portrait pages only.';}
+    ['dd-letterhead-first','dd-letterhead-other','dd-letterhead'].forEach(id=>{const control=document.getElementById(id);if(control)control.disabled=!available||(!companyAvailable&&letterheadSource.value==='company')||root.dataset.readOnly==='true';});
+    const personalSelect=document.getElementById('dd-personal-letterhead');
+    const personalButton=document.getElementById('dd-use-personal-letterhead');
+    const personalAvailable=personalButton?.dataset.letterheadAvailable==='true';
+    if(personalSelect)personalSelect.disabled=!available||!personalAvailable||root.dataset.readOnly==='true';
+    if(personalButton){personalButton.disabled=!available||!personalAvailable||root.dataset.readOnly==='true';if(!available)personalButton.title='Letterheads are available on A4 portrait pages only.';}
+  }
+  function applyPageLayout(){
+    let [widthMm,heightMm]=pageSizeMm[layoutState.page_size]||pageSizeMm.A4;
+    if(layoutState.orientation==='landscape')[widthMm,heightMm]=[heightMm,widthMm];
+    const naturalWidth=widthMm*96/25.4,naturalHeight=heightMm*96/25.4;
+    const scale=window.innerWidth<=700?Math.min(1,Math.max(.1,(window.innerWidth-20)/naturalWidth)):1;
+    let margins={...layoutState.margins};
+    if(document.getElementById('dd-letterhead').checked&&pageSupportsLetterhead()){
+      const css=getComputedStyle(sheet);
+      for(const [field,cssName] of [['top_cm','--dd-letterhead-header-guide'],['bottom_cm','--dd-letterhead-footer-guide'],['left_cm','--dd-letterhead-left-zone'],['right_cm','--dd-letterhead-right-zone']]){
+        const guide=parseFloat(css.getPropertyValue(cssName));if(Number.isFinite(guide))margins[field]=Math.max(margins[field],guide/10+(field==='top_cm'||field==='bottom_cm'?.4:0));
+      }
+    }
+    sheet.style.setProperty('--dd-page-width-print',`${widthMm}mm`);sheet.style.setProperty('--dd-page-height-print',`${heightMm}mm`);
+    sheet.querySelectorAll(':scope > .dd-page').forEach(page=>{
+      page.style.width=`${naturalWidth*scale}px`;page.style.height=`${naturalHeight*scale}px`;
+      page.style.padding=`${margins.top_cm*96/2.54*scale}px ${margins.right_cm*96/2.54*scale}px ${margins.bottom_cm*96/2.54*scale}px ${margins.left_cm*96/2.54*scale}px`;
+    });
+    dynamicPageStyle.textContent=`@page{size:${widthMm}mm ${heightMm}mm;margin:0}@media print{.dd-page{width:${widthMm}mm!important;height:${heightMm}mm!important;padding:${margins.top_cm}cm ${margins.right_cm}cm ${margins.bottom_cm}cm ${margins.left_cm}cm!important}}`;
+    syncLetterheadAvailability();syncLetterheadPages();
   }
   const letterheadGuides = document.getElementById('dd-letterhead-guides');
   letterheadGuides.addEventListener('click', () => {
@@ -265,6 +316,7 @@
     }
     syncLetterheadPages();
   }
+  applyPageLayout();
   paginate();
   let timer = 0, saving = false, dirty = false;
   function serializeInline(node) {
@@ -300,9 +352,10 @@
     if (tag === 'IMG') { const frame=el.closest('.dd-image-frame');return [{type:'image',attrs:{asset_id:el.dataset.assetId||'',alt:(el.alt||'').slice(0,300),width_percent:Math.min(100,Math.max(10,Number(frame&&frame.dataset.widthPercent)||100)),align:frame&&frame.dataset.imageAlign||'center',crop:frame&&frame.dataset.crop||'none'}}]; }
     if (tag === 'P' && el.dataset.pageBreak === 'true') return [{type:'hardBreak'}];
     if (tag === 'TABLE') return [{type:'table',content:Array.from(el.rows).map(row=>({type:'tableRow',content:Array.from(row.cells).map(cell=>({type:'tableCell',content:Array.from(cell.childNodes).flatMap(serializeInline)}))}))}];
-    if (type === 'heading') return [{type,level:Number(tag.slice(1)),...(el.dataset.align?{attrs:{align:el.dataset.align}}:{}),content:Array.from(el.childNodes).flatMap(serializeInline),...(el.dataset.autoContinuation === 'true' ? {_autoContinuation:true} : {})}];
+    if (type === 'heading') {const attrs={};if(el.dataset.align)attrs.align=el.dataset.align;for(const [field,key] of [['spaceBeforePt','space_before_pt'],['spaceAfterPt','space_after_pt']]){const value=Number(el.dataset[field]);if(Number.isInteger(value)&&value>=0&&value<=200)attrs[key]=value;}for(const [field,key,low] of [['indentLeftCm','left_indent_cm',0],['indentRightCm','right_indent_cm',0],['indentFirstLineCm','first_line_indent_cm',-2.54]]){const value=Number(el.dataset[field]);if(Number.isFinite(value)&&value>=low&&value<=10)attrs[key]=Math.round(value*100)/100;}return [{type,level:Number(tag.slice(1)),...(Object.keys(attrs).length?{attrs}:{}),content:Array.from(el.childNodes).flatMap(serializeInline),...(el.dataset.autoContinuation === 'true' ? {_autoContinuation:true} : {})}];}
     if ((type === 'bulletList' && el.dataset.checklist === 'true') || type === 'orderedList') {
       const attrs = type === 'bulletList' && el.dataset.checklist === 'true' ? {list_style:'checklist'} : {};
+      if(type==='orderedList'&&el.hasAttribute('start')){const start=Number(el.getAttribute('start'));if(Number.isInteger(start)&&start>=1&&start<=9999)attrs.start=start;}
       return [{type,...(Object.keys(attrs).length ? {attrs} : {}),content:Array.from(el.children).flatMap(serializeBlock)}];
     }
     if (type === 'paragraph' || type === 'tableCell') {
@@ -312,6 +365,8 @@
       const indent = Number(el.dataset.indent || 0);
       if (Number.isInteger(indent) && indent > 0 && indent <= 4) attrs.indent=indent;
       if (['single','1.15','1.5','double'].includes(el.dataset.lineSpacing)) attrs.line_spacing=el.dataset.lineSpacing;
+      for(const [field,key] of [['spaceBeforePt','space_before_pt'],['spaceAfterPt','space_after_pt']]){const value=Number(el.dataset[field]);if(Number.isInteger(value)&&value>=0&&value<=200)attrs[key]=value;}
+      for(const [field,key,low] of [['indentLeftCm','left_indent_cm',0],['indentRightCm','right_indent_cm',0],['indentFirstLineCm','first_line_indent_cm',-2.54]]){const value=Number(el.dataset[field]);if(Number.isFinite(value)&&value>=low&&value<=10)attrs[key]=Math.round(value*100)/100;}
       return [{type,...(Object.keys(attrs).length?{attrs}:{}),content,...(el.dataset.autoContinuation === 'true' ? {_autoContinuation:true} : {})}];
     }
     return [{type,content:Array.from(el.children).flatMap(serializeBlock)}];
@@ -328,7 +383,7 @@
         joined.push(node);
       }
     });
-    return {title:title.value,content:{type:'doc',content:joined.length?joined:[{type:'paragraph',content:[]}]},letterhead_enabled:document.getElementById('dd-letterhead').checked,letterhead_page_mode:letterheadOther.value==='none'?'first':'every',letterhead_first_slot:letterheadFirst.value,letterhead_other_slot:letterheadOther.value,letterhead_source:letterheadSource.value,personal_letterhead_id:personalLetterheadSelect.value||null,version:Number(root.dataset.version)};
+    return {title:title.value,content:{type:'doc',attrs:{page_size:layoutState.page_size,orientation:layoutState.orientation,margins:{...layoutState.margins}},content:joined.length?joined:[{type:'paragraph',content:[]}]},letterhead_enabled:document.getElementById('dd-letterhead').checked,letterhead_page_mode:letterheadOther.value==='none'?'first':'every',letterhead_first_slot:letterheadFirst.value,letterhead_other_slot:letterheadOther.value,letterhead_source:letterheadSource.value,personal_letterhead_id:personalLetterheadSelect.value||null,version:Number(root.dataset.version)};
   }
   let historyCurrent=null,historyRestoring=false;
   const undoHistory=[],redoHistory=[];
@@ -424,10 +479,14 @@
     previewWindow.location.href=previewUrl;
   });
   function getCookie(name) { const found=document.cookie.split('; ').find(row=>row.startsWith(name+'=')); return found?decodeURIComponent(found.split('=').slice(1).join('=')):''; }
-  function schedule() { paginate(); if(!historyRestoring){const current=historySnapshot();if(historyCurrent!==null&&current!==historyCurrent){undoHistory.push(historyCurrent);if(undoHistory.length>historyLimit)undoHistory.shift();redoHistory.length=0;historyCurrent=current;updateHistoryButtons();}} dirty=true; status.textContent='Unsaved changes'; clearTimeout(timer); timer=setTimeout(save,800); }
+  function schedule() { paginate(); if(!historyRestoring){const current=historySnapshot();if(historyCurrent!==null&&current!==historyCurrent){undoHistory.push(historyCurrent);if(undoHistory.length>historyLimit)undoHistory.shift();redoHistory.length=0;historyCurrent=current;updateHistoryButtons();}} markDirty(); }
+  function markDirty(){dirty=true;status.textContent='Unsaved changes';clearTimeout(timer);timer=setTimeout(save,800);}
+  // Inline marks do not change page geometry. Defer pagination and history snapshots
+  // until the next structural edit or history action, while keeping autosave debounced.
+  function scheduleFormatting(){markDirty();}
   sheet.addEventListener('input',schedule); title.addEventListener('input',schedule);
   ['dd-letterhead','dd-letterhead-first','dd-letterhead-other'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{syncLetterheadPages();schedule();}));
-  document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{sheet.focus();document.execCommand(button.dataset.command,false,null);schedule();}));
+  document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{sheet.focus();document.execCommand(button.dataset.command,false,null);scheduleFormatting();}));
   function runBlock(value){sheet.focus();document.execCommand('formatBlock',false,value);schedule();}
   function currentBlock(){const selection=window.getSelection();let node=selection&&selection.anchorNode;if(node&&node.nodeType===Node.TEXT_NODE)node=node.parentElement;const block=node&&node.closest('p,h1,h2,h3,td,th');return block&&sheet.contains(block)?block:null;}
   function selectedBlocks(){
@@ -468,7 +527,68 @@
     option.addEventListener('click',()=>{setAlignment(option.dataset.alignChoice);alignMenu.hidden=true;alignToggle.setAttribute('aria-expanded','false');alignToggle.focus();});
   });
   document.getElementById('dd-align-toolbar').addEventListener('change',e=>runAlign(e.target.value));
-  function setParagraphAttr(name,value){sheet.focus();const blocks=selectedBlocks();if(!blocks.length)return;blocks.forEach(block=>{if(value===null)delete block.dataset[name];else block.dataset[name]=value;});schedule();}
+  function syncPageLayoutControls(){
+    pageSizeControl.value=layoutState.page_size;orientationControl.value=layoutState.orientation;
+    Object.entries(marginControls).forEach(([field,control])=>control.value=String(layoutState.margins[field]));
+    const preset=Object.keys(marginPresets).find(name=>Object.keys(marginPresets[name]).every(key=>marginPresets[name][key]===layoutState.margins[key]));
+    marginPresetControl.value=preset||'Custom';
+  }
+  syncPageLayoutControls();
+  function changePageLayout(){
+    const next={page_size:pageSizeControl.value,orientation:orientationControl.value,margins:{...layoutState.margins}};
+    if(!pageSizeMm[next.page_size]||!['portrait','landscape'].includes(next.orientation)){syncPageLayoutControls();return;}
+    const letterheadEnabled=document.getElementById('dd-letterhead').checked;
+    if(letterheadEnabled&&!pageSupportsLetterhead(next)){
+      const remove=window.confirm('Letterheads work on A4 portrait pages only. Remove the letterhead and apply this page size or orientation?');
+      if(!remove){syncPageLayoutControls();return;}
+      document.getElementById('dd-letterhead').checked=false;
+    }
+    layoutState.page_size=next.page_size;layoutState.orientation=next.orientation;
+    applyPageLayout();schedule();
+  }
+  pageSizeControl.addEventListener('change',changePageLayout);orientationControl.addEventListener('change',changePageLayout);
+  marginPresetControl.addEventListener('change',()=>{
+    const preset=marginPresetControl.value;
+    if(marginPresets[preset]){layoutState.margins={...marginPresets[preset]};syncPageLayoutControls();applyPageLayout();schedule();}
+  });
+  Object.entries(marginControls).forEach(([field,control])=>control.addEventListener('change',()=>{
+    if(!control.checkValidity()){control.reportValidity();return;}
+    const value=Number(control.value);if(!Number.isFinite(value)||value<.5||value>5.5){control.reportValidity();return;}
+    layoutState.margins[field]=Math.round(value*100)/100;marginPresetControl.value='Custom';applyPageLayout();schedule();
+  }));
+  window.addEventListener('resize',applyPageLayout);
+  const paragraphLayoutFields={
+    'dd-space-before':['spaceBeforePt','space_before_pt',0,200,'pt','marginTop'],
+    'dd-space-after':['spaceAfterPt','space_after_pt',0,200,'pt','marginBottom'],
+    'dd-indent-left-cm':['indentLeftCm','left_indent_cm',0,10,'cm','marginLeft'],
+    'dd-indent-right-cm':['indentRightCm','right_indent_cm',0,10,'cm','marginRight'],
+    'dd-indent-first-line-cm':['indentFirstLineCm','first_line_indent_cm',-2.54,10,'cm','textIndent'],
+  };
+  function setParagraphAttr(name,value){
+    const selection=window.getSelection();
+    if(savedRange&&selection){selection.removeAllRanges();selection.addRange(savedRange);sheet.focus();}
+    else sheet.focus();
+    const blocks=selectedBlocks();if(!blocks.length)return;
+    blocks.forEach(block=>{
+      if(value===null||value===0){delete block.dataset[name];if(paragraphStyleNames[name])block.style[paragraphStyleNames[name]]='';}
+      else {block.dataset[name]=String(value);if(paragraphStyleNames[name])block.style[paragraphStyleNames[name]]=`${value}${paragraphStyleUnits[name]}`;}
+    });schedule();
+  }
+  const paragraphStyleNames={spaceBeforePt:'marginTop',spaceAfterPt:'marginBottom',indentLeftCm:'marginLeft',indentRightCm:'marginRight',indentFirstLineCm:'textIndent'};
+  const paragraphStyleUnits={spaceBeforePt:'pt',spaceAfterPt:'pt',indentLeftCm:'cm',indentRightCm:'cm',indentFirstLineCm:'cm'};
+  function syncParagraphLayoutControls(){
+    const block=selectedBlocks()[0];if(!block)return;
+    for(const [id,[key]] of Object.entries(paragraphLayoutFields)){const control=document.getElementById(id);control.value=block.dataset[key]||'0';}
+  }
+  Object.entries(paragraphLayoutFields).forEach(([id,[key,_attr,min,max]])=>{
+    const control=document.getElementById(id);
+    control.addEventListener('mousedown',()=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();});
+    control.addEventListener('change',()=>{
+      if(!control.checkValidity()){control.reportValidity();return;}
+      const value=Number(control.value);if(!Number.isFinite(value)||value<min||value>max){control.reportValidity();return;}
+      setParagraphAttr(key,value);
+    });
+  });
   ['dd-indent-in','dd-indent-out','dd-break','dd-table'].forEach(id=>document.getElementById(id).addEventListener('mousedown',event=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();event.preventDefault();}));
   document.querySelectorAll('[data-command]:not(:disabled)').forEach(button=>button.addEventListener('mousedown',event=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();event.preventDefault();}));
   function adjustIndent(direction){const blocks=selectedBlocks();if(!blocks.length)return;blocks.forEach(block=>{const next=Math.max(0,Math.min(4,Number(block.dataset.indent||0)+direction));if(next)block.dataset.indent=String(next);else delete block.dataset.indent;});schedule();}
@@ -516,7 +636,7 @@
   document.getElementById('dd-indent-out-menu').addEventListener('click',()=>document.getElementById('dd-indent-out').click());
   document.getElementById('dd-line-spacing-menu').addEventListener('change',e=>{document.getElementById('dd-line-spacing').value=e.target.value;setParagraphAttr('lineSpacing',e.target.value);});
   let savedRange=null;
-  document.addEventListener('selectionchange',()=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();});
+  document.addEventListener('selectionchange',()=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode)){savedRange=selection.getRangeAt(0).cloneRange();syncParagraphLayoutControls();}});
   function applyInlineMark(datasetKey,value){
     sheet.focus();const selection=window.getSelection();
     if(savedRange&&selection){selection.removeAllRanges();selection.addRange(savedRange);}
