@@ -173,6 +173,7 @@ urlpatterns = [
     path('digidoc/<uuid:document_id>/claim/', digidoc_views.digidoc_claim, name='digidoc_claim'),
     path('digidoc/images/upload/', digidoc_views.digidoc_image_upload, name='digidoc_image_upload'),
     path('digidoc/images/<uuid:asset_id>/', digidoc_views.digidoc_image, name='digidoc_image'),
+    path('digidoc/writing-settings/', digidoc_views.digidoc_writing_settings, name='digidoc_writing_settings'),
     path('digidoc/<uuid:document_id>/thumbnail.png', digidoc_views.digidoc_thumbnail, name='digidoc_thumbnail'),
     path('digidoc/<uuid:document_id>/letterhead/<str:slot>.png', digidoc_views.digidoc_letterhead_image, name='digidoc_letterhead_image'),
     path('digidoc/<uuid:document_id>/personal-letterhead.png', digidoc_views.digidoc_personal_letterhead_image, name='digidoc_personal_letterhead_image'),

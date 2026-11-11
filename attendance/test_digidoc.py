@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+﻿from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from attendance.digidoc import _build_pdf, _render_pdf_isolated, validate_document_json
 from attendance.digidoc_exports import _validate_rtf, docx as export_docx, odt as export_odt, plain_text, rtf_text as export_rtf
-from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, Organization, OrganizationMembership
+from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, DigiDocWritingSettings, Organization, OrganizationMembership
 from attendance.shell import build_navigation
 from PIL import Image
 from io import BytesIO
@@ -564,6 +564,28 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertIn("4.", pdf_text)
         self.assertIn("number four", pdf_text)
 
+    def test_alphabetic_and_roman_list_styles_are_native_and_export_to_text(self):
+        item = lambda value: {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": value}]}]}
+        content = {"type": "doc", "content": [
+            {"type": "orderedList", "attrs": {"list_style": "upper-alpha", "start": 4}, "content": [item("Alpha four"), item("Alpha five")]},
+            {"type": "orderedList", "attrs": {"list_style": "lower-roman", "start": 2}, "content": [item("Roman two")]},
+            {"type": "bulletList", "attrs": {"list_style": "square"}, "content": [item("Square item")]},
+        ]}
+        validate_document_json(content)
+        text_export = plain_text(content)
+        self.assertIn("D. Alpha four", text_export)
+        self.assertIn("E. Alpha five", text_export)
+        self.assertIn("ii. Roman two", text_export)
+        archive = ZipFile(BytesIO(export_docx(content)))
+        numbering = ElementTree.fromstring(archive.read("word/numbering.xml"))
+        word_ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        self.assertTrue(numbering.findall('.//w:numFmt[@w:val="upperLetter"]', word_ns))
+        self.assertTrue(numbering.findall('.//w:numFmt[@w:val="lowerRoman"]', word_ns))
+        self.assertTrue(numbering.findall('.//w:lvlText[@w:val="▪"]', word_ns))
+        rtf_export = export_rtf(content)
+        self.assertIn(b"D. Alpha four", rtf_export)
+        self.assertIn(b"ii. Roman two", rtf_export)
+
     def test_docx_download_reopens_complex_and_edge_case_documents(self):
         image_buffer = BytesIO()
         Image.new("RGB", (12, 12), "navy").save(image_buffer, format="PNG")
@@ -576,7 +598,7 @@ class DigiDocPhaseTwoTests(TestCase):
         rich_text = {
             "type": "text", "text": "Unicode café — 日本語 😀",
             "marks": [
-                {"type": "bold"}, {"type": "italic"}, {"type": "underline"}, {"type": "strike"},
+                {"type": "bold"}, {"type": "italic"}, {"type": "underline"}, {"type": "strike"}, {"type": "superscript"}, {"type": "subscript"},
                 {"type": "link", "attrs": {"href": "https://example.test/path?q=hello&lang=en"}},
                 {"type": "fontFamily", "attrs": {"value": "Times-Roman"}},
                 {"type": "fontSize", "attrs": {"value": 18}},
@@ -639,11 +661,13 @@ class DigiDocPhaseTwoTests(TestCase):
                     with ZipFile(BytesIO(response.content)) as archive:
                         xml = ElementTree.fromstring(archive.read("word/document.xml"))
                         word_ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-                        for mark_tag in ("b", "i", "u", "strike", "sz", "color", "shd"):
+                        for mark_tag in ("b", "i", "u", "strike", "vertAlign", "sz", "color", "shd"):
                             self.assertTrue(xml.findall(f".//w:{mark_tag}", word_ns), mark_tag)
                         self.assertTrue(xml.findall(".//w:hyperlink", word_ns))
                         relations = ElementTree.fromstring(archive.read("word/_rels/document.xml.rels"))
                         self.assertTrue(any("https://example.test/path" in (relation.get("Target") or "") for relation in relations))
+                        numbering = ElementTree.fromstring(archive.read("word/numbering.xml"))
+                        self.assertTrue(numbering.findall('.//w:lvlOverride[@w:ilvl="1"]/w:startOverride[@w:val="3"]', word_ns))
 
     def test_editor_flows_an_oversized_paragraph_onto_a_second_a4_page(self):
         from playwright.sync_api import sync_playwright
@@ -712,6 +736,35 @@ class DigiDocPhaseTwoTests(TestCase):
                 median = (sorted(samples)[3] + sorted(samples)[4]) / 2
                 print(f"50-page {kind} toggle timings (ms): {samples}; median={median:.2f}; max={max(samples):.2f}")
                 self.assertLessEqual(max(samples), 50, f"{kind} toggle timings exceeded 50 ms: {samples}")
+            browser.close()
+
+    def test_autocorrect_and_autocapitalization_undo_immediately(self):
+        from playwright.sync_api import sync_playwright
+
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_content(markup)
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=editor_js)
+            paragraph = page.locator("#dd-sheet p").first
+            state = paragraph.evaluate("el => { el.replaceChildren(); const text=document.createTextNode('teh '); el.append(text); const range=document.createRange(); range.setStart(text,4); range.collapse(true); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); document.querySelector('#dd-sheet').dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:' '})); return text; }")
+            self.assertEqual(paragraph.evaluate("el => el.textContent"), "the ")
+            page.evaluate("() => document.querySelector('#dd-sheet').dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',bubbles:true,cancelable:true}))")
+            self.assertEqual(paragraph.inner_text(), "teh")
+            paragraph.evaluate("el => { const text=el.firstChild; text.data='teh dont '; const range=document.createRange(); range.setStart(text,text.length); range.collapse(true); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); document.querySelector('#dd-sheet').dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:' '})); }")
+            self.assertTrue(paragraph.evaluate("el => el.textContent").endswith("don't "), paragraph.evaluate("el => el.textContent"))
+            page.evaluate("() => document.querySelector('#dd-sheet').dispatchEvent(new KeyboardEvent('keydown',{key:'z',ctrlKey:true,bubbles:true,cancelable:true}))")
+            self.assertTrue(paragraph.evaluate("el => el.textContent").endswith(" dont "))
+            paragraph.evaluate("el => { const text=el.firstChild; text.data='hello. w'; const range=document.createRange(); range.setStart(text,8); range.collapse(true); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); document.querySelector('#dd-sheet').dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'w'})); }")
+            self.assertEqual(paragraph.evaluate("el => el.textContent"), "hello. W")
+            paragraph.evaluate("el => { const text=el.firstChild; text.data='Dr. s'; const range=document.createRange(); range.setStart(text,5); range.collapse(true); const selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range); document.querySelector('#dd-sheet').dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'s'})); }")
+            self.assertEqual(paragraph.evaluate("el => el.textContent"), "Dr. s")
             browser.close()
 
     def test_layout_controls_apply_page_margin_spacing_and_letterhead_rules(self):
@@ -1145,7 +1198,8 @@ class DigiDocPhaseTwoTests(TestCase):
             page.add_script_tag(content=editor_js)
             page.add_script_tag(content=ribbon_js)
             self.assertGreaterEqual(page.locator("#dd-font-family option").count(), 15)
-            self.assertEqual(page.locator("#dd-font-size option").count(), 11)
+            self.assertEqual(page.locator("#dd-font-size").get_attribute("min"), "8")
+            self.assertEqual(page.locator("#dd-font-size").get_attribute("max"), "96")
             self.assertTrue(page.locator('.app-nav__link[data-label="DigiDoc"]').is_visible())
             self.assertEqual(page.locator('.app-nav__link[data-label="DigiDoc"]').get_attribute("aria-current"), "page")
             for width in (1440, 1280, 390):
@@ -1184,6 +1238,7 @@ class DigiDocPhaseTwoTests(TestCase):
                 self.assertFalse(page.locator("#dd-download").evaluate("el => el.open"))
             page.locator("#dd-download-toggle").focus()
             page.keyboard.press("ArrowDown")
+            page.wait_for_timeout(30)
             self.assertEqual(page.evaluate("document.activeElement.textContent.trim()"), "PDF")
             page.keyboard.press("End")
             self.assertIn(".txt", page.evaluate("document.activeElement.textContent").lower())
@@ -1191,3 +1246,53 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertTrue(page.locator("#dd-download-toggle").evaluate("el => el === document.activeElement"))
             self.assertEqual(page_errors, [])
             browser.close()
+
+    def test_writing_assistance_defaults_are_visible_and_company_rules_are_validated(self):
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        editor = self.client.get(reverse("digidoc_editor", args=[document.pk]))
+        self.assertEqual(editor.status_code, 200)
+        self.assertContains(editor, 'id="dd-autocapitalize" type="checkbox" checked')
+        self.assertContains(editor, 'id="dd-autocorrect" type="checkbox" checked')
+        self.assertContains(editor, 'id="dd-language"')
+        settings_url = reverse("digidoc_writing_settings")
+        page = self.client.get(settings_url)
+        self.assertEqual(page.status_code, 200)
+        saved = self.client.post(settings_url, {
+            "language": "en-NG", "autocapitalize_enabled": "on", "autocorrect_enabled": "on",
+            "spellcheck_enabled": "on", "rules": "teh => the\ndont => don't",
+        })
+        self.assertEqual(saved.status_code, 200)
+        settings = DigiDocWritingSettings.objects.get(organization=self.organization)
+        self.assertEqual(settings.language, "en-NG")
+        self.assertEqual(settings.autocorrect_rules, [{"from": "teh", "to": "the"}, {"from": "dont", "to": "don't"}])
+        from attendance.digidoc import _validated_autocorrect_rules
+        for malicious in ("x => <script>", "x => javascript:alert(1)", "same => same", "x\u202ey => bad"):
+            with self.subTest(malicious=malicious), self.assertRaises(ValidationError):
+                _validated_autocorrect_rules(malicious)
+
+    def test_font_allowlist_includes_phase_two_families_and_size_ceiling(self):
+        for family in ("Arimo", "Tinos", "Cousine", "Carlito", "Caladea", "Noto Sans", "Noto Serif", "Lora", "Raleway", "EB Garamond", "Libre Baskerville", "PT Serif", "Crimson Text"):
+            validate_document_json({"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Font", "marks": [{"type": "fontFamily", "attrs": {"value": family}}]}]}]})
+        validate_document_json({"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Big", "marks": [{"type": "fontSize", "attrs": {"value": 96}}]}]}]})
+        with self.assertRaises(ValidationError):
+            validate_document_json({"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Too big", "marks": [{"type": "fontSize", "attrs": {"value": 97}}]}]}]})
+
+    def test_pdf_embeds_the_self_hosted_font_used_by_a_text_run(self):
+        content = {"type": "doc", "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "Arimo embedded", "marks": [{"type": "fontFamily", "attrs": {"value": "Arimo"}}]},
+            {"type": "text", "text": " and PT Serif embedded", "marks": [{"type": "fontFamily", "attrs": {"value": "PT Serif"}}]},
+        ]}]}
+        document = SimpleNamespace(title="Embedded fonts", content_json=content, letterhead_enabled=False)
+        from pypdf import PdfReader
+        pdf = _build_pdf(document, self.organization)
+        fonts = PdfReader(BytesIO(pdf)).pages[0]["/Resources"]["/Font"].get_object()
+        embedded = []
+        for font in fonts.values():
+            font = font.get_object()
+            descriptor = font.get("/FontDescriptor")
+            if descriptor is None and font.get("/DescendantFonts"):
+                descriptor = font["/DescendantFonts"][0].get_object().get("/FontDescriptor")
+            if descriptor is not None and "/FontFile2" in descriptor.get_object():
+                embedded.append(str(font.get("/BaseFont", "")))
+        self.assertTrue(any("Arimo" in name for name in embedded), embedded)
+        self.assertTrue(any("PTSerif" in name for name in embedded), embedded)

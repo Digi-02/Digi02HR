@@ -1,14 +1,15 @@
-﻿# DigiDoc export fidelity
+# DigiDoc export fidelity
 
 | Feature | DOCX | PDF | RTF | TXT |
 |---|---|---|---|---|
-| Bulleted lists, nesting, empty items | Exact native numbering | Exact list layout | Approximate visible markers; nesting is flattened | Approximate markers and nesting |
-| Ordered lists, nesting, restart | Exact native numbering and restart | Exact numbering and restart | Approximate visible numbering; restart/nesting are not preserved | Approximate numbering and nesting |
-| Paragraph spacing and indents | Exact | Exact | Approximate (spacing only) | Approximate blank lines; indents omitted |
+| Bulleted lists, nesting, empty items | Exact native numbering | Exact list layout | Visible bullets and nesting indentation | Visible bullets and nesting indentation |
+| Ordered list styles, nesting, restart | Exact native numbering and restart | Native list markers and start values | Visible markers; nesting indented | Visible markers; nesting indented |
+| Paragraph spacing and indents | Exact | Exact | Approximate spacing and left indent | Approximate blank lines; indents omitted |
 | Tables | Exact editable tables | Exact table layout | Not supported | Approximate tab-separated cells |
-| Images | Embedded | Embedded | Embedded inline | Approximate alt-text labels |
+| Images | Embedded | Embedded | Embedded inline | Alt-text labels |
 | Letterheads | Not supported | Exact page placement | Not supported | Not supported |
-| Links | Clickable | Clickable | Not supported | Not supported |
-| Bold, italic, underline, strike | Exact | Exact | Not supported | Not supported |
-| Font, size, text colour, highlight | Preserved where supported | Preserved where supported | Not supported | Not supported |
+| Links | Clickable | Clickable | Clickable field | Plain URL text only |
+| Bold, italic, underline, strike, superscript, subscript | Exact | Exact | Exact | Plain text only |
+| Font family, size, text colour, highlight | Preserved; reader may substitute unavailable fonts | Embedded self-hosted fonts where available | Preserved | Plain text only |
+| Title, subtitle, heading levels | Native Word styles | PDF heading styles | Visual text formatting | Plain text order |
 | Page size, orientation, margins | Exact | Exact | Not supported | Not supported |

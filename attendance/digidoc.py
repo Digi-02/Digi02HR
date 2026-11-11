@@ -45,7 +45,7 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image as PdfImage, ListFlowable, ListItem, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .digidoc_exports import docx as export_docx, odt as export_odt, plain_text as export_text, rtf_text as export_rtf
-from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, OrganizationMembership, PersonalLetterhead
+from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, DigiDocWritingSettings, OrganizationMembership, PersonalLetterhead, default_digidoc_autocorrect_rules
 from .organization import DIGIDOC_ROLES, HR_ROLES
 from .shell import shell_context
 
@@ -57,17 +57,18 @@ MAX_DEPTH = 20
 MAX_NODES = 10000
 MAX_TITLE = 200
 MAX_PAGES = 50
-MAX_MARKS = 9
+MAX_MARKS = 12
 MAX_FLOATING_IMAGES = 20
 ALLOWED_TYPES = {"doc", "paragraph", "heading", "text", "hardBreak", "horizontalRule", "bulletList", "orderedList", "listItem", "table", "tableRow", "tableCell", "image"}
-ALLOWED_MARKS = {"bold", "italic", "underline", "strike", "link", "fontFamily", "fontSize", "textColor", "highlight"}
+ALLOWED_MARKS = {"bold", "italic", "underline", "strike", "superscript", "subscript", "link", "fontFamily", "fontSize", "textColor", "highlight"}
 ALIGNMENTS = {"left", "center", "right", "justify"}
 FONT_FAMILIES = {
     "Helvetica", "Times-Roman", "Courier", "Roboto", "Open Sans", "Lato",
     "Montserrat", "Merriweather", "Nunito", "Oswald", "Source Sans 3",
     "Poppins", "Playfair Display", "Roboto Mono", "Inter",
+    "Arimo", "Tinos", "Cousine", "Carlito", "Caladea", "Noto Sans", "Noto Serif",
+    "Lora", "Raleway", "EB Garamond", "Libre Baskerville", "PT Serif", "Crimson Text",
 }
-FONT_SIZE_VALUES = {8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48}
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LINE_SPACING = {"single", "1.15", "1.5", "double"}
 PAGE_SIZES = {"A4", "A5", "A3", "Letter", "Legal"}
@@ -230,8 +231,8 @@ def validate_document_json(value):
                     value = attrs[key]
                     if mark["type"] == "fontFamily" and (not isinstance(value, str) or value not in FONT_FAMILIES):
                         raise ValidationError("Unsupported font family.")
-                    if mark["type"] == "fontSize" and (type(value) is not int or value not in FONT_SIZE_VALUES):
-                        raise ValidationError("Unsupported font size.")
+                    if mark["type"] == "fontSize" and (type(value) is not int or not 8 <= value <= 96):
+                        raise ValidationError("Font size must be an integer from 8 to 96 pt.")
                     if mark["type"] in {"textColor", "highlight"} and (not isinstance(value, str) or not COLOR_RE.fullmatch(value)):
                         raise ValidationError("Unsupported text colour.")
                     item["attrs"] = {key: value.upper() if key == "color" else value}
@@ -353,20 +354,21 @@ def validate_document_json(value):
                 cleaned["attrs"] = clean_attrs
             else:
                 if kind in {"paragraph", "heading", "tableCell"}:
-                    allowed_attrs = {"align", "indent", "line_spacing"} | PARAGRAPH_SPACING_KEYS | PARAGRAPH_INDENT_KEYS
+                    allowed_attrs = {"align", "indent", "line_spacing", "style"} | PARAGRAPH_SPACING_KEYS | PARAGRAPH_INDENT_KEYS
                 elif kind == "bulletList":
                     allowed_attrs = {"list_style"}
                 elif kind == "orderedList":
-                    allowed_attrs = {"start"}
+                    allowed_attrs = {"start", "list_style"}
                 else:
                     allowed_attrs = set()
                 if set(attrs) - allowed_attrs:
                     raise ValidationError("Unsupported element property.")
                 clean_attrs = {}
                 if "list_style" in attrs:
-                    if attrs["list_style"] != "checklist":
+                    choices = {"disc", "circle", "square", "checklist"} if kind == "bulletList" else {"decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"} if kind == "orderedList" else set()
+                    if attrs["list_style"] not in choices:
                         raise ValidationError("Unsupported list style.")
-                    clean_attrs["list_style"] = "checklist"
+                    clean_attrs["list_style"] = attrs["list_style"]
                 if "align" in attrs:
                     if not isinstance(attrs["align"], str) or attrs["align"] not in ALIGNMENTS:
                         raise ValidationError("Unsupported alignment.")
@@ -379,6 +381,11 @@ def validate_document_json(value):
                     if not isinstance(attrs["line_spacing"], str) or attrs["line_spacing"] not in LINE_SPACING:
                         raise ValidationError("Unsupported line spacing.")
                     clean_attrs["line_spacing"] = attrs["line_spacing"]
+                if "style" in attrs:
+                    styles = {"normal", "subtitle"} if kind == "paragraph" else {"title"}
+                    if attrs["style"] not in styles:
+                        raise ValidationError("Unsupported paragraph style.")
+                    clean_attrs["style"] = attrs["style"]
                 if "start" in attrs:
                     if type(attrs["start"]) is not int or not 1 <= attrs["start"] <= 9999:
                         raise ValidationError("Ordered list start must be from 1 to 9999.")
@@ -580,15 +587,109 @@ def digidoc_editor(request, document_id):
     else:
         letterhead_image_url = reverse("company_letterhead_image")
         letterhead_second_image_url = reverse("company_letterhead_image") + "?slot=2"
+    writing_settings = DigiDocWritingSettings.objects.filter(organization=organization).first()
+    settings_json = {
+        "autocapitalize_enabled": writing_settings.autocapitalize_enabled if writing_settings else True,
+        "autocorrect_enabled": writing_settings.autocorrect_enabled if writing_settings else True,
+        "spellcheck_enabled": writing_settings.spellcheck_enabled if writing_settings else True,
+        "language": writing_settings.language if writing_settings else "en-GB",
+        "rules": writing_settings.autocorrect_rules if writing_settings else default_digidoc_autocorrect_rules(),
+    }
+    can_manage_writing = request.user.organization_memberships.filter(organization=organization, is_active=True, role__in={"owner", "hr_admin"}).exists()
     nonce = secrets.token_urlsafe(18)
     safe_json_script = str(json_script(content, "dd-initial")).replace("<script ", f'<script nonce="{nonce}" ', 1)
-    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, initial_json_script=safe_json_script, letterhead=letterhead, company_letterhead=company_letterhead, letterhead_image_url=letterhead_image_url, letterhead_second_image_url=letterhead_second_image_url, personal_letters=personal_letters, current_personal_letterhead=current_personal_letterhead, personal_letterhead_image_url=reverse("personal_letterhead_image", args=[current_personal_letterhead.pk]) if current_personal_letterhead else "", company_letterhead_image_url=reverse("company_letterhead_image"), company_letterhead_second_image_url=reverse("company_letterhead_image") + "?slot=2", branding_url=reverse("organization_branding"), csp_nonce=nonce))
+    settings_script = str(json_script(settings_json, "dd-writing-settings")).replace("<script ", f'<script nonce="{nonce}" ', 1)
+    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, initial_json_script=safe_json_script, writing_settings_script=settings_script, writing_settings=settings_json, writing_language_choices=DigiDocWritingSettings.LANGUAGE_CHOICES, can_manage_writing=can_manage_writing, letterhead=letterhead, company_letterhead=company_letterhead, letterhead_image_url=letterhead_image_url, letterhead_second_image_url=letterhead_second_image_url, personal_letters=personal_letters, current_personal_letterhead=current_personal_letterhead, personal_letterhead_image_url=reverse("personal_letterhead_image", args=[current_personal_letterhead.pk]) if current_personal_letterhead else "", company_letterhead_image_url=reverse("company_letterhead_image"), company_letterhead_second_image_url=reverse("company_letterhead_image") + "?slot=2", branding_url=reverse("organization_branding"), csp_nonce=nonce))
     response["Content-Security-Policy"] = f"default-src 'self'; script-src 'self'; style-src 'self' 'nonce-{nonce}'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     response["X-Frame-Options"] = "DENY"
     response["Referrer-Policy"] = "same-origin"
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, no-store"
     return response
+
+
+def _validated_autocorrect_rules(raw):
+    if not isinstance(raw, str) or len(raw) > 10000:
+        raise ValidationError("The correction list is too long.")
+    rules = []
+    seen = set()
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if "=>" not in line:
+            raise ValidationError("Use one rule per line in the form wrong => corrected.")
+        source, replacement = (part.strip() for part in line.split("=>", 1))
+        if not source or len(source) > 50 or len(replacement) > 100 or source == replacement:
+            raise ValidationError("Each correction needs 1–50 source characters and up to 100 replacement characters.")
+        for value in (source, replacement):
+            if any(unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in value) or any(char in "<>" for char in value):
+                raise ValidationError("Corrections cannot contain markup, control, or bidirectional characters.")
+            if re.search(r"(?:url\s*\(|https?://|javascript:|data:)", value, re.I):
+                raise ValidationError("Corrections cannot contain URLs or CSS values.")
+        key = source.casefold()
+        if key in seen:
+            raise ValidationError("Correction source phrases must be unique.")
+        seen.add(key)
+        rules.append({"from": source, "to": replacement})
+        if len(rules) > 100:
+            raise ValidationError("A company can define up to 100 correction rules.")
+    return rules
+
+
+@login_required
+def digidoc_writing_settings(request):
+    organization = _scope(request)
+    membership = request.user.organization_memberships.filter(organization=organization, is_active=True).first()
+    if not membership or membership.role not in {"owner", "hr_admin"}:
+        raise PermissionDenied
+    settings_obj = DigiDocWritingSettings.objects.filter(organization=organization).first()
+    defaults = {
+        "autocapitalize_enabled": True, "autocorrect_enabled": True,
+        "spellcheck_enabled": True, "language": "en-GB",
+        "autocorrect_rules": default_digidoc_autocorrect_rules(),
+    }
+    values = {**defaults, **({
+        "autocapitalize_enabled": settings_obj.autocapitalize_enabled,
+        "autocorrect_enabled": settings_obj.autocorrect_enabled,
+        "spellcheck_enabled": settings_obj.spellcheck_enabled,
+        "language": settings_obj.language,
+        "autocorrect_rules": settings_obj.autocorrect_rules,
+    } if settings_obj else {})}
+    error = ""
+    if request.method == "POST":
+        if len(request.body) > 12288:
+            raise ValidationError("The writing settings request is too large.")
+        allowed = {"csrfmiddlewaretoken", "autocapitalize_enabled", "autocorrect_enabled", "spellcheck_enabled", "language", "rules"}
+        if set(request.POST) - allowed:
+            raise ValidationError("Unsupported writing setting.")
+        language = request.POST.get("language", "")
+        if language not in {choice[0] for choice in DigiDocWritingSettings.LANGUAGE_CHOICES}:
+            raise ValidationError("Unsupported spell-check language.")
+        try:
+            rules = _validated_autocorrect_rules(request.POST.get("rules", ""))
+        except ValidationError as exc:
+            error = exc.messages[0]
+        else:
+            settings_obj, _created = DigiDocWritingSettings.objects.get_or_create(organization=organization)
+            settings_obj.autocapitalize_enabled = request.POST.get("autocapitalize_enabled") == "on"
+            settings_obj.autocorrect_enabled = request.POST.get("autocorrect_enabled") == "on"
+            settings_obj.spellcheck_enabled = request.POST.get("spellcheck_enabled") == "on"
+            settings_obj.language = language
+            settings_obj.autocorrect_rules = rules
+            settings_obj.updated_by = request.user
+            settings_obj.save()
+            AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.writing_settings_changed", target_model="DigiDocWritingSettings", target_id=str(organization.pk), summary="Updated company DigiDoc writing preferences.", metadata={"language": language, "rule_count": len(rules)})
+            values.update({
+                "autocapitalize_enabled": settings_obj.autocapitalize_enabled,
+                "autocorrect_enabled": settings_obj.autocorrect_enabled,
+                "spellcheck_enabled": settings_obj.spellcheck_enabled,
+                "language": language,
+                "autocorrect_rules": rules,
+            })
+    return render(request, "attendance/digidoc_writing_settings.html", {
+        "organization": organization, "values": values, "error": error,
+        "rules_text": "\n".join(f"{rule['from']} => {rule['to']}" for rule in values["autocorrect_rules"]),
+    })
 
 
 @login_required
@@ -754,6 +855,8 @@ def _paragraph_html(node):
             elif kind == "italic": value = f"<i>{value}</i>"
             elif kind == "underline": value = f"<u>{value}</u>"
             elif kind == "strike": value = f"<strike>{value}</strike>"
+            elif kind == "superscript": value = f"<super>{value}</super>"
+            elif kind == "subscript": value = f"<sub>{value}</sub>"
             elif kind == "link": value = f'<link href="{html.escape(mark["attrs"]["href"], quote=True)}" color="#2457b2">{value}</link>'
             elif kind == "fontFamily": value = f'<font name="{mark["attrs"]["value"]}">{value}</font>'
             elif kind == "fontSize": value = f'<font size="{mark["attrs"]["value"]}">{value}</font>'
@@ -765,13 +868,21 @@ def _paragraph_html(node):
 
 def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None, letterhead_meta=None):
     font_dir = os.path.join(os.path.dirname(__file__), "static", "attendance", "fonts")
-    for family, slug in (("Roboto", "roboto"), ("Open Sans", "open-sans"), ("Lato", "lato"), ("Montserrat", "montserrat"), ("Merriweather", "merriweather"), ("Nunito", "nunito"), ("Oswald", "oswald"), ("Source Sans 3", "source-sans-3"), ("Poppins", "poppins"), ("Playfair Display", "playfair-display"), ("Roboto Mono", "roboto-mono"), ("Inter", "inter")):
+    font_slugs = (("Roboto", "roboto"), ("Open Sans", "open-sans"), ("Lato", "lato"), ("Montserrat", "montserrat"), ("Merriweather", "merriweather"), ("Nunito", "nunito"), ("Oswald", "oswald"), ("Source Sans 3", "source-sans-3"), ("Poppins", "poppins"), ("Playfair Display", "playfair-display"), ("Roboto Mono", "roboto-mono"), ("Inter", "inter"), ("Arimo", "arimo"), ("Tinos", "tinos"), ("Cousine", "cousine"), ("Carlito", "carlito"), ("Caladea", "caladea"), ("Noto Sans", "notosans"), ("Noto Serif", "notoserif"), ("Lora", "lora"), ("Raleway", "raleway"), ("EB Garamond", "ebgaramond"), ("Libre Baskerville", "librebaskerville"), ("PT Serif", "pt-serif"), ("Crimson Text", "crimsontext"))
+    for family, slug in font_slugs:
         regular = os.path.join(font_dir, f"{slug}-400.ttf")
         bold = os.path.join(font_dir, f"{slug}-700.ttf")
-        if os.path.isfile(regular) and os.path.isfile(bold):
+        italic = os.path.join(font_dir, f"{slug}-400-italic.ttf")
+        bold_italic = os.path.join(font_dir, f"{slug}-700-italic.ttf")
+        if os.path.isfile(regular):
+            bold = bold if os.path.isfile(bold) else regular
+            italic = italic if os.path.isfile(italic) else regular
+            bold_italic = bold_italic if os.path.isfile(bold_italic) else bold
             pdfmetrics.registerFont(TTFont(family, regular))
             pdfmetrics.registerFont(TTFont(f"{family}-Bold", bold))
-            pdfmetrics.registerFontFamily(family, normal=family, bold=f"{family}-Bold", italic=family, boldItalic=f"{family}-Bold")
+            pdfmetrics.registerFont(TTFont(f"{family}-Italic", italic))
+            pdfmetrics.registerFont(TTFont(f"{family}-BoldItalic", bold_italic))
+            pdfmetrics.registerFontFamily(family, normal=family, bold=f"{family}-Bold", italic=f"{family}-Italic", boldItalic=f"{family}-BoldItalic")
     content = validate_document_json(doc.content_json)
     if letterhead_meta is not None:
         if doc.letterhead_enabled and isinstance(letterhead_meta, dict) and "scale_mode" in letterhead_meta:
@@ -820,6 +931,8 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
     styles.add(ParagraphStyle(name="DigiDocH1", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=20, leading=25, spaceBefore=8, spaceAfter=8))
     styles.add(ParagraphStyle(name="DigiDocH2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=16, leading=20, spaceBefore=7, spaceAfter=6))
     styles.add(ParagraphStyle(name="DigiDocH3", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=13, leading=17, spaceBefore=6, spaceAfter=5))
+    styles.add(ParagraphStyle(name="DigiDocTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=24, leading=30, spaceBefore=10, spaceAfter=10))
+    styles.add(ParagraphStyle(name="DigiDocSubtitle", parent=styles["BodyText"], fontName="Helvetica-Oblique", fontSize=12, leading=15, textColor="#5b6572", spaceAfter=8))
     alignments = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT, "justify": TA_JUSTIFY}
     flow = []
 
@@ -892,9 +1005,11 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             if checklist:
                 item_flows.insert(0, Paragraph("[ ]", styles["BodyText"]))
             items.append(ListItem(item_flows or [Paragraph("&#160;", styles["BodyText"])]))
-        bullet_type = "1" if kind == "orderedList" else "bullet"
+        list_style = node.get("attrs", {}).get("list_style", "decimal" if kind == "orderedList" else "disc")
+        bullet_type = ({"decimal":"1", "lower-alpha":"a", "upper-alpha":"A", "lower-roman":"i", "upper-roman":"I"}.get(list_style, "bullet")) if kind == "orderedList" else "bullet"
         start = node.get("attrs", {}).get("start", 1) if kind == "orderedList" else "bulletchar"
-        return ListFlowable(items, bulletType=bullet_type, start=start, leftIndent=18 * (level + 1),
+        glyph = {"disc":"•", "circle":"◦", "square":"▪", "checklist":"☐"}.get(list_style, "•")
+        return ListFlowable(items, bulletType=bullet_type, bulletChar=glyph, start=start, leftIndent=18 * (level + 1),
                             bulletFormat="%s." if kind == "orderedList" else None,
                             bulletFontName="Helvetica", bulletFontSize=9, bulletDedent=10)
 
@@ -908,13 +1023,13 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 text = _paragraph_html(node)
                 attrs = node.get("attrs", {})
                 if kind == "heading":
-                    base_style = styles[f"DigiDocH{node['level']}"]
+                    base_style = styles["DigiDocTitle"] if attrs.get("style") == "title" else styles[f"DigiDocH{node['level']}"]
                     base_size = base_style.fontSize
                     leading_ratio = base_style.leading / base_size
                 else:
-                    base_style = styles["BodyText"]
-                    base_size = 10
-                    leading_ratio = 1.2
+                    base_style = styles["DigiDocSubtitle"] if attrs.get("style") == "subtitle" else styles["BodyText"]
+                    base_size = base_style.fontSize if attrs.get("style") == "subtitle" else 10
+                    leading_ratio = base_style.leading / base_size if attrs.get("style") == "subtitle" else 1.2
                 leading_ratio = {"single": 1.2, "1.15": 1.38, "1.5": 1.8, "double": 2.4}.get(attrs.get("line_spacing", "single"), leading_ratio)
                 style = ParagraphStyle(
                     "DigiDocBlock", parent=base_style, fontName=base_style.fontName,

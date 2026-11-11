@@ -98,6 +98,7 @@
 .dd-group-controls button:disabled:hover { background:transparent; border-color:transparent!important; }
 .dd-group-controls button span { font-size:12px; }
 .dd-group-controls select,.dd-select-label select { max-width:145px; height:32px; padding:4px 7px; border:1px solid #cfd4dc; border-radius:5px; background:white; color:#303844; font-size:12px; }
+.dd-font-tools #dd-font-search { box-sizing:border-box; width:92px; height:32px; padding:4px 6px; border:1px solid #cfd4dc; border-radius:5px; font-size:11px; }.dd-font-tools #dd-font-family { max-width:130px; }.dd-font-tools #dd-font-size { box-sizing:border-box; width:58px; height:32px; padding:4px; border:1px solid #cfd4dc; border-radius:5px; }
 .dd-split-control { position:relative; z-index:var(--dd-z-ribbon,10); display:inline-flex; align-items:center; flex:none; }
 .dd-group-paragraph { z-index:var(--dd-z-ribbon-popover); }
 .dd-split-control:focus-within { z-index:var(--dd-z-ribbon-popover); }
@@ -148,3 +149,5 @@ button, input[type="button"], input[type="submit"], input[type="reset"], .btn, .
 .dd-sheet ul[data-checklist="true"] > li:before { content:""; position:absolute; left:2px; top:.25em; width:13px; height:13px; box-sizing:border-box; border:1.5px solid #687080; border-radius:2px; background:#fff; }
 
 .dd-page .dd-page-break-marker { box-sizing:border-box; display:flex; min-height:24px!important; height:24px; align-items:center; justify-content:center; margin:14px 0!important; border-top:1px dashed #99a2af; color:#768091; font:11px/1 Arial,sans-serif; }
+
+.dd-show-formatting-marks #dd-sheet p:not(.dd-page-break-marker)::after{content:'\00B6';color:#8b94a2;font-size:10px}.dd-show-formatting-marks #dd-sheet br::after{content:'\21B5';color:#8b94a2}.dd-editor dialog{z-index:100;background:#fff;border:1px solid #cbd2dc;border-radius:10px;box-shadow:0 12px 36px #17202d40;padding:20px;max-width:min(520px,calc(100vw - 32px))}.dd-editor dialog::backdrop{background:#18202d66}.dd-editor kbd{background:#f2f4f7;border:1px solid #d5d9df;border-radius:4px;padding:2px 5px}\n

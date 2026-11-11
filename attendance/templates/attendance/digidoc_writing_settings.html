@@ -1,0 +1,25 @@
+﻿{% extends 'attendance/base.html' %}
+{% block title %}DigiDoc writing preferences{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width:820px">
+  <h1 class="h3 mb-2">DigiDoc writing preferences</h1>
+  <p class="text-muted">These defaults apply to DigiDoc in {{ organization.name }}. People can adjust assistance for their own browser from the editor ribbon.</p>
+  {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" class="card card-body gap-3">
+    {% csrf_token %}
+    <label class="form-check"><input class="form-check-input" type="checkbox" name="autocapitalize_enabled" {% if values.autocapitalize_enabled %}checked{% endif %}> Automatically capitalise sentence and paragraph starts</label>
+    <label class="form-check"><input class="form-check-input" type="checkbox" name="autocorrect_enabled" {% if values.autocorrect_enabled %}checked{% endif %}> Automatically correct common typing errors</label>
+    <label class="form-check"><input class="form-check-input" type="checkbox" name="spellcheck_enabled" {% if values.spellcheck_enabled %}checked{% endif %}> Enable the browser's built-in spell-check</label>
+    <label for="dd-writing-language" class="form-label mb-0">Spell-check language</label>
+    <select id="dd-writing-language" name="language" class="form-select" style="max-width:300px">
+      <option value="en-GB" {% if values.language == 'en-GB' %}selected{% endif %}>English (UK)</option>
+      <option value="en-NG" {% if values.language == 'en-NG' %}selected{% endif %}>English (Nigeria)</option>
+      <option value="en-US" {% if values.language == 'en-US' %}selected{% endif %}>English (US)</option>
+    </select>
+    <label for="dd-correction-rules" class="form-label mb-0">Company correction list</label>
+    <textarea id="dd-correction-rules" name="rules" class="form-control font-monospace" rows="12" maxlength="10000" spellcheck="false">{{ rules_text }}</textarea>
+    <small class="text-muted">One correction per line: <code>wrong =&gt; corrected</code>. Up to 100 rules; source phrases up to 50 characters and replacements up to 100. Default rules include “teh =&gt; the” and “dont =&gt; don't”.</small>
+    <div class="d-flex gap-2"><button class="btn btn-primary" type="submit">Save writing preferences</button><a class="btn btn-outline-secondary" href="{% url 'digidoc_list' %}">Back to DigiDoc</a></div>
+  </form>
+</div>
+{% endblock %}

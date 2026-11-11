@@ -16,6 +16,26 @@ PAGE_SIZE_TWIPS = {
 DEFAULT_MARGINS_CM = {"top_cm": 2.5, "right_cm": 2.5, "bottom_cm": 2.5, "left_cm": 2.5}
 
 
+def _ordered_marker(style, number):
+    if style in {"lower-alpha", "upper-alpha"}:
+        base = 97 if style == "lower-alpha" else 65
+        value, letters = number, ""
+        while value > 0:
+            value -= 1
+            letters = chr(base + value % 26) + letters
+            value //= 26
+        return letters + "."
+    def roman(value):
+        result = ""
+        for amount, token in ((1000,"M"),(900,"CM"),(500,"D"),(400,"CD"),(100,"C"),(90,"XC"),(50,"L"),(40,"XL"),(10,"X"),(9,"IX"),(5,"V"),(4,"IV"),(1,"I")):
+            while value >= amount: result += token; value -= amount
+        return result
+    if style in {"lower-roman", "upper-roman"}:
+        token = roman(max(1, min(number, 3999)))
+        return (token.lower() if style == "lower-roman" else token) + "."
+    return f"{number}."
+
+
 def _layout_attrs(content):
     attrs = content.get("attrs", {})
     size = attrs.get("page_size", "A4")
@@ -97,7 +117,8 @@ def _text_paragraphs(nodes, assets=None):
         for index, item in enumerate(node.get("content", [])):
             children = item.get("content", [])
             text_parts = [_plain_inline(child.get("content", []), assets) for child in children if child["type"] in {"paragraph", "heading"}]
-            marker = "[ ] " if checklist else ("• " if kind == "bulletList" else f"{start + index}. ")
+            list_style = node.get("attrs", {}).get("list_style", "decimal" if kind == "orderedList" else "disc")
+            marker = "[ ] " if checklist else (({"disc":"\u2022", "circle":"\u25e6", "square":"\u25aa"}.get(list_style, "\u2022") + " ") if kind == "bulletList" else _ordered_marker(list_style, start + index) + " ")
             paragraphs.append("  " * depth + marker + " ".join(part for part in text_parts if part))
             for child in children:
                 if child["type"] in {"bulletList", "orderedList"}:
@@ -108,7 +129,8 @@ def _text_paragraphs(nodes, assets=None):
         if kind in {"paragraph", "heading", "tableCell"}:
             attrs = node.get("attrs", {})
             paragraphs.extend([""] * min(5, attrs.get("space_before_pt", 0) // 24))
-            paragraphs.append(_plain_inline(node.get("content", []), assets))
+            prefix = "#" * node.get("level", 1) + " " if kind == "heading" else ("## " if attrs.get("style") == "subtitle" else "")
+            paragraphs.append(prefix + _plain_inline(node.get("content", []), assets))
             paragraphs.extend([""] * min(5, attrs.get("space_after_pt", 0) // 24))
         elif kind == "image":
             alt = _safe_alt(node.get("attrs", {}).get("alt", ""))
@@ -172,11 +194,37 @@ def rtf_text(content, assets=None):
                 f"{{\\pict\\{blip}\\picw{prepared['width']}\\pich{prepared['height']}"
                 f"\\picwgoal{width_goal}\\pichgoal{height_goal}\n{hex_data}}}")
 
+    font_aliases = {"Helvetica":"Arial", "Times-Roman":"Times New Roman", "Courier":"Courier New", "Arimo":"Arial", "Tinos":"Times New Roman", "Cousine":"Courier New", "Carlito":"Calibri", "Caladea":"Cambria"}
+    fonts = ["Arial", "Times New Roman", "Courier New", "Calibri", "Cambria", "Roboto", "Open Sans", "Lato", "Montserrat", "Merriweather", "Nunito", "Oswald", "Source Sans 3", "Poppins", "Playfair Display", "Roboto Mono", "Inter", "Arimo", "Tinos", "Cousine", "Carlito", "Caladea", "Noto Sans", "Noto Serif", "Lora", "Raleway", "EB Garamond", "Libre Baskerville", "PT Serif", "Crimson Text"]
+    font_ids = {name:index for index,name in enumerate(fonts)}
+    colors = []
+    def collect(node):
+        if isinstance(node, dict):
+            for mark in node.get("marks", []):
+                if mark.get("type") in {"textColor", "highlight"}:
+                    color = mark.get("attrs", {}).get("color")
+                    if isinstance(color, str) and color not in colors: colors.append(color)
+            for child in node.get("content", []): collect(child)
+        elif isinstance(node, list):
+            for child in node: collect(child)
+    collect(content)
+    color_ids = {color:index+1 for index,color in enumerate(colors)}
+
     def inline(nodes):
         pieces = []
         for node in nodes:
             kind = node["type"]
-            if kind == "text": pieces.append(escape(node.get("text", "")))
+            if kind == "text":
+                text_value=escape(node.get("text", "")); marks={mark["type"]:mark.get("attrs", {}) for mark in node.get("marks", [])}
+                controls=[]
+                for name,on,off in (("bold", "\\b ", "\\b0 "), ("italic", "\\i ", "\\i0 "), ("underline", "\\ul ", "\\ulnone "), ("strike", "\\strike ", "\\strike0 "), ("superscript", "\\super ", "\\nosupersub "), ("subscript", "\\sub ", "\\nosupersub ")):
+                    if name in marks: controls.append("{"+on+text_value+off+"}");text_value=controls.pop()
+                if "fontSize" in marks: text_value="{\\fs"+str(marks["fontSize"]["value"]*2)+" "+text_value+"}"
+                if "fontFamily" in marks: text_value="{\\f"+str(font_ids.get(font_aliases.get(marks["fontFamily"]["value"],marks["fontFamily"]["value"]),0))+" "+text_value+"}"
+                if "textColor" in marks: text_value="{\\cf"+str(color_ids[marks["textColor"]["color"]])+" "+text_value+"}"
+                if "highlight" in marks: text_value="{\\highlight"+str(color_ids[marks["highlight"]["color"]])+" "+text_value+"}"
+                if "link" in marks: text_value="{\\field{\\*\\fldinst HYPERLINK \""+escape(marks["link"]["href"])+"\"}{\\fldrslt "+text_value+"}}"
+                pieces.append(text_value)
             elif kind == "hardBreak": pieces.append("\\line ")
             elif kind == "image": pieces.append(rtf_image(node))
         return "".join(pieces)
@@ -187,7 +235,12 @@ def rtf_text(content, assets=None):
             kind = node["type"]
             if kind in {"paragraph", "heading", "tableCell"}:
                 attrs = node.get("attrs", {})
-                result.append(f"\\sb{attrs.get('space_before_pt', 0) * 20}\\sa{attrs.get('space_after_pt', 0) * 20}" + inline(node.get("content", [])))
+                text_value=inline(node.get("content", []))
+                if kind == "heading":
+                    size=40 if attrs.get("style") == "title" else {1:36,2:30,3:26}.get(node.get("level",1),28)
+                    text_value="{\\b\\fs"+str(size)+" "+text_value+"}"
+                elif attrs.get("style") == "subtitle": text_value="{\\i\\fs24 "+text_value+"}"
+                result.append(f"\\sb{attrs.get('space_before_pt', 0) * 20}\\sa{attrs.get('space_after_pt', 0) * 20}" + text_value)
             elif kind == "image":
                 result.append(rtf_image(node))
             elif kind in {"doc", "listItem"}:
@@ -196,18 +249,21 @@ def rtf_text(content, assets=None):
                 start = node.get("attrs", {}).get("start", 1)
                 checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
                 for index, item in enumerate(node.get("content", [])):
-                    marker = "[ ] " if checklist else ("• " if kind == "bulletList" else f"{start + index}. ")
+                    list_style = node.get("attrs", {}).get("list_style", "decimal" if kind == "orderedList" else "disc")
+                    marker = "[ ] " if checklist else (({"disc":"\u2022", "circle":"\u25e6", "square":"\u25aa"}.get(list_style, "\u2022") + " ") if kind == "bulletList" else _ordered_marker(list_style, start + index) + " ")
                     item_nodes = item.get("content", [])
                     paragraphs = [child for child in item_nodes if child["type"] in {"paragraph", "heading"}]
                     text = " ".join(inline(child.get("content", [])) for child in paragraphs)
                     result.append(f"\\li{720 * (list_depth + 1)}\\fi-360\\tx{720 * (list_depth + 1)}" + escape(marker + text))
                     result.extend(blocks([child for child in item_nodes if child["type"] in {"bulletList", "orderedList"}], list_depth + 1))
             elif kind == "hardBreak": result.append("\\page ")
-            elif kind == "horizontalRule": result.append(escape("—" * 32))
+            elif kind == "horizontalRule": result.append(escape("\u2014" * 32))
         return result
 
     body = "\\par\n".join(blocks(content.get("content", [])))
-    output = ("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\viewkind4\\uc1\n" + body + "}").encode("ascii")
+    font_table="{\\fonttbl"+"".join(f"{{\\f{i} {escape(name)};}}" for i,name in enumerate(fonts))+"}"
+    color_table="{\\colortbl;"+"".join(f"\\red{int(color[1:3],16)}\\green{int(color[3:5],16)}\\blue{int(color[5:7],16)};" for color in colors)+"}"
+    output = ("{\\rtf1\\ansi\\deff0"+font_table+color_table+"\\viewkind4\\uc1\n" + body + "}").encode("ascii")
     _validate_rtf(output)
     return output
 
@@ -215,7 +271,7 @@ def rtf_text(content, assets=None):
 def _validate_rtf(data):
     if not isinstance(data, bytes) or len(data) > 25 * 1024 * 1024 or not data.startswith(b"{\\rtf1"):
         raise ValueError("Invalid RTF document")
-    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"f", b"viewkind", b"uc", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"li", b"fi", b"tx", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal"}
+    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"colortbl", b"red", b"green", b"blue", b"cf", b"highlight", b"f", b"fs", b"b", b"i", b"ul", b"ulnone", b"strike", b"strike0", b"super", b"sub", b"nosupersub", b"field", b"fldinst", b"fldrslt", b"viewkind", b"uc", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"li", b"fi", b"tx", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal"}
     control_scan = re.sub(rb"\\\\", b"", data)
     for match in re.finditer(rb"\\([A-Za-z]+)(-?\d+)? ?", control_scan):
         if match.group(1).lower() not in allowed:
@@ -251,16 +307,16 @@ def _docx_run(parent, text, marks=(), link_rels=None, link_counter=None):
         run_parent = ET.SubElement(parent, f"{{{w}}}hyperlink", {f"{{{relationship_ns}}}id": rid})
     run = ET.SubElement(run_parent, f"{{{w}}}r")
     props = ET.SubElement(run, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rPr")
-    for name, tag in (("bold", "b"), ("italic", "i"), ("underline", "u"), ("strike", "strike")):
+    for name, tag in (("bold", "b"), ("italic", "i"), ("underline", "u"), ("strike", "strike"), ("superscript", "vertAlign"), ("subscript", "vertAlign")):
         if name in types:
-            attrs = {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "single"} if name == "underline" else {}
+            attrs = {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "single"} if name == "underline" else ({"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": "superscript" if name == "superscript" else "subscript"} if name in {"superscript", "subscript"} else {})
             ET.SubElement(props, f"{{http://schemas.openxmlformats.org/wordprocessingml/2006/main}}{tag}", attrs)
     if "fontSize" in types:
         size = str(types["fontSize"]["value"] * 2)
         ET.SubElement(props, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sz", {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": size})
     if "fontFamily" in types:
         font = types["fontFamily"]["value"]
-        font = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New"}.get(font, font)
+        font = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New", "Arimo":"Arial", "Tinos":"Times New Roman", "Cousine":"Courier New", "Carlito":"Calibri", "Caladea":"Cambria"}.get(font, font)
         ET.SubElement(props, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}rFonts", {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}ascii": font, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hAnsi": font})
     if "textColor" in types:
         ET.SubElement(props, "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}color", {"{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val": types["textColor"]["color"][1:]})
@@ -323,7 +379,9 @@ def _docx_paragraph(parent, node=None, prefix="", assets=None, media=None, image
         attrs = node.get("attrs", {})
         props = ET.SubElement(para, f"{{{w}}}pPr")
         if node["type"] == "heading":
-            ET.SubElement(props, f"{{{w}}}pStyle", {f"{{{w}}}val": f"Heading{node['level']}"})
+            ET.SubElement(props, f"{{{w}}}pStyle", {f"{{{w}}}val": "Title" if attrs.get("style") == "title" else f"Heading{node['level']}"})
+        elif attrs.get("style") == "subtitle":
+            ET.SubElement(props, f"{{{w}}}pStyle", {f"{{{w}}}val": "Subtitle"})
         if attrs.get("align"):
             ET.SubElement(props, f"{{{w}}}jc", {f"{{{w}}}val": {"justify": "both"}.get(attrs["align"], attrs["align"])})
         ind = {}
@@ -389,8 +447,9 @@ def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counte
             _docx_paragraph(parent, node, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
         elif kind in {"bulletList", "orderedList"}:
             checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-            list_kind = "checklist" if checklist else ("decimal" if kind == "orderedList" else "bullet")
-            num_id = _docx_new_num(numbering, list_kind, node.get("attrs", {}).get("start"))
+            list_style = node.get("attrs", {}).get("list_style", "decimal" if kind == "orderedList" else "disc")
+            list_kind = "checklist" if checklist else (f"ordered:{list_style}" if kind == "orderedList" else f"bullet:{list_style}")
+            num_id = _docx_new_num(numbering, list_kind, node.get("attrs", {}).get("start"), level=level)
             for item in node.get("content", []):
                 children = item.get("content", [])
                 first_paragraph = next((index for index, child in enumerate(children) if child["type"] in {"paragraph", "heading"}), None)
@@ -425,14 +484,14 @@ def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counte
             _docx_paragraph(parent, {"type": "paragraph", "attrs":node.get("attrs", {}), "content": [{"type": "image", "attrs":node.get("attrs", {})}]}, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
 
 
-def _docx_new_num(numbering, list_kind, start=None):
+def _docx_new_num(numbering, list_kind, start=None, level=0):
     w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     numbering["next_num"] += 1
     num_id = numbering["next_num"]
     num = ET.SubElement(numbering["root"], f"{{{w}}}num", {f"{{{w}}}numId": str(num_id)})
     ET.SubElement(num, f"{{{w}}}abstractNumId", {f"{{{w}}}val": str(numbering["abstract"][list_kind])})
     if start is not None:
-        override = ET.SubElement(num, f"{{{w}}}lvlOverride", {f"{{{w}}}ilvl": "0"})
+        override = ET.SubElement(num, f"{{{w}}}lvlOverride", {f"{{{w}}}ilvl": str(level)})
         ET.SubElement(override, f"{{{w}}}startOverride", {f"{{{w}}}val": str(start)})
     return num_id
 
@@ -440,26 +499,35 @@ def _docx_new_num(numbering, list_kind, start=None):
 def _docx_numbering():
     w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     root = ET.Element(f"{{{w}}}numbering")
-    abstract = {"bullet": 1, "decimal": 2, "checklist": 3}
-    bullet_chars = ("•", "◦", "▪", "▫", "‣", "⁃", "•", "◦", "▪")
-    for list_kind, abstract_id in abstract.items():
+    definitions = {
+        "checklist": ("bullet", "\u2610"),
+        "bullet:disc": ("bullet", "\u2022"), "bullet:circle": ("bullet", "\u25e6"), "bullet:square": ("bullet", "\u25aa"),
+        "ordered:decimal": ("decimal", None), "ordered:lower-alpha": ("lowerLetter", None),
+        "ordered:upper-alpha": ("upperLetter", None), "ordered:lower-roman": ("lowerRoman", None),
+        "ordered:upper-roman": ("upperRoman", None),
+    }
+    abstract = {}
+    for abstract_id, (name, (fmt, bullet)) in enumerate(definitions.items(), 1):
+        abstract[name] = abstract_id
         item = ET.SubElement(root, f"{{{w}}}abstractNum", {f"{{{w}}}abstractNumId": str(abstract_id)})
         ET.SubElement(item, f"{{{w}}}multiLevelType", {f"{{{w}}}val": "multilevel"})
         for level in range(9):
             lvl = ET.SubElement(item, f"{{{w}}}lvl", {f"{{{w}}}ilvl": str(level)})
             ET.SubElement(lvl, f"{{{w}}}start", {f"{{{w}}}val": "1"})
-            fmt = "decimal" if list_kind == "decimal" else "bullet"
             ET.SubElement(lvl, f"{{{w}}}numFmt", {f"{{{w}}}val": fmt})
-            text = f"%{level + 1}." if list_kind == "decimal" else ("☐" if list_kind == "checklist" else bullet_chars[level])
+            text = f"%{level + 1}." if bullet is None else bullet
             ET.SubElement(lvl, f"{{{w}}}lvlText", {f"{{{w}}}val": text})
             ET.SubElement(lvl, f"{{{w}}}lvlJc", {f"{{{w}}}val": "left"})
             ppr = ET.SubElement(lvl, f"{{{w}}}pPr")
-            ET.SubElement(ppr, f"{{{w}}}tabs")
-            ET.SubElement(ppr[-1], f"{{{w}}}tab", {f"{{{w}}}val": "num", f"{{{w}}}pos": str((level + 1) * 720)})
+            tabs = ET.SubElement(ppr, f"{{{w}}}tabs")
+            ET.SubElement(tabs, f"{{{w}}}tab", {f"{{{w}}}val": "num", f"{{{w}}}pos": str((level + 1) * 720)})
             ET.SubElement(ppr, f"{{{w}}}ind", {f"{{{w}}}left": str((level + 1) * 720), f"{{{w}}}hanging": "360"})
-            if list_kind in {"bullet", "checklist"}:
+            if fmt == "bullet":
                 rpr = ET.SubElement(lvl, f"{{{w}}}rPr")
                 ET.SubElement(rpr, f"{{{w}}}rFonts", {f"{{{w}}}ascii": "Segoe UI Symbol", f"{{{w}}}hAnsi": "Segoe UI Symbol"})
+    abstract["checklist"] = abstract.pop("checklist")
+    abstract["decimal"] = abstract["ordered:decimal"]
+    abstract["bullet"] = abstract["bullet:disc"]
     return {"root": root, "abstract": abstract, "next_num": 0}
 
 
@@ -485,7 +553,7 @@ def docx(content, assets=None):
     ET.SubElement(sect, f"{{{w}}}pgMar", margin_attrs)
     content_types = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'''
     rels = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'''
-    styles = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style></w:styles>'''
+    styles = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="40"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:rPr><w:i/><w:sz w:val="24"/></w:rPr></w:style></w:styles>'''
     content_types = content_types.replace(b"</Types>", b'<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
     content_types = content_types.replace(b"</Types>", b'<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>')
     rel_items = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>']
@@ -523,20 +591,20 @@ def odt(content, assets=None):
         ET.register_namespace(prefix, uri)
     root = ET.Element(f"{{{ns['office']}}}document-content", {f"{{{ns['office']}}}version": "1.3"})
     automatic = ET.SubElement(root, f"{{{ns['office']}}}automatic-styles")
-    list_style_names = {"bulletList": "DigiDocBullets", "orderedList": "DigiDocNumbers", "checklist": "DigiDocChecklist"}
-    for list_kind, style_name in list_style_names.items():
+    list_style_names = {}
+    list_specs = {
+        "bullet:disc": ("bullet", "\u2022"), "bullet:circle": ("bullet", "\u25e6"), "bullet:square": ("bullet", "\u25aa"), "bullet:checklist": ("bullet", "\u2610"),
+        "ordered:decimal": ("1", None), "ordered:lower-alpha": ("a", None), "ordered:upper-alpha": ("A", None), "ordered:lower-roman": ("i", None), "ordered:upper-roman": ("I", None),
+    }
+    for key, (fmt, glyph) in list_specs.items():
+        style_name = "DigiDoc" + key.replace(":", "_").replace("-", "_")
+        list_style_names[key] = style_name
         style = ET.SubElement(automatic, f"{{{ns['text']}}}list-style", {f"{{{ns['style']}}}name": style_name})
         for level in range(1, 10):
-            if list_kind == "orderedList":
-                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-number", {
-                    f"{{{ns['text']}}}level": str(level), f"{{{ns['style']}}}num-format": "1",
-                    f"{{{ns['style']}}}num-suffix": ".", f"{{{ns['text']}}}start-value": "1",
-                })
+            if glyph is None:
+                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-number", {f"{{{ns['text']}}}level": str(level), f"{{{ns['style']}}}num-format": fmt, f"{{{ns['style']}}}num-suffix": ".", f"{{{ns['text']}}}start-value": "1"})
             else:
-                glyph = "☐" if list_kind == "checklist" else ("•", "◦", "▪", "▫", "‣", "⁃", "•", "◦", "▪")[level - 1]
-                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-bullet", {
-                    f"{{{ns['text']}}}level": str(level), f"{{{ns['text']}}}bullet-char": glyph,
-                })
+                ET.SubElement(style, f"{{{ns['text']}}}list-level-style-bullet", {f"{{{ns['text']}}}level": str(level), f"{{{ns['text']}}}bullet-char": glyph})
     body = ET.SubElement(root, f"{{{ns['office']}}}body")
     text_body = ET.SubElement(body, f"{{{ns['office']}}}text")
 
@@ -582,7 +650,8 @@ def odt(content, assets=None):
         if node:
             attrs = node.get("attrs", {})
             style_name = f"P{len(automatic)}"
-            style_attrs = {f"{{{ns['style']}}}name": style_name, f"{{{ns['style']}}}family": "paragraph"}
+            parent_style = ("Title" if attrs.get("style") == "title" else f"Heading {node['level']}" if kind == "heading" else "Subtitle" if attrs.get("style") == "subtitle" else "Normal")
+            style_attrs = {f"{{{ns['style']}}}name": style_name, f"{{{ns['style']}}}family": "paragraph", f"{{{ns['style']}}}parent-style-name": parent_style}
             style = ET.SubElement(automatic, f"{{{ns['style']}}}style", style_attrs)
             prop = {}
             if attrs.get("align"):
@@ -624,10 +693,12 @@ def odt(content, assets=None):
                         if "italic" in marks: text_props[f"{{{ns['fo']}}}font-style"] = "italic"
                         if "underline" in marks: text_props[f"{{{ns['style']}}}text-underline-style"] = "solid"
                         if "strike" in marks: text_props[f"{{{ns['style']}}}text-line-through-style"] = "solid"
+                        if "superscript" in marks: text_props[f"{{{ns['style']}}}text-position"] = "super 58%"
+                        if "subscript" in marks: text_props[f"{{{ns['style']}}}text-position"] = "sub 58%"
                         if "textColor" in marks: text_props[f"{{{ns['fo']}}}color"] = marks["textColor"]["color"]
                         if "highlight" in marks: text_props[f"{{{ns['fo']}}}background-color"] = marks["highlight"]["color"]
                         if "fontSize" in marks: text_props[f"{{{ns['fo']}}}font-size"] = f"{marks['fontSize']['value']}pt"
-                        if "fontFamily" in marks: text_props[f"{{{ns['fo']}}}font-family"] = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New"}.get(marks["fontFamily"]["value"], marks["fontFamily"]["value"])
+                        if "fontFamily" in marks: text_props[f"{{{ns['fo']}}}font-family"] = {"Helvetica": "Arial", "Times-Roman": "Times New Roman", "Courier": "Courier New", "Arimo":"Arial", "Tinos":"Times New Roman", "Cousine":"Courier New", "Carlito":"Calibri", "Caladea":"Cambria"}.get(marks["fontFamily"]["value"], marks["fontFamily"]["value"])
                         ET.SubElement(span_style, f"{{{ns['style']}}}text-properties", text_props)
                         span_parent = element
                         if "link" in marks:
@@ -663,7 +734,8 @@ def odt(content, assets=None):
                 para(parent, node)
             elif kind in {"bulletList", "orderedList"}:
                 checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
-                style_name = list_style_names["checklist" if checklist else kind]
+                list_style = node.get("attrs", {}).get("list_style", "decimal" if kind == "orderedList" else "disc")
+                style_name = list_style_names[("bullet:" if kind == "bulletList" else "ordered:") + list_style]
                 list_el = ET.SubElement(parent, f"{{{ns['text']}}}list", {f"{{{ns['text']}}}style-name": style_name})
                 for item_index, item in enumerate(node.get("content", [])):
                     item_attrs = {}
@@ -699,6 +771,12 @@ def odt(content, assets=None):
     default_style = ET.SubElement(common_styles, f"{{{ns['style']}}}default-style", {f"{{{ns['style']}}}family": "paragraph"})
     ET.SubElement(default_style, f"{{{ns['style']}}}paragraph-properties", {f"{{{ns['fo']}}}margin-top": "0in", f"{{{ns['fo']}}}margin-bottom": "0.08in"})
     ET.SubElement(default_style, f"{{{ns['style']}}}text-properties", {f"{{{ns['fo']}}}font-family": "Arial", f"{{{ns['fo']}}}font-size": "10pt"})
+    for name,size,bold,italic in (("Normal",10,False,False),("Title",20,True,False),("Subtitle",12,False,True),("Heading 1",18,True,False),("Heading 2",15,True,False),("Heading 3",13,True,False)):
+        style=ET.SubElement(common_styles,f"{{{ns['style']}}}style",{f"{{{ns['style']}}}name":name,f"{{{ns['style']}}}family":"paragraph"})
+        props={f"{{{ns['fo']}}}font-size":f"{size}pt"}
+        if bold: props[f"{{{ns['fo']}}}font-weight"]="bold"
+        if italic: props[f"{{{ns['fo']}}}font-style"]="italic"
+        ET.SubElement(style,f"{{{ns['style']}}}text-properties",props)
     _size, orientation, margins, page_twips = _layout_attrs(content)
     page_width, page_height = page_twips
     page_width_cm, page_height_cm = page_width / 567, page_height / 567

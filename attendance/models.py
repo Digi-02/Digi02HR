@@ -278,6 +278,31 @@ class DigiDocDocument(models.Model):
         return self.title
 
 
+def default_digidoc_autocorrect_rules():
+    return [
+        {"from": "teh", "to": "the"}, {"from": "dont", "to": "don't"}, {"from": "i", "to": "I"},
+        {"from": "recieve", "to": "receive"}, {"from": "seperate", "to": "separate"},
+        {"from": "definately", "to": "definitely"}, {"from": "accomodate", "to": "accommodate"},
+        {"from": "accomodation", "to": "accommodation"}, {"from": "occured", "to": "occurred"},
+        {"from": "goverment", "to": "government"},
+    ]
+
+
+class DigiDocWritingSettings(models.Model):
+    """Per-company writing assistance preferences and approved correction rules."""
+
+    LANGUAGE_CHOICES = [("en-GB", "English (UK)"), ("en-NG", "English (Nigeria)"), ("en-US", "English (US)")]
+
+    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name="digidoc_writing_settings")
+    autocapitalize_enabled = models.BooleanField(default=True)
+    autocorrect_enabled = models.BooleanField(default=True)
+    spellcheck_enabled = models.BooleanField(default=True)
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default="en-GB")
+    autocorrect_rules = models.JSONField(default=default_digidoc_autocorrect_rules, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="digidoc_writing_settings_updates")
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class DigiDocImageAsset(models.Model):
     """Re-encoded, private company image used by DigiDoc image nodes."""
 
