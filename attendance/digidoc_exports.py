@@ -49,6 +49,16 @@ def _layout_attrs(content):
     return size, orientation, margins, page
 
 
+def _table_columns(node):
+    rows = node.get("content", [])
+    count = max((sum(cell.get("attrs", {}).get("colspan", 1) for cell in row.get("content", [])) for row in rows), default=1)
+    supplied = node.get("attrs", {}).get("column_widths", [])
+    if len(supplied) == count:
+        return supplied
+    base, remainder = divmod(100, count)
+    return [base + (1 if index < remainder else 0) for index in range(count)]
+
+
 def _safe_alt(value):
     return "".join(ch for ch in str(value or "") if unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})[:300]
 
@@ -123,6 +133,9 @@ def _text_paragraphs(nodes, assets=None):
             for child in children:
                 if child["type"] in {"bulletList", "orderedList"}:
                     list_lines(child, depth + 1)
+                elif child["type"] == "table":
+                    for row in child.get("content", []):
+                        paragraphs.append("  " * (depth + 1) + " | ".join(_plain_inline(cell.get("content", []), assets) for cell in row.get("content", [])))
 
     for node in nodes:
         kind = node["type"]
@@ -148,14 +161,20 @@ def _text_paragraphs(nodes, assets=None):
         elif kind == "hardBreak":
             paragraphs.append("\f")
         elif kind == "horizontalRule":
-            paragraphs.append("─" * 32)
+            paragraphs.append("â”€" * 32)
         elif kind in {"doc", "listItem"}:
             paragraphs.extend(_text_paragraphs(node.get("content", []), assets))
     return paragraphs
 
 
 def plain_text(content, assets=None):
-    return "\n\n".join(_text_paragraphs(content.get("content", []), assets)) + "\n"
+    attrs=content.get("attrs",{})
+    lines=[]
+    if attrs.get("header"):lines.append(attrs["header"])
+    lines.extend(_text_paragraphs(content.get("content", []), assets))
+    if attrs.get("footer"):lines.append(attrs["footer"])
+    if attrs.get("page_numbers"):lines.append("Page X of Y")
+    return "\n\n".join(lines) + "\n"
 
 
 def rtf_text(content, assets=None):
@@ -204,6 +223,8 @@ def rtf_text(content, assets=None):
                 if mark.get("type") in {"textColor", "highlight"}:
                     color = mark.get("attrs", {}).get("color")
                     if isinstance(color, str) and color not in colors: colors.append(color)
+            for color in (node.get("attrs", {}).get("shading"), node.get("attrs", {}).get("border_color")):
+                if isinstance(color, str) and color not in colors: colors.append(color)
             for child in node.get("content", []): collect(child)
         elif isinstance(node, list):
             for child in node: collect(child)
@@ -255,12 +276,51 @@ def rtf_text(content, assets=None):
                     paragraphs = [child for child in item_nodes if child["type"] in {"paragraph", "heading"}]
                     text = " ".join(inline(child.get("content", [])) for child in paragraphs)
                     result.append(f"\\li{720 * (list_depth + 1)}\\fi-360\\tx{720 * (list_depth + 1)}" + escape(marker + text))
-                    result.extend(blocks([child for child in item_nodes if child["type"] in {"bulletList", "orderedList"}], list_depth + 1))
+                    result.extend(blocks([child for child in item_nodes if child["type"] in {"bulletList", "orderedList", "table"}], list_depth + 1))
+            elif kind == "table":
+                table_attrs = node.get("attrs", {})
+                width = round(9360 * table_attrs.get("width_percent", 100) / 100)
+                columns = _table_columns(node)
+                edges = []
+                total = 0
+                for col in columns:
+                    total += round(width * col / 100)
+                    edges.append(total)
+                for row in node.get("content", []):
+                    row_cells = row.get("content", [])
+                    row_width = width
+                    row_controls = f"\\trowd\\trleft0\\trkeep\\trwWidth{row_width}"
+                    column_offset = 0
+                    for index, cell in enumerate(row_cells):
+                        cell_attrs = cell.get("attrs", {})
+                        shading = color_ids.get(cell_attrs.get("shading"), 0)
+                        col_span = cell_attrs.get("colspan", 1)
+                        edge_index = min(column_offset + col_span - 1, len(edges)-1)
+                        border_color = color_ids.get(table_attrs.get("border_color", "#B7C0CC"), 0)
+                        row_controls += (f"\\clbrdrt\\brdrs\\brdrw{table_attrs.get('border_width',1)*10}"
+                                         f"\\clbrdrcf{border_color}"
+                                         f"\\clbrdrl\\brdrs\\brdrw{table_attrs.get('border_width',1)*10}"
+                                         f"\\clbrdrcf{border_color}"
+                                         f"\\clbrdrb\\brdrs\\brdrw{table_attrs.get('border_width',1)*10}"
+                                         f"\\clbrdrcf{border_color}"
+                                         f"\\clbrdrr\\brdrs\\brdrw{table_attrs.get('border_width',1)*10}"
+                                         f"\\clbrdrcf{border_color}"
+                                         + (f"\\clcbpat{shading}" if shading else "")
+                                         + f"\\cellx{edges[edge_index]}")
+                        column_offset += col_span
+                    result.append(row_controls + " " + "".join(inline(cell.get("content", [])) + "\\cell " for cell in row_cells) + "\\row")
             elif kind == "hardBreak": result.append("\\page ")
             elif kind == "horizontalRule": result.append(escape("\u2014" * 32))
         return result
 
     body = "\\par\n".join(blocks(content.get("content", [])))
+    attrs=content.get("attrs",{})
+    if attrs.get("header"):body+="{\\header\\pard "+escape(attrs["header"])+"\\par}"
+    if attrs.get("footer") or attrs.get("page_numbers"):
+        footer=escape(attrs.get("footer",""))
+        if attrs.get("page_numbers"):
+            footer+=("\\tab " if footer else "")+"Page \\chpgn of {\\field{\\*\\fldinst NUMPAGES}{\\fldrslt 1}}"
+        body+="{\\footer\\pard "+footer+"\\par}"
     font_table="{\\fonttbl"+"".join(f"{{\\f{i} {escape(name)};}}" for i,name in enumerate(fonts))+"}"
     color_table="{\\colortbl;"+"".join(f"\\red{int(color[1:3],16)}\\green{int(color[3:5],16)}\\blue{int(color[5:7],16)};" for color in colors)+"}"
     output = ("{\\rtf1\\ansi\\deff0"+font_table+color_table+"\\viewkind4\\uc1\n" + body + "}").encode("ascii")
@@ -271,7 +331,7 @@ def rtf_text(content, assets=None):
 def _validate_rtf(data):
     if not isinstance(data, bytes) or len(data) > 25 * 1024 * 1024 or not data.startswith(b"{\\rtf1"):
         raise ValueError("Invalid RTF document")
-    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"colortbl", b"red", b"green", b"blue", b"cf", b"highlight", b"f", b"fs", b"b", b"i", b"ul", b"ulnone", b"strike", b"strike0", b"super", b"sub", b"nosupersub", b"field", b"fldinst", b"fldrslt", b"viewkind", b"uc", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"li", b"fi", b"tx", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal"}
+    allowed = {b"rtf", b"ansi", b"deff", b"fonttbl", b"colortbl", b"red", b"green", b"blue", b"cf", b"highlight", b"f", b"fs", b"b", b"i", b"ul", b"ulnone", b"strike", b"strike0", b"super", b"sub", b"nosupersub", b"field", b"fldinst", b"fldrslt", b"viewkind", b"uc", b"pard", b"par", b"line", b"tab", b"u", b"sb", b"sa", b"li", b"fi", b"tx", b"ql", b"qc", b"qr", b"pict", b"pngblip", b"jpegblip", b"picw", b"pich", b"picwgoal", b"pichgoal", b"trowd", b"trleft", b"trkeep", b"trwwidth", b"clbrdrt", b"clbrdrl", b"clbrdrb", b"clbrdrr", b"clbrdrcf", b"brdrs", b"brdrw", b"clcbpat", b"cellx", b"cell", b"row", b"header", b"footer", b"chpgn", b"page", b"numpages"}
     control_scan = re.sub(rb"\\\\", b"", data)
     for match in re.finditer(rb"\\([A-Za-z]+)(-?\d+)? ?", control_scan):
         if match.group(1).lower() not in allowed:
@@ -462,23 +522,47 @@ def _docx_blocks(parent, nodes, assets=None, media=None, image_rels=None, counte
                                         level=level)
                     elif child["type"] in {"bulletList", "orderedList"}:
                         _docx_blocks(parent, [child], assets, media, image_rels, counter, numbering, level + 1, link_rels, link_counter)
+                    elif child["type"] == "table":
+                        _docx_blocks(parent, [child], assets, media, image_rels, counter, numbering, level, link_rels, link_counter)
         elif kind == "table":
             table = ET.SubElement(parent, f"{{{w}}}tbl")
             props = ET.SubElement(table, f"{{{w}}}tblPr")
+            width_pct = node.get("attrs", {}).get("width_percent", 100)
+            ET.SubElement(props, f"{{{w}}}tblW", {f"{{{w}}}w": str(width_pct * 50), f"{{{w}}}type": "pct"})
+            ET.SubElement(props, f"{{{w}}}tblLayout", {f"{{{w}}}type": "fixed"})
+            columns = _table_columns(node)
+            grid_widths = [round(9360 * width_pct / 100 * width / 100) for width in columns]
+            grid = ET.SubElement(table, f"{{{w}}}tblGrid")
+            for col_width in grid_widths:
+                ET.SubElement(grid, f"{{{w}}}gridCol", {f"{{{w}}}w": str(col_width)})
             borders = ET.SubElement(props, f"{{{w}}}tblBorders")
+            border_color = node.get("attrs", {}).get("border_color", "#B7C0CC").lstrip("#")
+            border_size = str(max(0, node.get("attrs", {}).get("border_width", 1)) * 4)
             for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-                ET.SubElement(borders, f"{{{w}}}{edge}", {f"{{{w}}}val": "single", f"{{{w}}}sz": "4", f"{{{w}}}color": "B7C0CC"})
+                ET.SubElement(borders, f"{{{w}}}{edge}", {f"{{{w}}}val": "nil" if border_size == "0" else "single", f"{{{w}}}sz": border_size, f"{{{w}}}color": border_color})
             for row in node.get("content", []):
                 tr = ET.SubElement(table, f"{{{w}}}tr")
-                for cell in row.get("content", []):
+                column_offset = 0
+                for cell_index, cell in enumerate(row.get("content", [])):
                     tc = ET.SubElement(tr, f"{{{w}}}tc")
+                    cell_props = ET.SubElement(tc, f"{{{w}}}tcPr")
+                    col_span = cell.get("attrs", {}).get("colspan", 1)
+                    cell_width = sum(grid_widths[column_offset:column_offset + col_span])
+                    ET.SubElement(cell_props, f"{{{w}}}tcW", {f"{{{w}}}w": str(cell_width), f"{{{w}}}type": "dxa"})
+                    if col_span > 1:
+                        ET.SubElement(cell_props, f"{{{w}}}gridSpan", {f"{{{w}}}val": str(col_span)})
+                    if cell.get("attrs", {}).get("rowspan", 1) > 1:
+                        ET.SubElement(cell_props, f"{{{w}}}vMerge", {f"{{{w}}}val": "restart"})
+                    if cell.get("attrs", {}).get("shading"):
+                        ET.SubElement(cell_props, f"{{{w}}}shd", {f"{{{w}}}fill": cell["attrs"]["shading"].lstrip("#")})
                     _docx_paragraph(tc, {"type":"paragraph", "content":cell.get("content", [])}, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
+                    column_offset += col_span
         elif kind == "hardBreak":
             p = ET.SubElement(parent, f"{{{w}}}p")
             run = ET.SubElement(p, f"{{{w}}}r")
             ET.SubElement(run, f"{{{w}}}br", {f"{{{w}}}type": "page"})
         elif kind == "horizontalRule":
-            _docx_paragraph(parent, {"type": "paragraph", "content": [{"type": "text", "text": "─" * 32}]}, link_rels=link_rels, link_counter=link_counter)
+            _docx_paragraph(parent, {"type": "paragraph", "content": [{"type": "text", "text": "â”€" * 32}]}, link_rels=link_rels, link_counter=link_counter)
         elif kind == "image":
             alt = node.get("attrs", {}).get("alt", "")
             _docx_paragraph(parent, {"type": "paragraph", "attrs":node.get("attrs", {}), "content": [{"type": "image", "attrs":node.get("attrs", {})}]}, assets=assets, media=media, image_rels=image_rels, counter=counter, link_rels=link_rels, link_counter=link_counter)
@@ -543,6 +627,11 @@ def docx(content, assets=None):
     _docx_blocks(body, content.get("content", []), assets, media, image_rels, counter, numbering, link_rels=link_rels, link_counter=link_counter)
     page_size, orientation, margins, page_dimensions = _layout_attrs(content)
     sect = ET.SubElement(body, f"{{{w}}}sectPr")
+    attrs=content.get("attrs",{})
+    if attrs.get("header"):
+        ET.SubElement(sect,f"{{{w}}}headerReference",{f"{{{w}}}type":"default","{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id":"rIdHeader"})
+    if attrs.get("footer") or attrs.get("page_numbers"):
+        ET.SubElement(sect,f"{{{w}}}footerReference",{f"{{{w}}}type":"default","{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id":"rIdFooter"})
     width, height = page_dimensions
     size_attrs = {f"{{{w}}}w": str(width), f"{{{w}}}h": str(height)}
     if orientation == "landscape":
@@ -558,6 +647,31 @@ def docx(content, assets=None):
     content_types = content_types.replace(b"</Types>", b'<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>')
     rel_items = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>']
     rel_items.append('<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>')
+    header_xml=footer_xml=None
+    if attrs.get("header"):
+        content_types=content_types.replace(b"</Types>",b'<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>')
+        rel_items.append('<Relationship Id="rIdHeader" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>')
+        header=ET.Element(f"{{{w}}}hdr")
+        _docx_paragraph(header,{"type":"paragraph","content":[{"type":"text","text":attrs["header"]}]})
+        header_xml=ET.tostring(header,encoding="utf-8",xml_declaration=True)
+    if attrs.get("footer") or attrs.get("page_numbers"):
+        content_types=content_types.replace(b"</Types>",b'<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>')
+        rel_items.append('<Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>')
+        footer=ET.Element(f"{{{w}}}ftr")
+        p=ET.SubElement(footer,f"{{{w}}}p")
+        if attrs.get("footer"):_docx_run(p,attrs["footer"])
+        if attrs.get("page_numbers"):
+            if attrs.get("footer"):_docx_run(p," Â· ")
+            for field in ("PAGE","NUMPAGES"):
+                if field=="NUMPAGES":_docx_run(p," of ")
+                run=ET.SubElement(p,f"{{{w}}}r")
+                ET.SubElement(run,f"{{{w}}}fldChar",{f"{{{w}}}fldCharType":"begin"})
+                run=ET.SubElement(p,f"{{{w}}}r")
+                instr=ET.SubElement(run,f"{{{w}}}instrText",{"{http://www.w3.org/XML/1998/namespace}space":"preserve"});instr.text=f" {field} "
+                run=ET.SubElement(p,f"{{{w}}}r");ET.SubElement(run,f"{{{w}}}fldChar",{f"{{{w}}}fldCharType":"separate"})
+                placeholder=ET.SubElement(ET.SubElement(p,f"{{{w}}}r"),f"{{{w}}}t");placeholder.text="1"
+                run=ET.SubElement(p,f"{{{w}}}r");ET.SubElement(run,f"{{{w}}}fldChar",{f"{{{w}}}fldCharType":"end"})
+        footer_xml=ET.tostring(footer,encoding="utf-8",xml_declaration=True)
     rel_items.extend(f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="{target}"/>' for rid, target in image_rels)
     rel_items.extend(f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="{html.escape(target, quote=True)}" TargetMode="External"/>' for rid, target in link_rels)
     word_rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + "".join(rel_items) + "</Relationships>").encode("utf-8")
@@ -569,6 +683,8 @@ def docx(content, assets=None):
         archive.writestr("word/styles.xml", styles)
         archive.writestr("word/numbering.xml", ET.tostring(numbering["root"], encoding="utf-8", xml_declaration=True))
         archive.writestr("word/_rels/document.xml.rels", word_rels)
+        if header_xml:archive.writestr("word/header1.xml",header_xml)
+        if footer_xml:archive.writestr("word/footer1.xml",footer_xml)
         for name, data in media.items():
             archive.writestr(f"word/media/{name}", data)
     return buffer.getvalue()
@@ -752,16 +868,44 @@ def odt(content, assets=None):
                     else:
                         para(li, prefix="[ ] " if checklist else "")
             elif kind == "table":
-                table_el = ET.SubElement(parent, f"{{{ns['table']}}}table", {f"{{{ns['table']}}}name": f"Table{len(parent)}"})
+                table_index = sum(1 for child in parent if child.tag == f"{{{ns['table']}}}table") + 1
+                table_style_name = f"DigiDocTable{table_index}"
+                table_style = ET.SubElement(automatic, f"{{{ns['style']}}}style", {f"{{{ns['style']}}}name": table_style_name, f"{{{ns['style']}}}family": "table"})
+                _page_size, _orientation, margins, page_twips = _layout_attrs(content)
+                page_width_cm = page_twips[0] / 567
+                content_width_cm = page_width_cm - margins["left_cm"] - margins["right_cm"]
+                table_width_cm = content_width_cm * node.get("attrs", {}).get("width_percent", 100) / 100
+                ET.SubElement(table_style, f"{{{ns['style']}}}table-properties", {f"{{{ns['style']}}}width": f"{table_width_cm:.2f}cm"})
+                table_el = ET.SubElement(parent, f"{{{ns['table']}}}table", {f"{{{ns['table']}}}name": f"Table{table_index}", f"{{{ns['table']}}}style-name": table_style_name})
+                table_columns = _table_columns(node)
+                for column_index, column_width in enumerate(table_columns, 1):
+                    column_style_name = f"{table_style_name}Column{column_index}"
+                    column_style = ET.SubElement(automatic, f"{{{ns['style']}}}style", {f"{{{ns['style']}}}name": column_style_name, f"{{{ns['style']}}}family": "table-column"})
+                    ET.SubElement(column_style, f"{{{ns['style']}}}table-column-properties", {f"{{{ns['style']}}}column-width": f"{table_width_cm * column_width / 100:.2f}cm"})
+                    ET.SubElement(table_el, f"{{{ns['table']}}}table-column", {f"{{{ns['table']}}}style-name": column_style_name})
                 for row in node.get("content", []):
                     row_el = ET.SubElement(table_el, f"{{{ns['table']}}}table-row")
                     for cell in row.get("content", []):
                         cell_el = ET.SubElement(row_el, f"{{{ns['table']}}}table-cell")
+                        if cell.get("attrs", {}).get("colspan", 1) > 1:
+                            cell_el.set(f"{{{ns['table']}}}number-columns-spanned", str(cell["attrs"]["colspan"]))
+                        if cell.get("attrs", {}).get("rowspan", 1) > 1:
+                            cell_el.set(f"{{{ns['table']}}}number-rows-spanned", str(cell["attrs"]["rowspan"]))
+                        cell_style_name = f"{table_style_name}Cell{len(automatic)}"
+                        cell_style = ET.SubElement(automatic, f"{{{ns['style']}}}style", {f"{{{ns['style']}}}name": cell_style_name, f"{{{ns['style']}}}family": "table-cell"})
+                        border_width = node.get("attrs", {}).get("border_width", 1)
+                        border_color = node.get("attrs", {}).get("border_color", "#B7C0CC")
+                        border = f"{max(0.5, border_width * 0.75):g}pt solid {border_color}" if border_width else "none"
+                        cell_props = {f"{{{ns['fo']}}}border": border, f"{{{ns['fo']}}}padding": "0.12cm"}
+                        if cell.get("attrs", {}).get("shading"):
+                            cell_props[f"{{{ns['fo']}}}background-color"] = cell["attrs"]["shading"]
+                        ET.SubElement(cell_style, f"{{{ns['style']}}}table-cell-properties", cell_props)
+                        cell_el.set(f"{{{ns['table']}}}style-name", cell_style_name)
                         para(cell_el, {"type": "paragraph", "content": cell.get("content", [])})
             elif kind == "hardBreak":
                 para(parent, {"type": "paragraph", "content": [{"type": "text", "text": ""}]})
             elif kind == "horizontalRule":
-                para(parent, {"type": "paragraph", "content": [{"type": "text", "text": "─" * 32}]})
+                para(parent, {"type": "paragraph", "content": [{"type": "text", "text": "â”€" * 32}]})
             elif kind == "image":
                 para(parent, {"type": "paragraph", "attrs":node.get("attrs", {}), "content": [node]})
 
@@ -792,9 +936,23 @@ def odt(content, assets=None):
         f"{{{ns['fo']}}}margin-left": f"{margins['left_cm']:.2f}cm",
     })
     master_styles = ET.SubElement(styles_root, f"{{{ns['office']}}}master-styles")
-    ET.SubElement(master_styles, f"{{{ns['style']}}}master-page", {
+    master_page=ET.SubElement(master_styles, f"{{{ns['style']}}}master-page", {
         f"{{{ns['style']}}}name": "Standard", f"{{{ns['style']}}}page-layout-name": "pm1",
     })
+    attrs=content.get("attrs",{})
+    if attrs.get("header"):
+        header=ET.SubElement(master_page,f"{{{ns['style']}}}header")
+        ET.SubElement(header,f"{{{ns['text']}}}p").text=attrs["header"]
+    if attrs.get("footer") or attrs.get("page_numbers"):
+        footer=ET.SubElement(master_page,f"{{{ns['style']}}}footer")
+        paragraph=ET.SubElement(footer,f"{{{ns['text']}}}p")
+        paragraph.text=attrs.get("footer","")
+        if attrs.get("page_numbers"):
+            if paragraph.text:paragraph.text+=" Â· "
+            ET.SubElement(paragraph,f"{{{ns['text']}}}span").text="Page "
+            ET.SubElement(paragraph,f"{{{ns['text']}}}page-number").text="1"
+            ET.SubElement(paragraph,f"{{{ns['text']}}}span").text=" of "
+            ET.SubElement(paragraph,f"{{{ns['text']}}}page-count").text="1"
     styles_xml = ET.tostring(styles_root, encoding="utf-8", xml_declaration=True)
     picture_entries = "".join(f'<manifest:file-entry manifest:full-path="{name}" manifest:media-type="image/{"jpeg" if name.endswith("jpeg") else "png"}"/>' for name in pictures)
     manifest = f'''<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>{picture_entries}</manifest:manifest>'''

@@ -119,10 +119,6 @@
     const page = element && element.closest('.dd-page');
     document.getElementById('dd-current-page').textContent = page?.dataset.pageNumber || '1';
     document.getElementById('dd-page-total').textContent = String(sheet.querySelectorAll(':scope > .dd-page').length || 1);
-    const text = (sheet.innerText || '').trim();
-    const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
-    document.getElementById('dd-status-word-count').textContent = `${words} ${words === 1 ? 'word' : 'words'}`;
-    document.getElementById('dd-word-count').textContent = `${words} ${words === 1 ? 'word' : 'words'}`;
   }
   document.addEventListener('selectionchange', updateCurrentPage);
   sheet.addEventListener('input', () => requestAnimationFrame(updateCurrentPage));

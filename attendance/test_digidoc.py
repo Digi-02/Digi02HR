@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.models import User
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -522,6 +522,429 @@ class DigiDocPhaseTwoTests(TestCase):
                 else:
                     self.assertIn("Exported bold text", download.content.decode("utf-8"))
 
+    def test_phase4_find_replace_links_special_characters_and_safe_paste(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Editor tools", content_json={"type": "doc", "attrs": {"header": "Repeated injected header", "footer": "Repeated footer words", "page_numbers": True}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "foo Foo foo"}]}]})
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8"))
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        editor_js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_default_timeout(4000)
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=editor_js)
+            page.add_script_tag(content=ribbon_js)
+            self.assertRegex(page.locator("#dd-status-word-count").inner_text(), r"3 words . 11 characters")
+            page.keyboard.press("Control+F")
+            page.locator("#dd-find-query").fill("foo")
+            page.locator("#dd-match-case").check()
+            page.locator("#dd-replace-query").fill("HR")
+            page.locator("#dd-replace-all").click()
+            paragraph = page.locator("#dd-sheet p").first
+            self.assertEqual(paragraph.inner_text(), "HR Foo HR")
+            self.assertRegex(page.locator("#dd-status-word-count").inner_text(), r"3 words . 9 characters")
+            self.assertIn("2 replacements", page.locator("#dd-find-result").inner_text())
+            page.locator("#dd-find-close").click()
+            page.evaluate("""() => {const text=document.querySelector('#dd-sheet p').firstChild,range=document.createRange(),selection=getSelection();range.setStart(text,0);range.setEnd(text,2);selection.removeAllRanges();selection.addRange(range);}""")
+            page.wait_for_function("document.getElementById('dd-selection-count').textContent.includes('characters selected')")
+            self.assertRegex(page.locator("#dd-selection-count").inner_text(), r"1 word . 2 characters selected")
+            page.locator("#dd-tab-insert").click()
+            page.evaluate("""() => { const p=document.querySelector('#dd-sheet p'),text=p.firstChild,range=document.createRange(),selection=getSelection();range.setStart(text,text.length);range.collapse(true);selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange')); }""")
+            page.locator("#dd-special-characters").click()
+            page.locator("#dd-special-panel button").filter(has_text=chr(169)).click()
+            self.assertIn(chr(169), paragraph.inner_text())
+            date_text = page.evaluate("new Intl.DateTimeFormat(document.documentElement.lang||'en-GB',{dateStyle:'long'}).format(new Date())")
+            page.locator("#dd-insert-date").click()
+            self.assertIn(date_text, paragraph.inner_text())
+            page.evaluate("""() => { const p=document.querySelector('#dd-sheet p'),range=document.createRange(),selection=getSelection();range.selectNodeContents(p);selection.removeAllRanges();selection.addRange(range);const event=new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:new DataTransfer()});event.clipboardData.setData('text/plain','HR <img src=x onerror=alert(1)>');event.clipboardData.setData('text/html','<img src=x onerror=alert(1)><script>alert(1)</script><b>bad</b>');document.querySelector('#dd-sheet').dispatchEvent(event); }""")
+            self.assertEqual(page.locator("#dd-sheet img").count(), 0)
+            self.assertNotIn("<script>", page.locator("#dd-sheet").inner_text())
+            page.evaluate("""() => {const p=document.querySelector('#dd-sheet p'),text=p.firstChild,range=document.createRange(),selection=getSelection();range.setStart(text,0);range.setEnd(text,2);selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));}""")
+            page.on("dialog", lambda dialog: dialog.accept("https://example.com/path"))
+            page.locator("#dd-link").click()
+            link = page.locator("#dd-sheet a[href='https://example.com/path']")
+            self.assertEqual(link.get_attribute("rel"), "noopener noreferrer")
+            page.evaluate("""() => {const p=document.querySelector('#dd-sheet p'),text=p.firstChild,range=document.createRange(),selection=getSelection();range.setStart(text,text.length);range.collapse(true);selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));}""")
+            page.locator("#dd-line").click()
+            self.assertEqual(page.locator("#dd-sheet hr").count(), 1)
+            browser.close()
+
+    def test_phase4_editor_downloads_all_five_formats(self):
+        from playwright.sync_api import sync_playwright
+        from pypdf import PdfReader
+        from odf.opendocument import load as load_odt
+        from striprtf.striprtf import rtf_to_text
+
+        image = BytesIO()
+        Image.new("RGB", (210, 297), "white").save(image, format="PNG")
+        letterhead = CompanyLetterhead.objects.create(organization=self.organization, image_format="png", image_width=210, image_height=297, margin_top_mm=35, margin_bottom_mm=25, margin_left_mm=18, margin_right_mm=18)
+        letterhead.image.save("phase4-letterhead.png", ContentFile(image.getvalue()), save=True)
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Phase 4 acceptance", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        scripts = [Path(f"attendance/static/attendance/{name}").read_text(encoding="utf-8") for name in ("digidoc-editor.js", "digidoc-ribbon.js")]
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.evaluate("window.__phase4Errors=[];window.addEventListener('error',e=>window.__phase4Errors.push(e.message));window.fetch=async(url,options={})=>{if(options.body)window.__phase4Payload=JSON.parse(options.body);return new Response(JSON.stringify({ok:true,version:2,updated_at:'Saved'}),{status:200,headers:{'Content-Type':'application/json'}})}")
+            page.add_style_tag(content=css)
+            for script in scripts:
+                page.add_script_tag(content=script)
+            editor = page.locator("#dd-sheet")
+            first = page.locator("#dd-sheet .dd-page p").first
+            first.click()
+            page.keyboard.press("Control+A")
+            page.keyboard.type("dear HR. this is a DigiDoc acceptance letter.")
+            page.keyboard.press("Enter")
+            page.locator('[data-command="insertOrderedList"]').click()
+            page.keyboard.type("First listed item")
+            page.keyboard.press("Enter")
+            page.keyboard.type("Second listed item")
+            page.keyboard.press("Enter")
+            page.keyboard.press("Enter")
+            page.locator("#dd-font-family").select_option(label="Roboto")
+            page.locator("#dd-tab-insert").click()
+            page.locator("#dd-table").click()
+            page.locator('#dd-table-grid button[data-rows="2"][data-columns="2"]').click()
+            page.locator("#dd-sheet table td").first.click()
+            page.keyboard.type("Table item")
+            page.locator("#dd-tab-layout").click()
+            page.locator("#dd-header-text").fill("HR confidential")
+            page.locator("#dd-footer-text").fill("Acceptance copy")
+            page.locator("#dd-page-numbers").check()
+            page.locator("#dd-margin-preset").select_option("Narrow")
+            page.locator("#dd-tab-insert").click()
+            page.locator("#dd-letterhead-menu").click()
+            artifact_path = Path("artifacts/digidoc-phase4-e2e")
+            artifact_path.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifact_path / "DigiDoc_Phase4_editor_1440.png"), full_page=True)
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.screenshot(path=str(artifact_path / "DigiDoc_Phase4_editor_390.png"), full_page=True)
+            page.set_viewport_size({"width": 1440, "height": 1000})
+            payload = page.evaluate("""() => {
+              const textNode = (node) => ({type:'text', text:node.textContent || '', marks:[{type:'fontFamily',attrs:{value:document.getElementById('dd-font-family').value}}]});
+              const blocks = Array.from(document.querySelectorAll('#dd-sheet > .dd-page')).flatMap(page => Array.from(page.children)).filter(el => !el.classList.contains('dd-page-zones') && !el.classList.contains('dd-page-header') && !el.classList.contains('dd-page-footer')).flatMap(el => el.matches('p') ? Array.from(el.children).filter(child=>child.matches('ol,ul,table,hr')).length ? [...Array.from(el.childNodes).filter(node=>node.nodeType===Node.TEXT_NODE&&node.textContent.trim()).map(node=>Object.assign(document.createElement('span'),{textContent:node.textContent})),...Array.from(el.children).filter(child=>child.matches('ol,ul,table,hr'))] : [el] : [el]);
+              const content = [];
+              for (const block of blocks) {
+                if (block.matches('p,h1,h2,h3')) { const nested=Array.from(block.children).find(child=>child.matches('ol,ul,table,hr')); if(nested){ if(block.textContent.replace(nested.textContent,'').trim())content.push({type:'paragraph',content:[textNode({textContent:block.textContent.replace(nested.textContent,'').trim()})]}); blocks.push(nested); } else content.push({type:block.tagName==='P'?'paragraph':'heading', ...(block.tagName!=='P'?{level:Number(block.tagName.slice(1))}:{}), content:block.textContent.trim()?[textNode(block)]:[]}); }
+                else if (block.matches('ol,ul')) content.push({type:block.tagName==='OL'?'orderedList':'bulletList',attrs:block.tagName==='OL'?{start:Number(block.getAttribute('start')||1)}:{},content:Array.from(block.children).filter(el=>el.tagName==='LI').map(li=>({type:'listItem',content:[{type:'paragraph',content:[{type:'text',text:li.textContent.trim()}]}]}))});
+                else if (block.matches('table')) content.push({type:'table',attrs:{width_percent:100,column_widths:Array.from(block.querySelectorAll(':scope > colgroup > col')).map(col=>Math.round(parseFloat(col.style.width)||50)),border_color:'#aab1ba',border_width:1},content:Array.from(block.rows).map(row=>({type:'tableRow',content:Array.from(row.cells).map(cell=>({type:'tableCell',content:cell.textContent.trim()?[{type:'text',text:cell.textContent.trim()}]:[]}))}))});
+              }
+              return {title:document.getElementById('dd-title').value,letterhead_enabled:document.getElementById('dd-letterhead').checked,content:{type:'doc',attrs:{page_size:document.getElementById('dd-page-size').value,orientation:document.getElementById('dd-orientation').value,margins:{top_cm:Number(document.getElementById('dd-margin-top').value),right_cm:Number(document.getElementById('dd-margin-right').value),bottom_cm:Number(document.getElementById('dd-margin-bottom').value),left_cm:Number(document.getElementById('dd-margin-left').value)},header:document.getElementById('dd-header-text').value,footer:document.getElementById('dd-footer-text').value,page_numbers:document.getElementById('dd-page-numbers').checked},content}};
+            }""")
+            self.assertEqual(page.evaluate("window.__phase4Errors"), [])
+            self.assertTrue(payload["letterhead_enabled"])
+            self.assertEqual(payload["content"]["attrs"]["header"], "HR confidential")
+            self.assertTrue(any(node["type"] == "orderedList" for node in payload["content"]["content"]), page.locator("#dd-sheet").evaluate("el => el.innerHTML"))
+            self.assertTrue(any(node["type"] == "table" for node in payload["content"]["content"]))
+            content = validate_document_json(payload["content"])
+            browser.close()
+
+        document.title = payload["title"]
+        document.content_json = content
+        document.letterhead_enabled = True
+        document.letterhead_snapshot = {"1": {"scale_mode": "fit", "margin_top_mm": 35, "margin_bottom_mm": 25, "margin_left_mm": 18, "margin_right_mm": 18, "image_format": "png", "image_width": 210, "image_height": 297}}
+        document.save()
+        outputs = {}
+        for file_format in ("docx", "odt", "rtf", "txt"):
+            response = self.client.get(reverse("digidoc_export", args=[document.pk, file_format]))
+            self.assertEqual(response.status_code, 200, response.content[:200])
+            outputs[file_format] = response.content
+        with patch("attendance.digidoc._render_pdf_isolated", side_effect=lambda saved_doc: _build_pdf(saved_doc, self.organization)):
+            pdf_response = self.client.get(reverse("digidoc_pdf", args=[document.pk]))
+        self.assertEqual(pdf_response.status_code, 200, pdf_response.content[:200])
+        outputs["pdf"] = pdf_response.content
+        target = Path("artifacts/digidoc-phase4-e2e")
+        target.mkdir(parents=True, exist_ok=True)
+        for extension, data in outputs.items():
+            path = target / f"DigiDoc_Phase4_acceptance.{extension}"
+            path.write_bytes(data)
+            self.assertGreater(path.stat().st_size, 0)
+        reopened = Document(BytesIO(outputs["docx"]))
+        self.assertTrue(any("First listed item" in paragraph.text for paragraph in reopened.paragraphs))
+        odt_document = load_odt(BytesIO(outputs["odt"]))
+        self.assertIsNotNone(odt_document.text)
+        with ZipFile(BytesIO(outputs["odt"])) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("Table item", "".join(ElementTree.fromstring(archive.read("content.xml")).itertext()))
+        _validate_rtf(outputs["rtf"])
+        self.assertIn("Table item", rtf_to_text(outputs["rtf"].decode("ascii")))
+        self.assertIn("Table item", outputs["txt"].decode("utf-8"))
+        self.assertIn("Table item", "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(outputs["pdf"])).pages))
+
+    def test_headers_footers_page_numbers_export_to_all_formats(self):
+        content = validate_document_json({"type": "doc", "attrs": {"page_size": "A4", "orientation": "portrait", "margins": {"top_cm": 2.5, "right_cm": 2.5, "bottom_cm": 2.5, "left_cm": 2.5}, "header": "HR Confidential", "footer": "DigiDoc test", "page_numbers": True}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Header footer body"}]}]})
+        self.assertEqual(content["attrs"]["header"], "HR Confidential")
+        docx_bytes = export_docx(content)
+        with ZipFile(BytesIO(docx_bytes)) as archive:
+            header = ElementTree.fromstring(archive.read("word/header1.xml"))
+            footer = ElementTree.fromstring(archive.read("word/footer1.xml"))
+            self.assertIn("HR Confidential", "".join(header.itertext()))
+            self.assertIn("DigiDoc test", "".join(footer.itertext()))
+            self.assertEqual(len(footer.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}instrText")), 2)
+        self.assertEqual("HR Confidential" in plain_text(content) and "DigiDoc test" in plain_text(content), True)
+        self.assertIn("Page \\chpgn of", export_rtf(content).decode("ascii"))
+        odt_bytes = export_odt(content)
+        with ZipFile(BytesIO(odt_bytes)) as archive:
+            styles = ElementTree.fromstring(archive.read("styles.xml"))
+            self.assertIn("HR Confidential", "".join(styles.itertext()))
+            self.assertTrue(styles.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}page-count"))
+        pdf_doc = SimpleNamespace(title="Phase 4", content_json=content, letterhead_enabled=False, letterhead_first_slot="1", letterhead_page_mode="every", letterhead_other_slot="1")
+        pdf = _build_pdf(pdf_doc, self.organization)
+        from pypdf import PdfReader
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
+        self.assertIn("HR Confidential", text)
+        self.assertIn("Page 1 of 1", text)
+        self.assertIn("DigiDoc test", text)
+
+    def test_link_validation_and_editor_tools_are_present(self):
+        valid = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "secure", "marks": [{"type": "link", "attrs": {"href": "https://example.com"}}]}]}]}
+        validate_document_json(valid)
+        for href in ("javascript:alert(1)", "data:text/html,boom", "ftp://example.com"):
+            attack = json.loads(json.dumps(valid)); attack["content"][0]["content"][0]["marks"][0]["attrs"]["href"] = href
+            with self.subTest(href=href), self.assertRaises(ValidationError): validate_document_json(attack)
+        document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Phase 4 controls", content_json={"type": "doc", "attrs": {"header": "Existing header", "footer": "Existing footer", "page_numbers": True}, "content": [{"type": "paragraph", "content": []}]})
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        for control in ("dd-find", "dd-replace", "dd-special-characters", "dd-insert-date", "dd-paste", "dd-format-painter", "dd-header-text", "dd-footer-text", "dd-page-numbers"):
+            self.assertIn(f'id="{control}"', markup)
+        self.assertNotIn("coming next", markup)
+        self.assertNotIn('id="dd-image-move"', markup)
+
+    def test_table_widths_and_merges_are_explicit_in_docx_and_odt_exports(self):
+        cell = lambda label, attrs=None: {"type": "tableCell", **({"attrs": attrs} if attrs else {}), "content": [{"type": "text", "text": label}]}
+        table = lambda rows, widths, width=100: {"type": "table", "attrs": {"width_percent": width, "column_widths": widths, "border_color": "#667788", "border_width": 2}, "content": [{"type": "tableRow", "content": row} for row in rows]}
+        contents = [
+            table([[cell("One")]], [100]),
+            table([[cell("Left"), cell("Right")]], [30, 70], 80),
+            table([[cell("A"), cell("B"), cell("C"), cell("D"), cell("E")]], [10, 15, 20, 25, 30]),
+            table([[cell("Merged", {"colspan": 2, "shading": "#FFFF00"}), cell("Tail")], [cell("X"), cell("Y"), cell("Z")]], [25, 25, 50]),
+        ]
+        nested = {"type": "bulletList", "content": [{"type": "listItem", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Table in list"}]},
+            table([[cell("Nested left"), cell("Nested right")]], [40, 60]),
+        ]}]}
+        content = validate_document_json({"type": "doc", "content": contents + [nested]})
+        docx_bytes = export_docx(content)
+        with ZipFile(BytesIO(docx_bytes)) as archive:
+            document_xml = ElementTree.fromstring(archive.read("word/document.xml"))
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            tables = document_xml.findall(".//w:tbl", ns)
+            self.assertEqual(len(tables), 5)
+            expected = ([9360], [2246, 5242], [936, 1404, 1872, 2340, 2808], [2340, 2340, 4680], [3744, 5616])
+            for table_xml, widths in zip(tables, expected):
+                self.assertEqual([int(col.get("{%s}w" % ns["w"])) for col in table_xml.findall("./w:tblGrid/w:gridCol", ns)], widths)
+                self.assertIsNotNone(table_xml.find("./w:tblPr/w:tblLayout[@w:type='fixed']", ns))
+                self.assertIsNotNone(table_xml.find("./w:tblPr/w:tblW[@w:type='pct']", ns))
+            self.assertEqual(tables[1].find("./w:tblPr/w:tblW", ns).get("{%s}w" % ns["w"]), "4000")
+            self.assertEqual(tables[3].find(".//w:gridSpan", ns).get("{%s}val" % ns["w"]), "2")
+            self.assertEqual(tables[3].find(".//w:shd", ns).get("{%s}fill" % ns["w"]), "FFFF00")
+            self.assertEqual(len(Document(BytesIO(docx_bytes)).tables), 5)
+
+        odt_bytes = export_odt(content)
+        with ZipFile(BytesIO(odt_bytes)) as archive:
+            odt_xml = ElementTree.fromstring(archive.read("content.xml"))
+            ns = {"table": "urn:oasis:names:tc:opendocument:xmlns:table:1.0"}
+            odt_tables = odt_xml.findall(".//table:table", ns)
+            self.assertEqual(len(odt_tables), 5)
+            self.assertEqual(len(odt_tables[2].findall("./table:table-column", ns)), 5)
+            self.assertEqual(odt_tables[3].find(".//table:table-cell", ns).get("{%s}number-columns-spanned" % ns["table"]), "2")
+            self.assertTrue(odt_tables[1].get("{%s}style-name" % ns["table"]))
+            style_ns = {"style": "urn:oasis:names:tc:opendocument:xmlns:style:1.0"}
+            table_styles = odt_xml.findall(".//style:style[@style:family='table']", style_ns)
+            self.assertTrue(table_styles)
+            self.assertTrue(any(style.find("style:table-properties", style_ns).get("{%s}width" % style_ns["style"]).endswith("cm") for style in table_styles if style.find("style:table-properties", style_ns) is not None))
+            cell_properties = odt_xml.findall(".//style:table-cell-properties", style_ns)
+            self.assertTrue(any(properties.get("{%s}border" % "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0") != "none" for properties in cell_properties))
+            self.assertTrue(any(properties.get("{%s}background-color" % "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0") == "#FFFF00" for properties in cell_properties))
+
+        rtf_bytes = export_rtf(content)
+        _validate_rtf(rtf_bytes)
+        self.assertIn(b"\\cellx", rtf_bytes)
+        self.assertIn(b"\\trwWidth7488", rtf_bytes)
+        self.assertIn(b"Nested left", rtf_bytes)
+        self.assertIn("Nested left | Nested right", plain_text(content))
+
+        pdf_document = DigiDocDocument(organization=self.organization, created_by=self.owner, title="Table width", content_json=content)
+        with patch("attendance.digidoc.Table", wraps=__import__("reportlab.platypus", fromlist=["Table"]).Table) as table_spy:
+            _build_pdf(pdf_document, self.organization)
+        built_tables = [call for call in table_spy.call_args_list]
+        self.assertEqual(len(built_tables), 5)
+        self.assertAlmostEqual(sum(built_tables[1].kwargs["colWidths"]), (595.2756 - 2 * 2.5 * 28.3465) * .8, delta=1)
+
+    def test_table_attributes_are_strictly_validated(self):
+        invalid = [
+            {"width_percent": 101},
+            {"column_widths": [40, 40]},
+            {"border_width": 9},
+        ]
+        for attrs in invalid:
+            with self.subTest(attrs=attrs), self.assertRaises(ValidationError):
+                validate_document_json({"type": "doc", "content": [{"type": "table", "attrs": attrs, "content": []}]})
+        with self.assertRaises(ValidationError):
+            validate_document_json({"type": "doc", "content": [{"type": "table", "attrs": {"column_widths": [100]}, "content": [
+                {"type": "tableRow", "content": [{"type": "tableCell", "content": []}, {"type": "tableCell", "content": []}]},
+            ]}]})
+
+    def test_table_grid_toolbar_and_structural_controls_work_in_editor(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Table controls",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.add_init_script("window.fetch = async () => new Response(JSON.stringify({version: 1, updated_at: 'Saved'}), {status: 200})")
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.add_script_tag(content=ribbon_js)
+            page.locator('[data-tab="insert"]').click()
+            page.locator("#dd-table").click()
+            page.locator('#dd-table-grid button[data-rows="2"][data-columns="3"]').click()
+            table = page.locator("#dd-sheet table")
+            self.assertEqual(table.count(), 1)
+            self.assertEqual(table.evaluate("el => [el.rows.length, el.rows[0].cells.length, el.style.width, el.style.tableLayout]"), [2, 3, "100%", "fixed"])
+            cell = table.locator("td").nth(0)
+            cell.click()
+            self.assertTrue(page.locator("#dd-table-toolbar").is_visible())
+            page.locator('[data-table-action="row-after"]').click()
+            self.assertEqual(table.locator("tr").count(), 3)
+            page.locator('[data-table-action="col-after"]').click()
+            self.assertEqual(table.locator("tr").nth(0).locator("td").count(), 4)
+            page.locator("#dd-table-width").fill("75")
+            page.locator("#dd-table-width").dispatch_event("change")
+            self.assertEqual(table.evaluate("el => el.style.width"), "75%")
+            page.locator("#dd-table-shading").fill("#ffdd00")
+            self.assertIn("rgb(255, 221, 0)", cell.evaluate("el => el.style.backgroundColor"))
+            page.evaluate("""() => {
+              const cells=document.querySelectorAll('#dd-sheet table tr:first-child td'),range=document.createRange(),selection=window.getSelection();
+              range.selectNodeContents(cells[0]);range.setEnd(cells[1].firstChild||cells[1],cells[1].firstChild?cells[1].firstChild.length:0);selection.removeAllRanges();selection.addRange(range);
+            }""")
+            page.locator('[data-table-action="merge"]').click()
+            self.assertGreaterEqual(int(table.locator("tr").nth(0).locator("td").nth(0).get_attribute("colspan") or "1"), 2)
+            page.locator('[data-table-action="split"]').click()
+            self.assertEqual(table.locator("tr").nth(0).locator("td").nth(0).get_attribute("colspan"), "1")
+            browser.close()
+
+    def test_empty_table_cells_keep_a_text_line_height_on_load(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Empty table cells",
+            content_json={"type": "doc", "content": [
+                {"type": "table", "content": [{"type": "tableRow", "content": [
+                    {"type": "tableCell", "content": []},
+                    {"type": "tableCell", "content": [{"type": "text", "text": "Filled"}]},
+                ]}]},
+            ]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            cells = page.locator("#dd-sheet table td")
+            self.assertTrue(cells.nth(0).evaluate("el => el.querySelector('br') !== null"))
+            empty_height = cells.nth(0).evaluate("el => Math.round(el.getBoundingClientRect().height)")
+            filled_height = cells.nth(1).evaluate("el => Math.round(el.getBoundingClientRect().height)")
+            self.assertEqual(empty_height, filled_height)
+            browser.close()
+
+    def test_table_size_picker_is_not_clipped_by_ribbon(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Table picker",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        markup = re.sub(r"<script[^>]*src=[^>]*></script>", "", markup)
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        js = Path("attendance/static/attendance/digidoc-editor.js").read_text(encoding="utf-8")
+        ribbon_js = Path("attendance/static/attendance/digidoc-ribbon.js").read_text(encoding="utf-8")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.set_content(markup, wait_until="domcontentloaded")
+            page.add_style_tag(content=css)
+            page.add_script_tag(content=js)
+            page.add_script_tag(content=ribbon_js)
+            page.locator('[data-tab="insert"]').click()
+            page.locator("#dd-table").click()
+            state = page.evaluate("""() => {
+              const grid=document.getElementById('dd-table-grid');
+              const rect=grid.getBoundingClientRect();
+              const hit=document.elementFromPoint(rect.left+rect.width/2, rect.top+rect.height/2);
+              return {height:rect.height, inViewport:rect.top>=0&&rect.bottom<=window.innerHeight, hitInside:grid.contains(hit)};
+            }""")
+            self.assertGreaterEqual(state["height"], 200)
+            self.assertTrue(state["inViewport"])
+            self.assertTrue(state["hitInside"])
+            page.locator('#dd-table-grid button[data-rows="10"][data-columns="10"]').click()
+            self.assertEqual(page.locator("#dd-sheet table tr").count(), 10)
+            browser.close()
+
+    def test_editor_sidebar_matches_shell_nav_styling(self):
+        from playwright.sync_api import sync_playwright
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Nav parity",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        editor_markup = self.client.get(reverse("digidoc_editor", args=[document.pk])).content.decode("utf-8")
+        list_markup = self.client.get(reverse("digidoc_list")).content.decode("utf-8")
+        css = Path("attendance/static/attendance/digidoc.css").read_text(encoding="utf-8")
+        nav_styles_js = """() => {
+          const links=Array.from(document.querySelectorAll('.app-nav__link'));
+          const link=links.find(item=>!item.classList.contains('is-active'));
+          const active=links.find(item=>item.classList.contains('is-active'));
+          const icon=link.querySelector('.app-nav__icon');
+          const activeIcon=active&&active.querySelector('.app-nav__icon');
+          const iconStyle=getComputedStyle(icon);
+          return {
+            iconRadius:iconStyle.borderRadius,
+            iconBg:iconStyle.backgroundColor,
+            iconColor:iconStyle.color,
+            linkColor:getComputedStyle(link).color,
+            linkRadius:getComputedStyle(link).borderRadius,
+            activeIconBg:activeIcon?getComputedStyle(activeIcon).backgroundColor:null,
+            activeIconColor:activeIcon?getComputedStyle(activeIcon).color:null,
+          };
+        }"""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            def load(markup, stylesheet=None):
+                markup = re.sub(r"<script[^>]*>.*?</script>", "", markup, flags=re.S)
+                markup = re.sub(r"<link[^>]*>", "", markup)
+                page.set_content(markup, wait_until="domcontentloaded")
+                if stylesheet:
+                    page.add_style_tag(content=stylesheet)
+                page.add_style_tag(content="*,*::before,*::after{transition:none!important}")
+                page.evaluate("() => document.querySelectorAll('#pageLoader').forEach(el => el.remove())")
+                styles = page.evaluate(nav_styles_js)
+                page.hover(".app-nav__link:not(.is-active)")
+                styles["hoverBg"] = page.evaluate("() => getComputedStyle(document.querySelector('.app-nav__link:not(.is-active)')).backgroundColor")
+                styles["hoverIconBg"] = page.evaluate("() => getComputedStyle(document.querySelector('.app-nav__link:not(.is-active) .app-nav__icon')).backgroundColor")
+                return styles
+            editor_styles = load(editor_markup, css)
+            shell_styles = load(list_markup)
+            self.assertEqual(editor_styles, shell_styles)
+            browser.close()
+
     def test_docx_lists_use_numbering_definitions_and_preserve_nesting_and_restarts(self):
         paragraph = lambda value: {"type": "paragraph", "content": [{"type": "text", "text": value}]}
         item = lambda *children: {"type": "listItem", "content": list(children)}
@@ -554,7 +977,7 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertTrue(numbering.findall(".//w:abstractNum/w:lvl/w:numFmt[@w:val='decimal']", namespace))
         text_export = plain_text(content)
         self.assertIn("4. number four", text_export)
-        self.assertIn("  • nested bullet", text_export)
+        self.assertIn("  \u2022 nested bullet", text_export)
         rtf_export = export_rtf(content)
         self.assertIn(b"4. number four", rtf_export)
         self.assertIn(b"\\li1440\\fi-360\\tx1440", rtf_export)
@@ -581,7 +1004,7 @@ class DigiDocPhaseTwoTests(TestCase):
         word_ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
         self.assertTrue(numbering.findall('.//w:numFmt[@w:val="upperLetter"]', word_ns))
         self.assertTrue(numbering.findall('.//w:numFmt[@w:val="lowerRoman"]', word_ns))
-        self.assertTrue(numbering.findall('.//w:lvlText[@w:val="▪"]', word_ns))
+        self.assertTrue(numbering.findall('.//w:lvlText[@w:val="\u25aa"]', word_ns))
         rtf_export = export_rtf(content)
         self.assertIn(b"D. Alpha four", rtf_export)
         self.assertIn(b"ii. Roman two", rtf_export)
@@ -596,7 +1019,7 @@ class DigiDocPhaseTwoTests(TestCase):
         asset_id = upload.json()["id"]
         tiny_png = image_buffer.getvalue()
         rich_text = {
-            "type": "text", "text": "Unicode café — 日本語 😀",
+            "type": "text", "text": "Unicode caf\u00e9 \u2014 \u65e5\u672c\u8a9e \U0001f600",
             "marks": [
                 {"type": "bold"}, {"type": "italic"}, {"type": "underline"}, {"type": "strike"}, {"type": "superscript"}, {"type": "subscript"},
                 {"type": "link", "attrs": {"href": "https://example.test/path?q=hello&lang=en"}},
@@ -630,7 +1053,7 @@ class DigiDocPhaseTwoTests(TestCase):
         long_content = []
         for page_index in range(49):
             long_content.extend([
-                {"type": "paragraph", "content": [{"type": "text", "text": f"Long Unicode page {page_index + 1}: café — 日本語 😀 " + "x" * 1800}]},
+                {"type": "paragraph", "content": [{"type": "text", "text": f"Long Unicode page {page_index + 1}: caf\u00e9 \u2014 \u65e5\u672c\u8a9e \U0001f600 " + "x" * 1800}]},
                 {"type": "hardBreak"},
             ])
         long_content.append({"type": "paragraph", "content": [{"type": "text", "text": "Final page after forty-nine explicit breaks."}]})
@@ -656,6 +1079,7 @@ class DigiDocPhaseTwoTests(TestCase):
                 self.assertIn(f"filename=\"{title.replace(' ', '_')}.docx\"", response["Content-Disposition"])
                 reopened = _assert_docx_integrity(self, response.content)
                 if title == "Complex document":
+                    self.assertTrue(any("Unicode caf\u00e9 \u2014 \u65e5\u672c\u8a9e \U0001f600" in paragraph.text for paragraph in reopened.paragraphs))
                     self.assertEqual(len(reopened.tables), 1)
                     self.assertEqual(len(reopened.inline_shapes), 1)
                     with ZipFile(BytesIO(response.content)) as archive:
@@ -881,8 +1305,8 @@ class DigiDocPhaseTwoTests(TestCase):
             }""", pasted)
             self.assertEqual(page.locator("#dd-sheet strong").all_inner_texts(), ["[YOUR FULL NAME]", "Dear Hiring Manager,"])
             self.assertEqual(page.locator("#dd-sheet h3").inner_text(), "LETTER OF ACCEPTANCE")
-            self.assertNotIn("**", page.locator("#dd-sheet").inner_text())
-            self.assertNotIn("###", page.locator("#dd-sheet").inner_text())
+            self.assertNotIn("**", page.locator("#dd-sheet").evaluate("el => el.innerHTML"))
+            self.assertNotIn("###", page.locator("#dd-sheet").evaluate("el => el.innerHTML"))
             self.assertEqual(page.locator("#dd-sheet ul li").all_inner_texts(), ["Confirm the role", "Agree to the start date"])
             self.assertTrue(page.locator("#dd-sheet p, #dd-sheet h3").evaluate_all("els => els.every(el => getComputedStyle(el).textAlign === 'left')"))
             browser.close()
@@ -936,7 +1360,7 @@ class DigiDocPhaseTwoTests(TestCase):
             self.assertEqual(guides.nth(0).evaluate("el => getComputedStyle(el).getPropertyValue('--dd-letterhead-footer-guide').trim()"), "30mm")
             self.assertIn("Header guide", guides.nth(0).evaluate("el => getComputedStyle(el, '::before').content"))
             self.assertIn("Footer guide", guides.nth(0).evaluate("el => getComputedStyle(el, '::after').content"))
-            self.assertNotIn("boundary", page.locator("#dd-sheet").inner_text())
+            self.assertNotIn("boundary", page.locator("#dd-sheet").evaluate("el => el.innerHTML"))
             second_page = page.locator("#dd-sheet > .dd-page").nth(1)
             page_box, text_box = second_page.bounding_box(), second_page.locator("p").bounding_box()
             self.assertGreaterEqual(text_box["y"], page_box["y"] + 150)
@@ -1226,13 +1650,15 @@ class DigiDocPhaseTwoTests(TestCase):
                 page.set_viewport_size({"width": width, "height": height})
                 page.locator("#dd-download-toggle").click()
                 menu = page.locator("#dd-download-menu")
+                page.wait_for_timeout(50)
                 bounds = menu.evaluate("el => { const r=el.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}; }")
                 self.assertGreaterEqual(bounds["left"], 0)
                 self.assertLessEqual(bounds["right"], width)
                 self.assertTrue(menu.locator('[role="menuitem"]').first.is_visible())
                 for index in range(menu.locator('[role="menuitem"]').count()):
                     item = menu.locator('[role="menuitem"]').nth(index)
-                    self.assertTrue(item.evaluate("el => { const r=el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.left+Math.min(8,r.width/2),r.top+r.height/2)); }"))
+                    hit_test = item.evaluate("el => { const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.left+Math.min(8,r.width/2),r.top+r.height/2);return {ok:el.contains(hit),box:{left:r.left,right:r.right,top:r.top,bottom:r.bottom},hit:hit&&hit.outerHTML.slice(0,120)}; }")
+                    self.assertTrue(hit_test["ok"], f"Viewport {width}, menu item {index}: {hit_test}")
                 page.screenshot(path=str(output / f"dropdown-after-{width}.png"), full_page=True)
                 page.keyboard.press("Escape")
                 self.assertFalse(page.locator("#dd-download").evaluate("el => el.open"))

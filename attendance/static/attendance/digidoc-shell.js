@@ -35,7 +35,7 @@
     const items=()=>Array.from(downloadMenu.querySelectorAll('[role="menuitem"]'));
     downloads.addEventListener('toggle',()=>{
       downloadToggle.setAttribute('aria-expanded',String(downloads.open));
-      if(downloads.open)requestAnimationFrame(positionDownloadMenu);
+      if(downloads.open){downloadMenu.style.left='';downloadMenu.style.top='';downloadMenu.style.right='8px';requestAnimationFrame(positionDownloadMenu);}
     });
     downloadToggle.addEventListener('keydown',event=>{
       if(event.key==='ArrowDown'||event.key==='ArrowUp'){

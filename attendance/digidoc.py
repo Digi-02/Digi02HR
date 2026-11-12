@@ -81,7 +81,7 @@ CHILDREN = {
     "doc": {"paragraph", "heading", "bulletList", "orderedList", "table", "image", "hardBreak", "horizontalRule"},
     "paragraph": {"text", "hardBreak", "image"}, "heading": {"text", "hardBreak"},
     "bulletList": {"listItem"}, "orderedList": {"listItem"},
-    "listItem": {"paragraph", "bulletList", "orderedList"},
+    "listItem": {"paragraph", "bulletList", "orderedList", "table"},
     "table": {"tableRow"}, "tableRow": {"tableCell"}, "tableCell": {"text", "hardBreak"},
 }
 
@@ -198,7 +198,7 @@ def validate_document_json(value):
             allowed_keys |= {"text", "marks"}
         if kind == "heading":
             allowed_keys |= {"level", "content", "attrs"}
-        if kind in {"paragraph", "tableCell", "bulletList", "orderedList"}:
+        if kind in {"paragraph", "tableCell", "bulletList", "orderedList", "table"}:
             allowed_keys |= {"attrs"}
         if kind == "image":
             allowed_keys |= {"attrs"}
@@ -329,7 +329,7 @@ def validate_document_json(value):
                     "space_after_pt": space_after_pt,
                 }
             elif kind == "doc":
-                allowed_attrs = {"page_size", "orientation", "margins"}
+                allowed_attrs = {"page_size", "orientation", "margins", "header", "footer", "page_numbers"}
                 if set(attrs) - allowed_attrs:
                     raise ValidationError("Unsupported page layout property.")
                 clean_attrs = {}
@@ -351,7 +351,60 @@ def validate_document_json(value):
                             raise ValidationError("Page margins must be between 0.5 and 5.5 cm.")
                         clean_margins[field] = round(float(value), 2)
                     clean_attrs["margins"] = clean_margins
+                for field in ("header", "footer"):
+                    if field in attrs:
+                        value = attrs[field]
+                        if not isinstance(value, str) or len(value) > 1000:
+                            raise ValidationError(f"{field.title()} text must be at most 1000 characters.")
+                        clean_attrs[field] = "".join(ch for ch in value if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})
+                if "page_numbers" in attrs:
+                    if type(attrs["page_numbers"]) is not bool:
+                        raise ValidationError("Page number setting must be true or false.")
+                    clean_attrs["page_numbers"] = attrs["page_numbers"]
                 cleaned["attrs"] = clean_attrs
+            elif kind == "table":
+                allowed_attrs = {"width_percent", "column_widths", "border_color", "border_width"}
+                if set(attrs) - allowed_attrs:
+                    raise ValidationError("Unsupported table property.")
+                clean_attrs = {}
+                width = attrs.get("width_percent", 100)
+                if type(width) is not int or not 10 <= width <= 100:
+                    raise ValidationError("Table width must be from 10 to 100 percent.")
+                clean_attrs["width_percent"] = width
+                if "column_widths" in attrs:
+                    widths = attrs["column_widths"]
+                    if not isinstance(widths, list) or not widths or len(widths) > 20 or any(type(value) is not int or not 1 <= value <= 100 for value in widths) or sum(widths) != 100:
+                        raise ValidationError("Table column widths must be whole percentages that total 100.")
+                    rows = node.get("content", [])
+                    expected_columns = max((sum(cell.get("attrs", {}).get("colspan", 1) for cell in (row.get("content", []) if isinstance(row.get("content", []), list) else []) if isinstance(cell, dict)) for row in rows if isinstance(row, dict)), default=0)
+                    if expected_columns and len(widths) != expected_columns:
+                        raise ValidationError("Table column widths must match the table's column count.")
+                    clean_attrs["column_widths"] = widths
+                if "border_color" in attrs:
+                    if not isinstance(attrs["border_color"], str) or not COLOR_RE.fullmatch(attrs["border_color"]):
+                        raise ValidationError("Table border colour is invalid.")
+                    clean_attrs["border_color"] = attrs["border_color"].upper()
+                border_width = attrs.get("border_width", 1)
+                if type(border_width) is not int or not 0 <= border_width <= 8:
+                    raise ValidationError("Table border width must be from 0 to 8 px.")
+                clean_attrs["border_width"] = border_width
+                cleaned["attrs"] = clean_attrs
+            elif kind == "tableCell":
+                allowed_attrs = {"rowspan", "colspan", "shading"}
+                if set(attrs) - allowed_attrs:
+                    raise ValidationError("Unsupported table cell property.")
+                clean_attrs = {}
+                for key in ("rowspan", "colspan"):
+                    if key in attrs:
+                        if type(attrs[key]) is not int or not 1 <= attrs[key] <= 20:
+                            raise ValidationError("Merged table cell span is invalid.")
+                        clean_attrs[key] = attrs[key]
+                if "shading" in attrs:
+                    if not isinstance(attrs["shading"], str) or not COLOR_RE.fullmatch(attrs["shading"]):
+                        raise ValidationError("Table cell shading colour is invalid.")
+                    clean_attrs["shading"] = attrs["shading"].upper()
+                if clean_attrs:
+                    cleaned["attrs"] = clean_attrs
             else:
                 if kind in {"paragraph", "heading", "tableCell"}:
                     allowed_attrs = {"align", "indent", "line_spacing", "style"} | PARAGRAPH_SPACING_KEYS | PARAGRAPH_INDENT_KEYS
@@ -991,6 +1044,41 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             result.append(Paragraph(_paragraph_html({"type": "paragraph", "content": segment}) or "&#160;", style))
         return result
 
+    def table_flow(node):
+        rows = node.get("content", [])
+        count = max((sum(cell.get("attrs", {}).get("colspan", 1) for cell in row.get("content", [])) for row in rows), default=1)
+        supplied = node.get("attrs", {}).get("column_widths", [])
+        if len(supplied) != count:
+            base, remainder = divmod(100, count)
+            supplied = [base + (1 if index < remainder else 0) for index in range(count)]
+        available = page_size[0] - (left + right) * mm
+        available *= node.get("attrs", {}).get("width_percent", 100) / 100
+        col_widths = [available * value / 100 for value in supplied]
+        data, styles_for_table = [], [
+            ("GRID", (0, 0), (-1, -1), node.get("attrs", {}).get("border_width", 1) * .5,
+             node.get("attrs", {}).get("border_color", "#B7C0CC")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]
+        for row_index, row in enumerate(rows):
+            row_data = []
+            col_index = 0
+            for cell in row.get("content", []):
+                row_data.append(Paragraph(_paragraph_html(cell) or "&#160;", styles["BodyText"]))
+                cell_attrs = cell.get("attrs", {})
+                rowspan, colspan = cell_attrs.get("rowspan", 1), cell_attrs.get("colspan", 1)
+                if rowspan > 1 or colspan > 1:
+                    styles_for_table.append(("SPAN", (col_index, row_index), (col_index + colspan - 1, row_index + rowspan - 1)))
+                if cell_attrs.get("shading"):
+                    from reportlab.lib.colors import HexColor
+                    styles_for_table.append(("BACKGROUND", (col_index, row_index), (col_index + colspan - 1, row_index + rowspan - 1), HexColor(cell_attrs["shading"])))
+                col_index += colspan
+                row_data.extend([""] * (colspan - 1))
+            row_data.extend([""] * max(0, count - len(row_data)))
+            data.append(row_data)
+        return Table(data, colWidths=col_widths, repeatRows=1, hAlign="LEFT", style=TableStyle(styles_for_table))
+
     def build_list_flow(node, level=0):
         kind = node["type"]
         checklist = kind == "bulletList" and node.get("attrs", {}).get("list_style") == "checklist"
@@ -1002,6 +1090,8 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                     item_flows.extend(paragraph_flows(child, styles["BodyText"]))
                 elif child["type"] in {"bulletList", "orderedList"}:
                     item_flows.append(build_list_flow(child, level + 1))
+                elif child["type"] == "table":
+                    item_flows.append(table_flow(child))
             if checklist:
                 item_flows.insert(0, Paragraph("[ ]", styles["BodyText"]))
             items.append(ListItem(item_flows or [Paragraph("&#160;", styles["BodyText"])]))
@@ -1049,15 +1139,8 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
             elif kind in {"bulletList", "orderedList"}:
                 flow.append(build_list_flow(node))
             elif kind == "table":
-                rows = []
-                for row in node.get("content", []):
-                    rows.append([Paragraph(_paragraph_html(cell) or "&#160;", styles["BodyText"]) for cell in row.get("content", [])])
-                if rows:
-                    width = A4[0] - (left + right)*mm
-                    column_count = max(len(row) for row in rows)
-                    table = Table(rows, colWidths=[width/max(column_count, 1)] * column_count, repeatRows=1, hAlign="LEFT")
-                    table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .5, (0.65,0.68,0.72)), ("BACKGROUND", (0,0), (-1,0), (0.92,0.94,0.97)), ("VALIGN", (0,0), (-1,-1), "TOP"), ("LEFTPADDING", (0,0), (-1,-1), 7), ("RIGHTPADDING", (0,0), (-1,-1), 7), ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6)]))
-                    flow.extend([table, Spacer(1, 8)])
+                if node.get("content"):
+                    flow.extend([table_flow(node), Spacer(1, 8)])
             elif kind in {"doc", "listItem"}:
                 blocks(node.get("content", []))
     blocks(content.get("content", []))
@@ -1088,8 +1171,32 @@ def _build_pdf(doc, organization=None, *, pdf_assets=None, letterhead_bytes=None
                 raise ValidationError("The document exceeds the 50 page limit.")
 
     def make_canvas(*args, **kwargs):
-        kwargs.update(pagesize=A4, pageCompression=1, invariant=1)
-        output = pdf_canvas.Canvas(*args, **kwargs)
+        kwargs.update(pagesize=page_size, pageCompression=1, invariant=1)
+        class NumberedCanvas(pdf_canvas.Canvas):
+            def __init__(self, *canvas_args, **canvas_kwargs):
+                super().__init__(*canvas_args, **canvas_kwargs)
+                self._page_states=[]
+            def showPage(self):
+                self._page_states.append(dict(self.__dict__))
+                self._startPage()
+            def save(self):
+                total=len(self._page_states)
+                for state in self._page_states:
+                    self.__dict__.update(state)
+                    self.saveState()
+                    if document_attrs.get("header"):
+                        self.setFont("Helvetica",8)
+                        self.drawString(left*mm,self._pagesize[1]-top*mm+8,document_attrs["header"][:200])
+                    if document_attrs.get("footer") or document_attrs.get("page_numbers"):
+                        self.setFont("Helvetica",8)
+                        footer=document_attrs.get("footer","")[:200]
+                        if document_attrs.get("page_numbers"):
+                            footer+=((" · " if footer else "")+f"Page {self.getPageNumber()} of {total}")
+                        self.drawRightString(self._pagesize[0]-right*mm,bottom*mm-14,footer)
+                    self.restoreState()
+                    super().showPage()
+                super().save()
+        output = NumberedCanvas(*args, **kwargs)
         output.setTitle(_clean_title(doc.title))
         output.setAuthor("")
         output.setSubject("")

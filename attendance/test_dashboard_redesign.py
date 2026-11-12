@@ -84,10 +84,9 @@ class DashboardRedesignTests(TestCase):
         self.assertIn('Employees present · 7 days', response.content.decode())
         self.assertIn('Peak 0', response.content.decode())
 
-    def test_manager_kpi_pages_render_the_shared_trend_component(self):
+    def test_manager_kpi_pages_do_not_add_a_trend_panel_to_the_dashboard(self):
         for route_name in ('manager_dashboard', 'manager_team'):
             with self.subTest(route=route_name):
                 response = self.client.get(reverse(route_name))
                 self.assertEqual(response.status_code, 200)
-                self.assertIn('Employees present · 7 days', response.content.decode())
-
+                self.assertNotContains(response, 'Recent workforce activity trends')

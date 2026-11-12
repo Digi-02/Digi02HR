@@ -126,7 +126,7 @@ class Organization(models.Model):
         help_text='Whether the logo artwork is light (needs a dark tile). Set automatically on upload.',
     )
     brand_color = models.CharField(
-        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default='#F02A4C', validators=[BRAND_COLOR_VALIDATOR]
     )
     DASHBOARD_APPEARANCE_CHOICES = [
         ('brand', 'DIGI HR brand'),
