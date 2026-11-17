@@ -149,6 +149,7 @@
     if(personalButton){personalButton.disabled=!available||!personalAvailable||root.dataset.readOnly==='true';if(!available)personalButton.title='Letterheads are available on A4 portrait pages only.';}
   }
   function applyPageLayout(){
+    syncLetterheadPages();
     let [widthMm,heightMm]=pageSizeMm[layoutState.page_size]||pageSizeMm.A4;
     if(layoutState.orientation==='landscape')[widthMm,heightMm]=[heightMm,widthMm];
     const naturalWidth=widthMm*96/25.4,naturalHeight=heightMm*96/25.4;
@@ -157,7 +158,16 @@
     if(document.getElementById('dd-letterhead').checked&&pageSupportsLetterhead()){
       const css=getComputedStyle(sheet);
       for(const [field,cssName] of [['top_cm','--dd-letterhead-header-guide'],['bottom_cm','--dd-letterhead-footer-guide'],['left_cm','--dd-letterhead-left-zone'],['right_cm','--dd-letterhead-right-zone']]){
-        const guide=parseFloat(css.getPropertyValue(cssName));if(Number.isFinite(guide))margins[field]=Math.max(margins[field],guide/10+(field==='top_cm'||field==='bottom_cm'?.4:0));
+        // The header and footer guides mark the edge of the safe area, not the
+        // content edge. Keep vertical content 4 mm inside them.
+        const guide=parseFloat(css.getPropertyValue(cssName));
+        if(Number.isFinite(guide)){
+          const inset=(field==='top_cm'||field==='bottom_cm') ? .4 : 0;
+          margins[field]=Math.max(margins[field],guide/10+inset);
+          // The mobile page is a scaled A4 canvas. Use a screen-specific guide
+          // coordinate so the visible guides stay aligned with its artwork.
+          sheet.style.setProperty(`${cssName}-screen`,`${guide*96/25.4*scale}px`);
+        }
       }
     }
     sheet.style.setProperty('--dd-page-width-print',`${widthMm}mm`);sheet.style.setProperty('--dd-page-height-print',`${heightMm}mm`);
@@ -165,6 +175,10 @@
       page.style.width=`${naturalWidth*scale}px`;page.style.height=`${naturalHeight*scale}px`;
       page.style.padding=`${margins.top_cm*96/2.54*scale}px ${margins.right_cm*96/2.54*scale}px ${margins.bottom_cm*96/2.54*scale}px ${margins.left_cm*96/2.54*scale}px`;
     });
+    // Resizing from desktop to mobile changes the scaled page padding. Reposition
+    // document headers and footers at the same time, rather than leaving their
+    // desktop coordinates over the company logo.
+    syncPageDecorations();
     dynamicPageStyle.textContent=`@page{size:${widthMm}mm ${heightMm}mm;margin:0}@media print{.dd-page{width:${widthMm}mm!important;height:${heightMm}mm!important;padding:${margins.top_cm}cm ${margins.right_cm}cm ${margins.bottom_cm}cm ${margins.left_cm}cm!important}}`;
     syncLetterheadAvailability();syncLetterheadPages();
   }
@@ -629,7 +643,7 @@
   document.getElementById('dd-paste').addEventListener('mousedown',event=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();event.preventDefault();});
   document.getElementById('dd-paste').addEventListener('click',async()=>{try{insertTextAtSaved(await navigator.clipboard.readText());}catch(_){status.textContent='Clipboard access was blocked. Use Ctrl+V inside the document.';}});
   sheet.addEventListener('input',schedule); title.addEventListener('input',schedule);
-  ['dd-letterhead','dd-letterhead-first','dd-letterhead-other'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{syncLetterheadPages();schedule();}));
+  ['dd-letterhead','dd-letterhead-first','dd-letterhead-other'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{applyPageLayout();schedule();}));
   function restoreSavedSelection(){const selection=window.getSelection();if(savedRange&&selection&&sheet.contains(savedRange.commonAncestorContainer)){selection.removeAllRanges();selection.addRange(savedRange);return selection;}return selection;}
   document.querySelectorAll('[data-command]').forEach(button=>{button.addEventListener('mousedown',event=>{const selection=window.getSelection();if(selection&&selection.rangeCount&&sheet.contains(selection.anchorNode))savedRange=selection.getRangeAt(0).cloneRange();event.preventDefault();});button.addEventListener('click',()=>{sheet.focus();restoreSavedSelection();document.execCommand(button.dataset.command,false,null);scheduleFormatting();});});
   function runBlock(value){sheet.focus();const style=value.toLowerCase();const mapped=style==='title'?'h1':style==='subtitle'?'p':style.startsWith('heading')?'h'+style.slice(-1):value;document.execCommand('formatBlock',false,mapped);const block=currentBlock();if(block){if(style==='title')block.dataset.docStyle='title';else if(style==='subtitle')block.dataset.docStyle='subtitle';else delete block.dataset.docStyle;}schedule();}
@@ -912,9 +926,6 @@
   }
   document.getElementById('dd-break').addEventListener('click',insertBreak);
   document.getElementById('dd-break-toolbar').addEventListener('click',insertBreak);
-  const lh=document.getElementById('dd-letterhead');
-  syncLetterheadPages();
-  lh.addEventListener('change',()=>{syncLetterheadPages();schedule();});
   document.getElementById('dd-rename').addEventListener('click',()=>{title.focus();title.select();});
   document.getElementById('dd-select-all').addEventListener('click',()=>{sheet.focus();document.execCommand('selectAll');});
   function clearFormatting(){sheet.focus();document.execCommand('removeFormat');document.execCommand('formatBlock',false,'p');schedule();}

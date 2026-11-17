@@ -548,6 +548,7 @@ def payroll_required(view_func):
 
 def login_view(request):
     """Custom login view"""
+    from django.utils.http import url_has_allowed_host_and_scheme
     from .organization import get_user_organizations
 
     def suspended_org_for(user):
@@ -556,11 +557,22 @@ def login_view(request):
             return orgs[0]
         return None
 
+    def safe_next_url():
+        candidate = request.POST.get('next') or request.GET.get('next') or ''
+        if candidate and url_has_allowed_host_and_scheme(
+            candidate, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        ):
+            return candidate
+        return None
+
     if request.user.is_authenticated:
         suspended = suspended_org_for(request.user)
         if suspended is not None:
             logout(request)
             return render(request, 'attendance/suspended.html', {'organization': suspended}, status=403)
+        next_url = safe_next_url()
+        if next_url:
+            return redirect(next_url)
         if is_employee_self_service_user(request.user):
             return redirect('employee_self_service_dashboard')
         if user_has_payroll_access(request.user) and not user_has_hr_access(request.user):
@@ -580,6 +592,9 @@ def login_view(request):
             if suspended is not None:
                 logout(request)
                 return render(request, 'attendance/suspended.html', {'organization': suspended}, status=403)
+            next_url = safe_next_url()
+            if next_url:
+                return redirect(next_url)
             if is_employee_self_service_user(user):
                 return redirect('employee_self_service_dashboard')
             if user_has_payroll_access(user) and not user_has_hr_access(user):
@@ -5397,66 +5412,97 @@ _contact_hits = {}
 
 
 def contact_request_view(request):
+    import logging
+    import threading
     import time
     from .models import AccessRequest
-    if request.method == 'POST':
-        # Honeypot: invisible "website" field; bots fill it, humans don't.
-        if (request.POST.get('website') or '').strip():
-            return redirect('welcome')
-        ip = request.META.get('REMOTE_ADDR', 'anon')
-        now = time.time()
-        hits = [t for t in _contact_hits.get(ip, []) if now - t < 600]
-        _contact_hits[ip] = hits
-        if len(hits) >= 5:
-            messages.error(request, 'Too many requests. Please try again later.')
-            return redirect('welcome')
-        hits.append(now)
-        _contact_hits[ip] = hits
-        name = (request.POST.get('name') or '').strip()[:150]
-        email = (request.POST.get('email') or '').strip()[:120]
-        message = (request.POST.get('message') or '').strip()[:2000]
-        company = (request.POST.get('company') or '').strip()[:150]
-        phone = (request.POST.get('phone') or '').strip()[:30]
-        team_size = (request.POST.get('team_size') or '').strip()[:30]
-        if name and email and message:
-            access_request = AccessRequest.objects.create(
-                company_name=company, contact_name=name, email=email,
-                phone=phone, team_size=team_size, message=message)
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')
-            platform_url = request.build_absolute_uri(reverse('platform_access_requests'))
+
+    logger = logging.getLogger(__name__)
+
+    if request.method != 'POST':
+        return redirect('welcome')
+
+    # Honeypot: invisible "website" field; bots fill it, humans don't.
+    if (request.POST.get('website') or '').strip():
+        return redirect('welcome')
+    ip = request.META.get('REMOTE_ADDR', 'anon')
+    now = time.time()
+    hits = [t for t in _contact_hits.get(ip, []) if now - t < 600]
+    _contact_hits[ip] = hits
+    if len(hits) >= 5:
+        messages.error(request, 'Too many requests. Please try again later.')
+        return redirect('welcome')
+    hits.append(now)
+    _contact_hits[ip] = hits
+
+    name = (request.POST.get('name') or '').strip()[:150]
+    email = (request.POST.get('email') or '').strip()[:120]
+    message = (request.POST.get('message') or '').strip()[:2000]
+    company = (request.POST.get('company') or '').strip()[:150]
+    phone = (request.POST.get('phone') or '').strip()[:30]
+    team_size = (request.POST.get('team_size') or '').strip()[:30]
+    if not (name and email and message):
+        messages.error(request, 'Please complete name, email and message.')
+        return redirect('welcome')
+
+    access_request = None
+    try:
+        access_request = AccessRequest.objects.create(
+            company_name=company, contact_name=name, email=email,
+            phone=phone, team_size=team_size, message=message)
+    except Exception:
+        logger.exception('Could not store access request from %s', email)
+
+    # Email delivery must never block the confirmation shown to the visitor.
+    if access_request is not None:
+        from django.templatetags.static import static
+
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@digi02hr.local')
+        platform_url = request.build_absolute_uri(reverse('platform_access_requests'))
+        logo_url = request.build_absolute_uri(static('brand/digi-hr-logo.png'))
+        admin_emails = list(
+            User.objects.filter(is_superuser=True, is_active=True)
+            .exclude(email='')
+            .values_list('email', flat=True)
+        )
+        notification_context = {
+            'contact_name': name,
+            'email': email,
+            'company_name': company,
+            'team_size': team_size,
+            'phone': phone,
+            'message': message,
+            'platform_url': platform_url,
+            'logo_url': logo_url,
+        }
+        request_pk = access_request.pk
+
+        def _send_notifications():
             try:
-                # Notify platform admin
                 _send_templated_mail(
                     subject=f'DIGI HR access request from {name}',
                     html_template='registration/email/access_request_admin.html',
                     text_template='registration/email/access_request_admin.txt',
-                    context={
-                        'contact_name': name,
-                        'email': email,
-                        'company_name': company,
-                        'team_size': team_size,
-                        'phone': phone,
-                        'message': message,
-                        'platform_url': platform_url,
-                    },
-                    recipient_list=[from_email],
+                    context=notification_context,
+                    recipient_list=admin_emails or [from_email],
                     from_email=from_email,
                 )
-                # Confirmation to requester
+            except Exception:
+                logger.exception('Could not notify admins about access request %s', request_pk)
+            try:
                 _send_templated_mail(
                     subject='We received your access request — DIGI HR',
                     html_template='registration/email/access_request_confirmation.html',
                     text_template='registration/email/access_request_confirmation.txt',
-                    context={
-                        'contact_name': name,
-                        'company_name': company,
-                    },
+                    context={'contact_name': name, 'company_name': company, 'logo_url': logo_url},
                     recipient_list=[email],
                     from_email=from_email,
                 )
             except Exception:
-                pass
-            messages.success(request, 'Thanks — we will be in touch shortly.')
-            return redirect('welcome')
-        messages.error(request, 'Please complete name, email and message.')
-    return redirect('welcome')
+                logger.exception('Could not send confirmation to %s for request %s', email, request_pk)
+
+        # Send in the background so a slow SMTP server can never turn a
+        # successfully saved request into an error page for the visitor.
+        threading.Thread(target=_send_notifications, daemon=True).start()
+
+    return redirect('/welcome/?request=sent#contact')

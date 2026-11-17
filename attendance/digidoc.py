@@ -500,10 +500,26 @@ def _doc_context(request, organization, **extra):
 def digidoc_list(request):
     organization = _scope(request)
     query = _clean_title(request.GET.get("q", "")) if request.GET.get("q") else ""
-    documents = DigiDocDocument.objects.filter(organization=organization).filter(created_by=request.user).select_related("created_by")
+    # The document body can be very large. Deferring it keeps MySQL's ORDER BY
+    # from sorting entire JSON payloads and exhausting sort_buffer_size.
+    list_projection = (
+        "id", "title", "updated_at", "created_by",
+        "created_by__first_name", "created_by__last_name", "created_by__username",
+    )
+    documents = (
+        DigiDocDocument.objects.filter(organization=organization)
+        .filter(created_by=request.user)
+        .select_related("created_by")
+        .only(*list_projection)
+    )
     can_claim = request.user.organization_memberships.filter(organization=organization, is_active=True, role__in=HR_ROLES).exists()
     if can_claim:
-        documents = DigiDocDocument.objects.filter(organization=organization).filter(Q(created_by=request.user) | Q(created_by__isnull=True)).select_related("created_by")
+        documents = (
+            DigiDocDocument.objects.filter(organization=organization)
+            .filter(Q(created_by=request.user) | Q(created_by__isnull=True))
+            .select_related("created_by")
+            .only(*list_projection)
+        )
     if query:
         documents = documents.filter(title__icontains=query)
     owner = ""

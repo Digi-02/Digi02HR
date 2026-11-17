@@ -5,8 +5,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }} | DigiDoc</title>
-  <link rel="stylesheet" href="{% static 'attendance/digidoc.css' %}">
-  <link rel="stylesheet" href="{% static 'attendance/digidoc-fonts.css' %}">
+  <link rel="stylesheet" href="{% static 'attendance/digidoc.css' %}?v=20261114-full-nav">
+  <link rel="stylesheet" href="{% static 'attendance/digidoc-fonts.css' %}?v=20261114">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
   <style nonce="{{ csp_nonce }}">
     :root{--nav-bg:{{ nav_styles.nav_bg|default:'#FFFFFF' }};--nav-fg:{{ nav_styles.nav_fg|default:'#1C1C1C' }};--nav-fg-muted:{{ nav_styles.nav_fg_muted|default:'#6B6B6B' }};--nav-border:{{ nav_styles.nav_border|default:'#ECECEC' }};--nav-hover-bg:{{ nav_styles.nav_hover_bg|default:'#F6F6F6' }};--nav-hover-fg:{{ nav_styles.nav_hover_fg|default:'#111111' }};--nav-hover-icon-bg:{{ nav_styles.nav_hover_icon_bg|default:'#ECECEC' }};--nav-icon-bg:{{ nav_styles.nav_icon_bg|default:'#F4F4F5' }};--nav-icon-fg:{{ nav_styles.nav_icon_fg|default:'#5C5C5C' }};--nav-active-bg:{{ nav_styles.nav_active_bg|default:'#111111' }};--nav-active-fg:{{ nav_styles.nav_active_fg|default:'#FFFFFF' }};--nav-active-indicator:{{ nav_styles.nav_active_indicator|default:'#111111' }};--nav-active-icon-bg:{{ nav_styles.nav_active_icon_bg|default:'#FFFFFF' }};--nav-active-icon-fg:{{ nav_styles.nav_active_icon_fg|default:'#111111' }};--nav-active-border:{{ nav_styles.nav_active_border|default:'transparent' }};--nav-focus-ring:{{ nav_styles.nav_focus_ring|default:'#1C1C1C' }};--nav-pill-bg:{{ nav_styles.nav_pill_bg|default:'#111111' }};}
     {% if letterhead %}#dd-sheet.dd-letterhead{--dd-letterhead-header-guide:{{ letterhead.margin_top_mm }}mm;--dd-letterhead-footer-guide:{{ letterhead.margin_bottom_mm }}mm;--dd-letterhead-left-zone:{{ letterhead.margin_left_mm }}mm;--dd-letterhead-right-zone:{{ letterhead.margin_right_mm }}mm;--dd-letterhead-image-1:url('{{ letterhead_image_url }}');--dd-letterhead-image-2:url('{{ letterhead_second_image_url }}')}#dd-sheet.dd-letterhead .dd-page{padding-top:calc({{ letterhead.margin_top_mm }}mm + 4mm);padding-right:{{ letterhead.margin_right_mm }}mm;padding-bottom:calc({{ letterhead.margin_bottom_mm }}mm + 4mm);padding-left:{{ letterhead.margin_left_mm }}mm;background-size:{% if letterhead.scale_mode == 'fill' %}cover{% else %}contain{% endif %};background-position:center;background-repeat:no-repeat}#dd-sheet.dd-letterhead .dd-page[data-letterhead-slot="1"]{background-image:var(--dd-letterhead-image-1)}#dd-sheet.dd-letterhead .dd-page[data-letterhead-slot="2"]{background-image:var(--dd-letterhead-image-2)}{% endif %}
@@ -93,6 +94,6 @@
     </div>
   </main>
 </div>
-<script src="{% static 'attendance/digidoc-shell.js' %}" defer></script><script src="{% static 'attendance/digidoc-editor.js' %}" defer></script><script src="{% static 'attendance/digidoc-ribbon.js' %}" defer></script>
+<script src="{% static 'attendance/digidoc-shell.js' %}?v=20261114-full-nav" defer></script><script src="{% static 'attendance/digidoc-editor.js' %}?v=20261114-editor-tools" defer></script><script src="{% static 'attendance/digidoc-ribbon.js' %}?v=20261114-editor-tools" defer></script>
 </body>
 </html>

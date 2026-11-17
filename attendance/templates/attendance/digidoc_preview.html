@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }} | Preview</title>
-  <link rel="stylesheet" href="{% static 'attendance/digidoc-preview.css' %}">
+  <link rel="stylesheet" href="{% static 'attendance/digidoc-preview.css' %}?v=20261114">
   {% if has_letterhead_guides %}<style nonce="{{ csp_nonce }}">{% for page in pages %}{% if page.show_letterhead_guides %}.preview-page[data-page-number="{{ page.number }}"]{--guide-header:{{ page.guide_top_pct }}%;--guide-footer:{{ page.guide_bottom_pct }}%;--guide-left:{{ page.guide_left_pct }}%;--guide-right:{{ page.guide_right_pct }}%}{% endif %}{% endfor %}</style>{% endif %}
 </head>
 <body>

@@ -1,32 +1,78 @@
 {% extends 'platform/base.html' %}
 {% block title %}Access requests — Platform Admin{% endblock %}
 {% block content %}
-<div class="page-head"><div><h2>Access requests</h2><p>From the landing-page form. Approving opens the create-company flow pre-filled.</p></div></div>
+<div class="page-head">
+  <div>
+    <h2>Access requests</h2>
+    <p>Review companies that asked for access from the landing page. Approving opens the create-company flow pre-filled with their details.</p>
+  </div>
+  <a href="{% url 'platform_company_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create company</a>
+</div>
+
+<div class="stat-grid mb-4">
+  <div class="card stat-card"><div class="stat-label">Total requests</div><div class="stat-value">{{ counts.total }}</div><span class="stat-icon"><i class="bi bi-inbox"></i></span></div>
+  <div class="card stat-card coral"><div class="stat-label">New</div><div class="stat-value">{{ counts.new }}</div><span class="stat-icon"><i class="bi bi-bell"></i></span></div>
+  <div class="card stat-card green"><div class="stat-label">Approved</div><div class="stat-value">{{ counts.approved }}</div><span class="stat-icon"><i class="bi bi-check2-circle"></i></span></div>
+  <div class="card stat-card red"><div class="stat-label">Rejected</div><div class="stat-value">{{ counts.rejected }}</div><span class="stat-icon"><i class="bi bi-x-circle"></i></span></div>
+</div>
+
 <div class="card"><div class="card-body">
-<form method="get" class="d-flex gap-2 flex-wrap">
-<select name="status" class="form-select" style="max-width:220px" onchange="this.form.submit()">
-<option value="">All statuses</option>
-{% for code, label in status_choices %}<option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
-</select>
-{% if status %}<a href="{% url 'platform_access_requests' %}" class="btn btn-outline-secondary">Clear</a>{% endif %}
-</form></div>
-<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr>
-<th>Company</th><th>Contact</th><th>Team</th><th>Message</th><th>Status</th><th>Received</th><th></th></tr></thead><tbody>
-{% for item in items %}<tr>
-<td><strong>{{ item.company_name|default:"-" }}</strong></td>
-<td>{{ item.contact_name }}<br><small class="text-muted">{{ item.email }}{% if item.phone %} · {{ item.phone }}{% endif %}</small></td>
-<td>{{ item.team_size|default:"-" }}</td>
-<td style="max-width:280px">{{ item.message|truncatewords:20 }}</td>
-<td>{% if item.status == 'new' %}<span class="badge badge-mid">New</span>{% elif item.status == 'approved' %}<span class="badge badge-ok">Approved</span>{% else %}<span class="badge badge-stop">Rejected</span>{% endif %}</td>
-<td>{{ item.created_at|date:"M j, Y" }}</td>
-<td class="text-end text-nowrap">
-{% if item.status == 'new' %}
-<form method="post" action="{% url 'platform_access_request_action' item.pk %}" class="d-inline">{% csrf_token %}
-<input type="hidden" name="action" value="approve"><button class="btn btn-sm btn-primary" type="submit">Approve</button></form>
-<form method="post" action="{% url 'platform_access_request_action' item.pk %}" class="d-inline">{% csrf_token %}
-<input type="hidden" name="action" value="reject"><button class="btn btn-sm btn-outline-secondary" type="submit">Reject</button></form>
-{% elif item.created_company %}<a href="{% url 'platform_company_detail' item.created_company.pk %}">View company</a>
-{% endif %}</td></tr>
-{% empty %}<tr><td colspan="7">No requests.</td></tr>{% endfor %}
-</tbody></table></div></div>
+  <form method="get" class="filter-bar">
+    <div class="search">
+      <i class="bi bi-search"></i>
+      <input type="search" name="q" value="{{ query }}" class="form-control" placeholder="Search company, contact, email or message">
+    </div>
+    <select name="status" class="form-select" style="max-width:190px" onchange="this.form.submit()">
+      <option value="">All statuses</option>
+      {% for code, label in status_choices %}<option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-outline-primary" type="submit">Filter</button>
+    {% if status or query %}<a href="{% url 'platform_access_requests' %}" class="btn btn-outline-secondary">Clear</a>{% endif %}
+  </form>
+</div></div>
+
+<div class="request-list">
+  {% for item in items %}
+  <article class="request-card">
+    <div class="req-avatar">{{ item.company_name|default:item.contact_name|slice:":1"|upper }}</div>
+    <div class="req-main">
+      <div class="req-top">
+        <h3>{{ item.company_name|default:"Untitled company" }}</h3>
+        {% if item.status == 'new' %}<span class="badge badge-mid">New</span>
+        {% elif item.status == 'approved' %}<span class="badge badge-ok">Approved</span>
+        {% else %}<span class="badge badge-stop">Rejected</span>{% endif %}
+      </div>
+      <div class="req-meta">
+        <span><i class="bi bi-person"></i> {{ item.contact_name }}</span>
+        <span><i class="bi bi-envelope"></i> {{ item.email }}</span>
+        {% if item.phone %}<span><i class="bi bi-telephone"></i> {{ item.phone }}</span>{% endif %}
+        {% if item.team_size %}<span><i class="bi bi-people"></i> {{ item.team_size }} people</span>{% endif %}
+        <span><i class="bi bi-clock"></i> {{ item.created_at|date:"M j, Y · H:i" }}</span>
+      </div>
+      <p class="req-msg">{{ item.message|truncatewords:40 }}</p>
+    </div>
+    <div class="req-actions">
+      <a href="{% url 'platform_access_request_detail' item.pk %}" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-eye"></i> Review details</a>
+      {% if item.status == 'new' %}
+      <form method="post" action="{% url 'platform_access_request_action' item.pk %}">{% csrf_token %}
+        <input type="hidden" name="action" value="approve">
+        <button class="btn btn-sm btn-primary w-100" type="submit" title="Create the company and email a set-password link"><i class="bi bi-check-lg"></i> Approve &amp; send setup email</button>
+      </form>
+      <form method="post" action="{% url 'platform_access_request_action' item.pk %}">{% csrf_token %}
+        <input type="hidden" name="action" value="reject">
+        <button class="btn btn-sm btn-outline-secondary w-100" type="submit">Reject</button>
+      </form>
+      {% elif item.created_company %}
+      <a href="{% url 'platform_company_detail' item.created_company.pk %}" class="btn btn-sm btn-outline-primary w-100">View company</a>
+      {% endif %}
+    </div>
+  </article>
+  {% empty %}
+  <div class="card"><div class="empty-state">
+    <i class="bi bi-inbox"></i>
+    <h3>No access requests{% if status or query %} match your filters{% endif %}</h3>
+    <p class="mb-0">New requests submitted from the landing page will appear here.</p>
+  </div></div>
+  {% endfor %}
+</div>
 {% endblock %}

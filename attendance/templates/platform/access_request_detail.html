@@ -1,0 +1,54 @@
+{% extends 'platform/base.html' %}
+{% block title %}{{ item.company_name|default:"Access request" }} — Platform Admin{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="{% url 'platform_access_requests' %}" class="d-inline-flex align-items-center gap-1 mb-2" style="font-size:13px;text-decoration:none;color:var(--muted)"><i class="bi bi-arrow-left"></i> Access requests</a>
+    <h2>{{ item.company_name|default:"Untitled company" }}</h2>
+    <p>Requested {{ item.created_at|date:"M j, Y · H:i" }}{% if item.company_name %} by {{ item.contact_name }}{% endif %}.</p>
+  </div>
+  {% if item.status == 'new' %}<span class="badge badge-mid">New</span>
+  {% elif item.status == 'approved' %}<span class="badge badge-ok">Approved</span>
+  {% else %}<span class="badge badge-stop">Rejected</span>{% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card"><div class="card-header"><h5 class="mb-0">Company details</h5></div><div class="card-body">
+      <div class="row g-3">
+        <div class="col-sm-6"><div class="stat-label">Company name</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.company_name|default:"-" }}</div></div>
+        <div class="col-sm-6"><div class="stat-label">Team size</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.team_size|default:"-" }}</div></div>
+        <div class="col-sm-6"><div class="stat-label">Contact name</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.contact_name }}</div></div>
+        <div class="col-sm-6"><div class="stat-label">Email</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.email }}</div></div>
+        <div class="col-sm-6"><div class="stat-label">Phone</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.phone|default:"-" }}</div></div>
+        <div class="col-sm-6"><div class="stat-label">Received</div><div style="font-weight:600;color:var(--black);margin-top:3px">{{ item.created_at|date:"M j, Y · H:i" }}</div></div>
+      </div>
+      <div class="mt-4"><div class="stat-label">Message</div><p style="margin-top:6px;line-height:1.6">{{ item.message|linebreaksbr }}</p></div>
+    </div></div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card"><div class="card-header"><h5 class="mb-0">Actions</h5></div><div class="card-body">
+      {% if item.status == 'new' %}
+      <p style="font-size:13.5px;color:var(--muted);margin-top:0">Approving creates the company, creates the owner account and emails them a secure link to set their password.</p>
+      <form method="post" action="{% url 'platform_access_request_action' item.pk %}" class="d-grid gap-2">{% csrf_token %}
+        <input type="hidden" name="action" value="approve">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Approve &amp; send setup email</button>
+      </form>
+      <a href="{% url 'platform_company_create' %}?request={{ item.pk }}" class="btn btn-outline-secondary w-100 mt-2">Review &amp; edit details first</a>
+      <form method="post" action="{% url 'platform_access_request_action' item.pk %}" class="mt-2">{% csrf_token %}
+        <input type="hidden" name="action" value="reject">
+        <button class="btn btn-outline-secondary w-100" type="submit">Reject request</button>
+      </form>
+      {% elif item.created_company %}
+      <p style="font-size:13.5px;color:var(--muted);margin-top:0">This request was approved and the company workspace was created.</p>
+      <a href="{% url 'platform_company_detail' item.created_company.pk %}" class="btn btn-primary w-100"><i class="bi bi-building"></i> View company</a>
+      <a href="{% url 'platform_access_requests' %}" class="btn btn-outline-secondary w-100 mt-2">Back to requests</a>
+      {% else %}
+      <p style="font-size:13.5px;color:var(--muted);margin-top:0">This request was rejected.</p>
+      <a href="{% url 'platform_access_requests' %}" class="btn btn-outline-secondary w-100">Back to requests</a>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

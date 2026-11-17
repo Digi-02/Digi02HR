@@ -123,7 +123,7 @@ if not DEBUG and not ALLOWED_HOSTS:
 SECURE_PROXY_SSL_HEADER = _env_pair("DJANGO_SECURE_PROXY_SSL_HEADER")
 USE_X_FORWARDED_HOST = _env_bool("DJANGO_USE_X_FORWARDED_HOST", default=False)
 CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
-for origin in _env_list("DJANGO_EXTRA_CSRF_TRUSTED_ORIGINS", default="https://hr.digi02.org"):
+for origin in _env_list("DJANGO_EXTRA_CSRF_TRUSTED_ORIGINS", default="https://hr.digi02.org,http://hr.digi02.org"):
     if origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(origin)
 

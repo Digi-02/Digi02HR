@@ -1,6 +1,6 @@
 # core/urls.py
 
-from django.urls import path, re_path
+from django.urls import path, re_path, reverse
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
@@ -63,6 +63,16 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
         except Exception:
             pass
         context['organization_name'] = org_name or 'DIGI HR'
+        protocol = context.get('protocol', 'https')
+        domain = context.get('domain', '')
+        base_url = f'{protocol}://{domain}' if domain else ''
+        context['logo_url'] = f'{base_url}{settings.STATIC_URL}brand/digi-hr-logo.png'
+        if context.get('uid') and context.get('token'):
+            context['reset_link'] = (
+                f'{base_url}'
+                + reverse('password_reset_confirm', kwargs={
+                    'uidb64': context['uid'], 'token': context['token']})
+            )
 
         html_content = render_to_string(self.html_email_template_name, context)
         text_content = render_to_string(email_template_name, context)
@@ -86,6 +96,7 @@ urlpatterns = [
     path('platform/companies/<int:organization_id>/logo/', views.platform_organization_logo, name='platform_organization_logo'),
     path('platform/companies/<int:pk>/action/', platform_views.company_action, name='platform_company_action'),
     path('platform/requests/', platform_views.access_requests, name='platform_access_requests'),
+    path('platform/requests/<int:pk>/', platform_views.access_request_detail, name='platform_access_request_detail'),
     path('platform/requests/<int:pk>/action/', platform_views.access_request_action, name='platform_access_request_action'),
     path('platform/audit/', platform_views.audit_log, name='platform_audit'),
     path('platform/settings/', platform_views.platform_settings, name='platform_settings'),

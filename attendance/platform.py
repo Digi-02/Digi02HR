@@ -137,6 +137,70 @@ def company_detail(request, pk):
     return render(request, 'platform/company_detail.html', context)
 
 
+def _provision_company(request, name, owner_name, owner_email, source_request=None):
+    """Create the workspace, owner account and membership, then email the invite."""
+    from django.utils.text import slugify as dj_slugify
+
+    name = (name or '').strip()
+    owner_name = (owner_name or '').strip()
+    owner_email = (owner_email or '').strip().lower()
+
+    errors = []
+    if not name:
+        errors.append('Company name is required.')
+    if not owner_name:
+        errors.append('Owner name is required.')
+    if not owner_email or '@' not in owner_email:
+        errors.append('A valid owner email is required.')
+    if name and Organization.objects.filter(name__iexact=name).exists():
+        errors.append('A company with this name already exists.')
+    if errors:
+        return None, errors
+
+    slug = dj_slugify(name)[:80] or f'company-{get_random_string(6)}'
+    base_slug, counter, candidate = slug, 2, slug
+    while Organization.objects.filter(slug=candidate).exists():
+        candidate = f'{base_slug}-{counter}'
+        counter += 1
+
+    existing_user = User.objects.filter(email__iexact=owner_email).first()
+    with transaction.atomic():
+        org = Organization.objects.create(name=name, slug=candidate)
+        setup_default_organization_records(org)
+        if existing_user is not None:
+            user = existing_user
+            parts = owner_name.split()
+            updates = []
+            if not user.first_name and parts:
+                user.first_name = parts[0]
+                updates.append('first_name')
+            if not user.last_name and len(parts) > 1:
+                user.last_name = ' '.join(parts[1:])
+                updates.append('last_name')
+            if updates:
+                user.save(update_fields=updates)
+        else:
+            parts = owner_name.split()
+            user = User.objects.create_user(
+                username=owner_email.split('@')[0][:140] or f'owner-{get_random_string(6)}',
+                email=owner_email,
+                password=get_random_string(24),
+                first_name=parts[0] if parts else '',
+                last_name=' '.join(parts[1:]) if len(parts) > 1 else '',
+            )
+        OrganizationMembership.objects.get_or_create(
+            user=user, organization=org,
+            defaults={'role': 'owner', 'is_active': True},
+        )
+        if source_request:
+            source_request.status = 'approved'
+            source_request.created_company = org
+            source_request.save(update_fields=['status', 'created_company', 'updated_at'])
+    send_owner_invite(request, user, org, new_user=existing_user is None)
+    platform_audit(request, 'company.created', org, f'Created {name}; invite sent to {owner_email}.')
+    return org, []
+
+
 @platform_admin_required
 def company_create(request):
     prefill = {}
@@ -153,50 +217,18 @@ def company_create(request):
         except (AccessRequest.DoesNotExist, ValueError):
             source_request = None
     if request.method == 'POST':
-        name = (request.POST.get('name') or '').strip()
-        owner_name = (request.POST.get('owner_name') or '').strip()
-        owner_email = (request.POST.get('owner_email') or '').strip().lower()
-        errors = []
-        if not name:
-            errors.append('Company name is required.')
-        if not owner_name:
-            errors.append('Owner name is required.')
-        if not owner_email or '@' not in owner_email:
-            errors.append('A valid owner email is required.')
-        if Organization.objects.filter(name__iexact=name).exists():
-            errors.append('A company with this name already exists.')
-        if User.objects.filter(email__iexact=owner_email).exists():
-            errors.append('A user with this email already exists.')
+        org, errors = _provision_company(
+            request,
+            request.POST.get('name'),
+            request.POST.get('owner_name'),
+            request.POST.get('owner_email'),
+            source_request=source_request,
+        )
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            from django.utils.text import slugify as dj_slugify
-            slug = dj_slugify(name)[:80] or f'company-{get_random_string(6)}'
-            base_slug, counter, candidate = slug, 2, slug
-            while Organization.objects.filter(slug=candidate).exists():
-                candidate = f'{base_slug}-{counter}'
-                counter += 1
-            with transaction.atomic():
-                org = Organization.objects.create(name=name, slug=candidate)
-                setup_default_organization_records(org)
-                parts = owner_name.split()
-                user = User.objects.create_user(
-                    username=owner_email.split('@')[0][:140] or f'owner-{get_random_string(6)}',
-                    email=owner_email,
-                    password=get_random_string(24),
-                    first_name=parts[0] if parts else '',
-                    last_name=' '.join(parts[1:]) if len(parts) > 1 else '',
-                )
-                OrganizationMembership.objects.create(
-                    user=user, organization=org, role='owner', is_active=True)
-                if source_request:
-                    source_request.status = 'approved'
-                    source_request.created_company = org
-                    source_request.save(update_fields=['status', 'created_company', 'updated_at'])
-            send_owner_invite(request, user, org)
-            platform_audit(request, 'company.created', org, f'Created {name}; invite sent to {owner_email}.')
-            messages.success(request, f'{name} created. An invite was sent to {owner_email}.')
+            messages.success(request, f'{org.name} created. A set-password email was sent to {org.memberships.filter(role="owner").first().user.email}.')
             return redirect('platform_company_detail', pk=org.pk)
     context = {
         'prefill': prefill,
@@ -220,18 +252,25 @@ def _send_templated_mail(subject, html_template, text_template, context, recipie
     email.send(fail_silently=False)
 
 
-def send_owner_invite(request, user, org):
+def send_owner_invite(request, user, org, new_user=True):
     # New owner accounts start with an unusable password; the invite link is
-    # the only way to set one. Django's default token generator is bound to the
-    # password hash, so after the password is set the token becomes invalid
-    # (single-use).
-    user.set_unusable_password()
-    user.save(update_fields=['password'])
+    # the only way to set one. Existing accounts keep their current password
+    # and can either sign in as before or use the link to choose a new one.
+    # Django's default token generator is bound to the password hash, so after
+    # the password is set the token becomes invalid (single-use).
+    if new_user:
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
+
+    from django.templatetags.static import static
 
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     link = request.build_absolute_uri(
         reverse('set_owner_password', kwargs={'uidb64': uid, 'token': token}))
+    logo_url = ''
+    if request is not None:
+        logo_url = request.build_absolute_uri(static('brand/digi-hr-logo.png'))
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
     _send_templated_mail(
         subject=f'Your {org.name} workspace is ready — set your password',
@@ -240,6 +279,7 @@ def send_owner_invite(request, user, org):
         context={
             'organization_name': org.name,
             'invite_link': link,
+            'logo_url': logo_url,
         },
         recipient_list=[user.email],
         from_email=from_email,
@@ -313,7 +353,7 @@ def company_action(request, pk):
     elif action == 'resend_invite':
         owner = _owner_of(org)
         if owner:
-            send_owner_invite(request, owner, org)
+            send_owner_invite(request, owner, org, new_user=False)
             messages.success(request, f'Invite resent to {owner.email}.')
         else:
             messages.error(request, 'This company has no owner to invite.')
@@ -323,15 +363,31 @@ def company_action(request, pk):
 @platform_admin_required
 def access_requests(request):
     status = (request.GET.get('status') or '').strip()
+    query = (request.GET.get('q') or '').strip()
     valid = dict(AccessRequest.STATUS_CHOICES)
     if status not in valid:
         status = ''
     items = AccessRequest.objects.all().order_by('-created_at')
     if status:
         items = items.filter(status=status)
+    if query:
+        items = items.filter(
+            Q(company_name__icontains=query)
+            | Q(contact_name__icontains=query)
+            | Q(email__icontains=query)
+            | Q(message__icontains=query)
+        )
+    counts = AccessRequest.objects.aggregate(
+        total=Count('id'),
+        new=Count('id', filter=Q(status='new')),
+        approved=Count('id', filter=Q(status='approved')),
+        rejected=Count('id', filter=Q(status='rejected')),
+    )
     context = {
         'items': items[:100],
         'status': status,
+        'query': query,
+        'counts': counts,
         'status_choices': AccessRequest.STATUS_CHOICES,
         'page_title': 'Access requests',
     }
@@ -350,9 +406,35 @@ def access_request_action(request, pk):
         messages.success(request, 'Request rejected.')
         return redirect('platform_access_requests')
     if action == 'approve':
-        platform_audit(request, 'request.approved', None, f'Approved request from {item.email}; opening create flow.')
-        return redirect(f"{reverse('platform_company_create')}?request={item.pk}")
+        if item.created_company_id:
+            messages.info(request, 'This request has already been approved.')
+            return redirect('platform_company_detail', pk=item.created_company_id)
+        org, errors = _provision_company(
+            request,
+            item.company_name or item.contact_name,
+            item.contact_name,
+            item.email,
+            source_request=item,
+        )
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            messages.info(request, 'Review the details below and create the company manually.')
+            return redirect(f"{reverse('platform_company_create')}?request={item.pk}")
+        platform_audit(request, 'request.approved', org, f'Approved request from {item.email}; invite sent.')
+        messages.success(
+            request,
+            f'{org.name} approved. A set-password email was sent to {item.email}.',
+        )
+        return redirect('platform_company_detail', pk=org.pk)
     return redirect('platform_access_requests')
+
+
+@platform_admin_required
+def access_request_detail(request, pk):
+    item = get_object_or_404(AccessRequest, pk=pk)
+    context = {'item': item, 'page_title': f'Request from {item.company_name or item.contact_name}'}
+    return render(request, 'platform/access_request_detail.html', context)
 
 
 @platform_admin_required

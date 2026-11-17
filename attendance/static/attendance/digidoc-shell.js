@@ -9,7 +9,26 @@
   if(close)close.addEventListener('click',()=>set(false));
   if(backdrop)backdrop.addEventListener('click',()=>set(false));
   if(sidebar){sidebar.addEventListener('click',e=>{if(e.target.closest('a'))set(false);});}
-  if(collapse){collapse.addEventListener('click',()=>{const on=document.body.classList.toggle('dd-collapsed');collapse.setAttribute('aria-label',on?'Expand navigation':'Collapse navigation');collapse.title=on?'Expand navigation':'Collapse navigation';document.querySelectorAll('.app-nav__link[data-label]').forEach(a=>a.title=on?a.dataset.label:'');});}
+  const RAIL_KEY='digi02hr.nav.rail.v2';
+  const desktop=window.matchMedia('(min-width:1024px)');
+  function railExpanded(){try{return window.localStorage.getItem(RAIL_KEY)==='0';}catch(_){return false;}}
+  function applyRail(){
+    document.body.classList.toggle('rail',desktop.matches&&!railExpanded());
+    if(collapse){
+      collapse.hidden=!desktop.matches;
+      const label=document.body.classList.contains('rail')?'Expand navigation':'Collapse navigation';
+      collapse.setAttribute('aria-label',label);collapse.setAttribute('title',label);
+    }
+  }
+  applyRail();
+  desktop.addEventListener('change',applyRail);
+  if(collapse)collapse.addEventListener('click',()=>{
+    if(!desktop.matches)return;
+    const rail=!document.body.classList.contains('rail');
+    document.body.classList.toggle('rail',rail);
+    try{window.localStorage.setItem(RAIL_KEY,rail?'1':'0');}catch(_){}
+    applyRail();
+  });
   const downloads=document.getElementById('dd-download');
   const downloadToggle=document.getElementById('dd-download-toggle');
   const downloadMenu=document.getElementById('dd-download-menu');

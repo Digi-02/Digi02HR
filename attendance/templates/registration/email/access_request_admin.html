@@ -5,38 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>New access request — DIGI HR Platform</title>
 </head>
-<body style="margin:0;padding:0;background:#000;color:#fff;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000">
+<body style="margin:0;padding:0;background:#FFEFF1;color:#1A1A1A;font-family:Poppins,Arial,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFEFF1">
   <tr>
     <td align="center" style="padding:40px 20px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:420px;background:#0A0A0A;border:1px solid #1A1A1A;border-radius:12px;overflow:hidden">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#FFD9DE;border-radius:16px;overflow:hidden">
         <tr>
-          <td style="padding:32px 24px;color:#fff">
-            <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;letter-spacing:-0.02em;color:#fff">New access request</h1>
-            <p style="margin:0 0 20px;font-size:16px;color:rgba(255,255,255,0.7);line-height:1.6">
-              A prospective company has requested access to DIGI HR. Review and approve in the platform admin.
+          <td align="center" style="padding:30px 24px 20px;background:#FFD9DE">
+            <img src="{{ logo_url }}" alt="DIGI HR" width="160" style="display:block;height:auto;max-width:160px;border:0">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 28px 32px;color:#1A1A1A">
+            <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#1A1A1A;text-align:center">New access request</h1>
+            <p style="margin:0 0 20px;font-size:15px;color:#626262;line-height:1.6;text-align:center">
+              A prospective company has requested access to DIGI HR. Review and approve it in the platform admin.
             </p>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0">
-              <tr><td style="padding:4px 0;color:rgba(255,255,255,0.6);font-size:13px"><strong>Contact:</strong></td><td style="padding:4px 0;color:#fff;font-size:14px">{{ contact_name }}</td></tr>
-              <tr><td style="padding:4px 0;color:rgba(255,255,255,0.6);font-size:13px"><strong>Email:</strong></td><td style="padding:4px 0;color:#fff;font-size:14px">{{ email }}</td></tr>
-              <tr><td style="padding:4px 0;color:rgba(255,255,255,0.6);font-size:13px"><strong>Company:</strong></td><td style="padding:4px 0;color:#fff;font-size:14px">{{ company_name|default:"-" }}</td></tr>
-              <tr><td style="padding:4px 0;color:rgba(255,255,255,0.6);font-size:13px"><strong>Team size:</strong></td><td style="padding:4px 0;color:#fff;font-size:14px">{{ team_size|default:"-" }}</td></tr>
-              <tr><td style="padding:4px 0;color:rgba(255,255,255,0.6);font-size:13px"><strong>Phone:</strong></td><td style="padding:4px 0;color:#fff;font-size:14px">{{ phone|default:"-" }}</td></tr>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background:#FFF7F8;border:1px solid #F5C2CA;border-radius:12px">
+              <tr><td style="padding:8px 14px;color:#626262;font-size:13px"><strong>Contact:</strong></td><td style="padding:8px 14px;color:#1A1A1A;font-size:14px">{{ contact_name }}</td></tr>
+              <tr><td style="padding:8px 14px;color:#626262;font-size:13px"><strong>Email:</strong></td><td style="padding:8px 14px;color:#1A1A1A;font-size:14px">{{ email }}</td></tr>
+              <tr><td style="padding:8px 14px;color:#626262;font-size:13px"><strong>Company:</strong></td><td style="padding:8px 14px;color:#1A1A1A;font-size:14px">{{ company_name|default:"-" }}</td></tr>
+              <tr><td style="padding:8px 14px;color:#626262;font-size:13px"><strong>Team size:</strong></td><td style="padding:8px 14px;color:#1A1A1A;font-size:14px">{{ team_size|default:"-" }}</td></tr>
+              <tr><td style="padding:8px 14px;color:#626262;font-size:13px"><strong>Phone:</strong></td><td style="padding:8px 14px;color:#1A1A1A;font-size:14px">{{ phone|default:"-" }}</td></tr>
             </table>
-            <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6"><strong>Message:</strong></p>
-            <p style="margin:0 0 24px;font-size:14px;color:#fff;background:#050505;padding:16px;border-radius:8px;line-height:1.6">{{ message }}</p>
+            <p style="margin:0 0 8px;font-size:13px;color:#626262;line-height:1.6"><strong>Message:</strong></p>
+            <p style="margin:0 0 22px;font-size:14px;color:#1A1A1A;background:#FFF7F8;border:1px solid #F5C2CA;padding:16px;border-radius:12px;line-height:1.6">{{ message }}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center" style="padding:16px 0">
-                  <a href="{{ platform_url }}" style="display:inline-block;width:100%;max-width:260px;min-height:52px;background:#0E4DA4;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:17px;text-align:center;text-decoration:none;padding:0 16px">Review access requests</a>
+                <td align="center" style="padding:8px 0">
+                  <a href="{{ platform_url }}" style="display:inline-block;min-width:240px;min-height:50px;background:#FFA6B5;color:#222222;border-radius:8px;font-weight:600;font-size:16px;line-height:50px;text-align:center;text-decoration:none;padding:0 24px">Review access requests</a>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
         <tr>
-          <td align="center" style="padding:24px;color:rgba(255,255,255,0.4);font-size:13px;border-top:1px solid #1A1A1A;background:#050505">
-            Powered by DIGI
+          <td align="center" style="padding:20px;color:#8A6A70;font-size:12px;border-top:1px solid #F5C2CA;background:#FFEFF1">
+            Powered by Digi02
           </td>
         </tr>
       </table>
