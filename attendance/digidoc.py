@@ -42,8 +42,7 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .digidoc_exports import docx as export_docx, odt as export_odt, plain_text as export_text, rtf_text as export_rtf
-from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset
-from .organization import get_active_organization, user_has_hr_access
+from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, DigiDocLetterheadSnapshot, OrganizationMembership, PersonalLetterhead
 from .shell import shell_context
 
 
@@ -51,6 +50,7 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_DEPTH = 20
 MAX_NODES = 10000
 MAX_TITLE = 200
+MAX_DOCUMENTS_PER_USER = 200
 MAX_PAGES = 50
 MAX_FLOATING_IMAGES = 20
 ALLOWED_TYPES = {"doc", "paragraph", "heading", "text", "hardBreak", "horizontalRule", "bulletList", "orderedList", "listItem", "table", "tableRow", "tableCell", "image"}
@@ -73,11 +73,47 @@ CHILDREN = {
 }
 
 
+DIGIDOC_ROLES = {"owner", "hr_admin", "manager", "payroll_officer", "employee"}
+DIGIDOC_STAFF_ROLES = {"manager", "payroll_officer", "employee"}
+
+
 def _scope(request):
-    organization = get_active_organization(request)
-    if not organization or not user_has_hr_access(request.user, organization):
+    memberships = OrganizationMembership.objects.filter(
+        user=request.user, is_active=True, organization__is_active=True,
+    ).select_related("organization")
+    selected_id = request.session.get("active_organization_id")
+    membership = memberships.filter(organization_id=selected_id).first() if selected_id else None
+    membership = membership or memberships.order_by("organization__name").first()
+    organization = membership.organization if membership else None
+    employee_profile = getattr(request.user, "employee_profile", None)
+    if (not organization or not organization.is_active or not membership
+            or employee_profile and (not employee_profile.is_active or employee_profile.organization_id != organization.pk)):
         raise PermissionDenied
-    return organization
+    if membership.role in DIGIDOC_ROLES:
+        if membership.role in DIGIDOC_STAFF_ROLES and not organization.allow_staff_digidoc:
+            raise PermissionDenied
+        return organization
+    raise PermissionDenied
+
+
+def _membership(request, organization):
+    return OrganizationMembership.objects.filter(user=request.user, organization=organization, is_active=True).first()
+
+
+def _hr_member(request, organization):
+    membership = _membership(request, organization)
+    return bool(membership and membership.role in {"owner", "hr_admin"})
+
+
+def _owned_document(request, organization, document_id):
+    document = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    if document.created_by_id == request.user.pk:
+        return document
+    if document.created_by_id is None and _hr_member(request, organization):
+        return document
+    # Do not reveal whether another member's UUID exists.
+    from django.http import Http404
+    raise Http404
 
 
 def _clean_title(value):
@@ -293,13 +329,22 @@ def validate_document_json(value):
     return result
 
 
-def _ensure_company_images(content, organization):
+def _ensure_company_images(content, organization, user=None, previous_content=None):
     image_ids = []
     def walk(node):
         if node["type"] == "image": image_ids.append(node["attrs"]["asset_id"])
         for child in node.get("content", []): walk(child)
     walk(content)
-    found = set(str(value) for value in DigiDocImageAsset.objects.filter(organization=organization, pk__in=image_ids).values_list("pk", flat=True))
+    requested_ids = set(image_ids)
+    permitted = DigiDocImageAsset.objects.filter(organization=organization, pk__in=requested_ids)
+    if user is not None:
+        permitted = permitted.filter(uploaded_by=user)
+        if previous_content is not None:
+            previous_ids = _collect_image_ids(previous_content)
+            permitted = DigiDocImageAsset.objects.filter(organization=organization, pk__in=image_ids).filter(
+                uploaded_by=user
+            ) | DigiDocImageAsset.objects.filter(organization=organization, pk__in=requested_ids & previous_ids)
+    found = set(str(value) for value in permitted.values_list("pk", flat=True))
     if found != set(image_ids):
         raise ValidationError("One or more document images are unavailable.")
 
@@ -308,18 +353,129 @@ def _doc_context(request, organization, **extra):
     return {"organization": organization, "page_title": "DigiDoc", **shell_context(request, organization), **extra}
 
 
+def _snapshot_source(document, selected):
+    if selected.startswith("personal:"):
+        personal_id = selected.split(":", 1)[1]
+        member = OrganizationMembership.objects.filter(
+            organization=document.organization, user=document.created_by, is_active=True,
+        ).first()
+        if not member or (member.role not in {"owner", "hr_admin"} and not member.personal_branding_enabled):
+            return None
+        return PersonalLetterhead.objects.filter(
+            pk=personal_id, organization=document.organization, user=document.created_by,
+        ).first()
+    if selected not in {"1", "2"}:
+        return None
+    asset = CompanyLetterhead.objects.filter(organization=document.organization).first()
+    if not asset:
+        return None
+    field_name = "image_second" if selected == "2" else "image"
+    image = getattr(asset, field_name)
+    if not image:
+        return None
+    return SimpleNamespace(
+        pk="company", image=image,
+        image_format=asset.image_second_format if selected == "2" else asset.image_format,
+        image_width=asset.image_second_width if selected == "2" else asset.image_width,
+        image_height=asset.image_second_height if selected == "2" else asset.image_height,
+        scale_mode=asset.scale_mode, margin_top_mm=asset.margin_top_mm,
+        margin_bottom_mm=asset.margin_bottom_mm, margin_left_mm=asset.margin_left_mm,
+        margin_right_mm=asset.margin_right_mm, source_kind="company",
+    )
+
+
+def _capture_document_letterheads(document):
+    """Capture each selected letterhead once; later company changes cannot alter it."""
+    selections = {
+        "first": document.letterhead_first_slot,
+        "other": document.letterhead_other_slot,
+    }
+    for page_role, selected in selections.items():
+        existing = DigiDocLetterheadSnapshot.objects.filter(document=document, page_role=page_role).first()
+        if not document.letterhead_enabled or selected == "none":
+            if existing:
+                existing.image.delete(save=False)
+                existing.delete()
+            continue
+        if existing and existing.source_slot == selected:
+            continue
+        source = _snapshot_source(document, selected)
+        if source is None:
+            raise ValidationError("The selected letterhead is unavailable.")
+        try:
+            with source.image.open("rb") as image_file:
+                image_bytes = image_file.read(8 * 1024 * 1024 + 1)
+        except (OSError, ValueError) as exc:
+            raise ValidationError("The selected letterhead is unavailable.") from exc
+        if not image_bytes or len(image_bytes) > 8 * 1024 * 1024:
+            raise ValidationError("The selected letterhead exceeds the safe size limit.")
+        if existing:
+            existing.image.delete(save=False)
+            existing.delete()
+        snapshot = DigiDocLetterheadSnapshot(
+            document=document, organization=document.organization, page_role=page_role,
+            source_kind="personal" if selected.startswith("personal:") else "company",
+            source_id=str(getattr(source, "pk", "")), source_slot=selected,
+            image_format=source.image_format, image_width=source.image_width,
+            image_height=source.image_height, scale_mode=source.scale_mode,
+            margin_top_mm=source.margin_top_mm, margin_bottom_mm=source.margin_bottom_mm,
+            margin_left_mm=source.margin_left_mm, margin_right_mm=source.margin_right_mm,
+        )
+        extension = "png" if source.image_format == "png" else "jpg"
+        snapshot.image.save(f"digidoc-{page_role}.{extension}", ContentFile(image_bytes), save=True)
+
+
+def _copy_document_letterhead_snapshots(source_document, target_document):
+    for source in DigiDocLetterheadSnapshot.objects.filter(document=source_document):
+        try:
+            with source.image.open("rb") as image_file:
+                data = image_file.read(8 * 1024 * 1024 + 1)
+        except (OSError, ValueError):
+            continue
+        if not data or len(data) > 8 * 1024 * 1024:
+            continue
+        clone = DigiDocLetterheadSnapshot(
+            document=target_document, organization=target_document.organization,
+            page_role=source.page_role, source_kind=source.source_kind,
+            source_id=source.source_id, source_slot=source.source_slot,
+            image_format=source.image_format, image_width=source.image_width,
+            image_height=source.image_height, scale_mode=source.scale_mode,
+            margin_top_mm=source.margin_top_mm, margin_bottom_mm=source.margin_bottom_mm,
+            margin_left_mm=source.margin_left_mm, margin_right_mm=source.margin_right_mm,
+        )
+        extension = "png" if source.image_format == "png" else "jpg"
+        clone.image.save(f"digidoc-copy-{source.page_role}.{extension}", ContentFile(data), save=True)
+
+
+def _is_orphan(document):
+    return document.created_by_id is None
+
+
+@login_required
+@require_POST
+def digidoc_claim(request, document_id):
+    organization = _scope(request)
+    if not _hr_member(request, organization):
+        raise PermissionDenied
+    document = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization, created_by__isnull=True)
+    document.created_by = request.user
+    document.save(update_fields=["created_by"])
+    AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.claimed", target_model="DigiDocDocument", target_id=str(document.pk), summary="Claimed an unowned DigiDoc document.")
+    return redirect("digidoc_editor", document_id=document.pk)
+
+
 @login_required
 def digidoc_list(request):
     organization = _scope(request)
     query = _clean_title(request.GET.get("q", "")) if request.GET.get("q") else ""
-    documents = DigiDocDocument.objects.filter(organization=organization).select_related("created_by")
+    documents = DigiDocDocument.objects.filter(organization=organization, created_by=request.user).select_related("created_by")
+    orphan_documents = DigiDocDocument.objects.none()
+    if _hr_member(request, organization):
+        orphan_documents = DigiDocDocument.objects.filter(organization=organization, created_by__isnull=True).select_related("created_by")
+        documents = documents | orphan_documents
     if query:
         documents = documents.filter(title__icontains=query)
-    owner = request.GET.get("owner", "")
-    if owner == "me":
-        documents = documents.filter(created_by=request.user)
-    elif owner.isdigit():
-        documents = documents.filter(created_by_id=int(owner))
+    owner = "me"
     sort = request.GET.get("sort", "recent")
     if sort == "title":
         documents = documents.order_by("title", "-updated_at")
@@ -327,15 +483,16 @@ def digidoc_list(request):
         sort = "recent"
         documents = documents.order_by("-updated_at")
     page = Paginator(documents, 24).get_page(request.GET.get("page"))
-    owners = DigiDocDocument.objects.filter(organization=organization).select_related("created_by").values_list("created_by_id", "created_by__first_name", "created_by__last_name", "created_by__username").distinct().order_by("created_by__username")
+    owners = ()
     return render(request, "attendance/digidoc_list.html", _doc_context(request, organization,
-        documents=page.object_list, document_page=page, query=query, owner=owner, sort=sort, owners=owners))
+        documents=page.object_list, document_page=page, query=query, owner=owner,
+        sort=sort, owners=owners))
 
 
 @login_required
 def digidoc_thumbnail(request, document_id):
     organization = _scope(request)
-    document = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    document = _owned_document(request, organization, document_id)
     revision = document.updated_at.isoformat() if document.updated_at else "new"
     cache_key = f"digidoc:thumbnail:{document.pk}:{document.version}:{revision}"
     image = cache.get(cache_key)
@@ -357,17 +514,24 @@ def digidoc_thumbnail(request, document_id):
 @require_POST
 def digidoc_create(request):
     organization = _scope(request)
+    if DigiDocDocument.objects.filter(organization=organization, created_by=request.user).count() >= MAX_DOCUMENTS_PER_USER:
+        return HttpResponse("You have reached the 200 document limit.", status=429)
     letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
+    membership = _membership(request, organization)
+    default_personal = PersonalLetterhead.objects.filter(organization=organization, user=request.user, is_default=True).first() if membership.personal_branding_enabled or membership.role in {"owner", "hr_admin"} else None
+    default_selection = f"personal:{default_personal.pk}" if default_personal else "1"
     doc = DigiDocDocument.objects.create(
         organization=organization,
         created_by=request.user,
         title="Untitled document",
         content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
-        letterhead_enabled=bool(letterhead and letterhead.image),
+        letterhead_enabled=bool((letterhead and letterhead.image) or default_personal),
         letterhead_page_mode=letterhead.default_page_mode if letterhead else "every",
-        letterhead_first_slot="1",
-        letterhead_other_slot="none" if letterhead and letterhead.default_page_mode == "first" else "1",
+        letterhead_first_slot=default_selection,
+        letterhead_other_slot="none" if default_personal or letterhead and letterhead.default_page_mode == "first" else default_selection,
     )
+    _capture_document_letterheads(doc)
+    AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.created", target_model="DigiDocDocument", target_id=str(doc.pk), summary="Created a DigiDoc document.")
     return redirect("digidoc_editor", document_id=doc.pk)
 
 
@@ -375,7 +539,7 @@ def digidoc_create(request):
 @ensure_csrf_cookie
 def digidoc_editor(request, document_id):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
     try:
         content = validate_document_json(doc.content_json)
     except ValidationError:
@@ -383,7 +547,12 @@ def digidoc_editor(request, document_id):
     letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
     nonce = secrets.token_urlsafe(18)
     safe_json_script = str(json_script(content, "dd-initial")).replace("<script ", f'<script nonce="{nonce}" ', 1)
-    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, initial_json_script=safe_json_script, letterhead=letterhead, letterhead_image_url=reverse("company_letterhead_image"), letterhead_second_image_url=reverse("company_letterhead_image") + "?slot=2", branding_url=reverse("organization_branding"), csp_nonce=nonce))
+    personal_allowed = bool(_membership(request, organization).personal_branding_enabled or _hr_member(request, organization))
+    personal_letterheads = PersonalLetterhead.objects.filter(organization=organization, user=request.user) if personal_allowed else PersonalLetterhead.objects.none()
+    first_snapshot = DigiDocLetterheadSnapshot.objects.filter(document=doc, page_role="first").first()
+    other_snapshot = DigiDocLetterheadSnapshot.objects.filter(document=doc, page_role="other").first()
+    layout_source = first_snapshot or other_snapshot or letterhead
+    response = render(request, "attendance/digidoc_editor.html", _doc_context(request, organization, document=doc, readonly_orphan=doc.created_by_id is None, initial_json_script=safe_json_script, letterhead=layout_source, current_company_letterhead=letterhead, has_editor_letterhead=bool((letterhead and letterhead.image) or personal_letterheads.exists() or first_snapshot or other_snapshot), personal_letterheads=personal_letterheads, first_snapshot_url=reverse("digidoc_snapshot_image", args=[first_snapshot.pk]) if first_snapshot else "", first_snapshot_slot=first_snapshot.source_slot if first_snapshot else "", other_snapshot_url=reverse("digidoc_snapshot_image", args=[other_snapshot.pk]) if other_snapshot else "", other_snapshot_slot=other_snapshot.source_slot if other_snapshot else "", branding_url=reverse("organization_branding"), personal_branding_url=reverse("personal_branding"), csp_nonce=nonce))
     response["Content-Security-Policy"] = f"default-src 'self'; script-src 'self'; style-src 'self' 'nonce-{nonce}'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     response["X-Frame-Options"] = "DENY"
     response["Referrer-Policy"] = "same-origin"
@@ -396,7 +565,9 @@ def digidoc_editor(request, document_id):
 @require_POST
 def digidoc_save(request, document_id):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
+    if doc.created_by_id is None:
+        raise PermissionDenied("Claim this document before editing it.")
     if len(request.body) > MAX_JSON_BYTES + 4096:
         return JsonResponse({"error": "The document exceeds the 2 MB limit."}, status=413)
     rate_key = f"digidoc:save:{organization.pk}:{request.user.pk}"
@@ -411,7 +582,7 @@ def digidoc_save(request, document_id):
         if not isinstance(payload, dict) or set(payload) - {"title", "content", "letterhead_enabled", "letterhead_page_mode", "letterhead_first_slot", "letterhead_other_slot", "version"}:
             raise ValidationError("Unsupported save request.")
         content = validate_document_json(payload.get("content"))
-        _ensure_company_images(content, organization)
+        _ensure_company_images(content, organization, request.user, doc.content_json)
         expected_version = payload.get("version")
         if type(expected_version) is not int:
             raise ValidationError("Document version is invalid.")
@@ -421,13 +592,18 @@ def digidoc_save(request, document_id):
         first_slot = payload.get("letterhead_first_slot", "1")
         other_slot = payload.get("letterhead_other_slot", "none" if mode == "first" else "1")
         current_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
+        membership = _membership(request, organization)
+        personal = PersonalLetterhead.objects.filter(organization=organization, user=request.user)
+        if membership.role not in {"owner", "hr_admin"} and not membership.personal_branding_enabled:
+            personal = PersonalLetterhead.objects.none()
         valid_slots = {"1", "none"} | ({"2"} if current_letterhead and current_letterhead.image_second else set())
+        valid_slots |= {f"personal:{item}" for item in personal.values_list("pk", flat=True)}
         if type(enabled) is not bool or mode not in {"every", "first"} or first_slot not in valid_slots or other_slot not in valid_slots:
             raise ValidationError("Invalid letterhead settings.")
-        if enabled and not CompanyLetterhead.objects.filter(organization=organization).exists():
-            raise ValidationError("This company has no saved letterhead.")
+        if enabled and not any(slot != "none" for slot in (first_slot, other_slot)):
+            raise ValidationError("Choose a letterhead for at least one page.")
         with transaction.atomic():
-            doc = get_object_or_404(DigiDocDocument.objects.select_for_update(), pk=document_id, organization=organization)
+            doc = _owned_document(request, organization, document_id)
             if expected_version != doc.version:
                 return JsonResponse({"error": "This document changed in another session. Reload before saving."}, status=409)
             doc.title, doc.content_json = title, content
@@ -435,6 +611,7 @@ def digidoc_save(request, document_id):
             doc.letterhead_first_slot, doc.letterhead_other_slot = first_slot, other_slot
             doc.version += 1
             doc.save(update_fields=["title", "content_json", "letterhead_enabled", "letterhead_page_mode", "letterhead_first_slot", "letterhead_other_slot", "version", "updated_at"])
+            _capture_document_letterheads(doc)
         return JsonResponse({"ok": True, "version": doc.version, "updated_at": timezone.localtime(doc.updated_at).strftime("%I:%M %p").lstrip("0")})
     except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
         message = exc.messages[0] if isinstance(exc, ValidationError) else "Invalid save request."
@@ -445,8 +622,18 @@ def digidoc_save(request, document_id):
 @require_POST
 def digidoc_duplicate(request, document_id):
     organization = _scope(request)
-    original = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
-    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode, letterhead_first_slot=original.letterhead_first_slot, letterhead_other_slot=original.letterhead_other_slot)
+    original = _owned_document(request, organization, document_id)
+    if original.created_by_id is None:
+        raise PermissionDenied("Claim this document before making a copy.")
+    if DigiDocDocument.objects.filter(organization=organization, created_by=request.user).count() >= MAX_DOCUMENTS_PER_USER:
+        return HttpResponse("You have reached the 200 document limit.", status=429)
+    with transaction.atomic():
+        doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode, letterhead_first_slot=original.letterhead_first_slot, letterhead_other_slot=original.letterhead_other_slot)
+        if original.letterhead_enabled:
+            if original.letterhead_snapshots.exists():
+                _copy_document_letterhead_snapshots(original, doc)
+            else:
+                _capture_document_letterheads(doc)
     return redirect("digidoc_editor", document_id=doc.pk)
 
 
@@ -454,7 +641,13 @@ def digidoc_duplicate(request, document_id):
 @require_POST
 def digidoc_delete(request, document_id):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
+    if doc.created_by_id is None:
+        raise PermissionDenied("Claim this document before deleting it.")
+    AuditLog.objects.create(organization=organization, actor=request.user, area="organization", action="digidoc.deleted", target_model="DigiDocDocument", target_id=str(doc.pk), summary="Deleted a DigiDoc document.")
+    for snapshot in doc.letterhead_snapshots.all():
+        if snapshot.image:
+            snapshot.image.delete(save=False)
     doc.delete()
     return redirect("digidoc_list")
 
@@ -490,6 +683,18 @@ def digidoc_image_upload(request):
 def digidoc_image(request, asset_id):
     organization = _scope(request)
     asset = get_object_or_404(DigiDocImageAsset, pk=asset_id, organization=organization)
+    if asset.uploaded_by_id != request.user.pk:
+        referenced = False
+        for own_doc in DigiDocDocument.objects.filter(organization=organization, created_by=request.user).only("content_json"):
+            try:
+                if str(asset_id) in _collect_image_ids(validate_document_json(own_doc.content_json)):
+                    referenced = True
+                    break
+            except ValidationError:
+                continue
+        if not referenced:
+            from django.http import Http404
+            raise Http404
     try:
         with asset.image.open("rb") as image_file:
             data = image_file.read(8 * 1024 * 1024 + 1)
@@ -498,6 +703,35 @@ def digidoc_image(request, asset_id):
     if len(data) > 8 * 1024 * 1024:
         return HttpResponse(status=404)
     response = HttpResponse(data, content_type="image/png" if asset.image_format == "png" else "image/jpeg")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _collect_image_ids(content):
+    found = set()
+    def walk(node):
+        if node.get("type") == "image":
+            found.add(str(node.get("attrs", {}).get("asset_id", "")))
+        for child in node.get("content", []):
+            walk(child)
+    walk(content)
+    return found
+
+
+@login_required
+def digidoc_snapshot_image(request, snapshot_id):
+    organization = _scope(request)
+    snapshot = get_object_or_404(DigiDocLetterheadSnapshot, pk=snapshot_id, organization=organization)
+    _owned_document(request, organization, snapshot.document_id)
+    try:
+        with snapshot.image.open("rb") as image_file:
+            data = image_file.read(8 * 1024 * 1024 + 1)
+    except OSError:
+        return HttpResponse(status=404)
+    if not data or len(data) > 8 * 1024 * 1024:
+        return HttpResponse(status=404)
+    response = HttpResponse(data, content_type="image/png" if snapshot.image_format == "png" else "image/jpeg")
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, no-store"
     return response
@@ -748,23 +982,34 @@ def _render_pdf_isolated(document):
         image_payload[str(asset.pk)] = base64.b64encode(data).decode("ascii")
     letterhead_bytes = None
     letterhead_meta = None
+    first_export_slot, other_export_slot = document.letterhead_first_slot, document.letterhead_other_slot
     if document.letterhead_enabled:
-        letterhead = CompanyLetterhead.objects.filter(organization=document.organization).first()
-        if not letterhead:
-            raise ValidationError("The saved letterhead is unavailable.")
+        _capture_document_letterheads(document)
         letterhead_bytes, letterhead_meta = {}, {}
-        for slot, field_name in (("1", "image"), ("2", "image_second")):
-            image = getattr(letterhead, field_name)
-            if image:
-                with image.open("rb") as source:
-                    letterhead_bytes[slot] = source.read(8 * 1024 * 1024 + 1)
-                letterhead_meta[slot] = {"scale_mode": letterhead.scale_mode, "margin_top_mm": letterhead.margin_top_mm, "margin_bottom_mm": letterhead.margin_bottom_mm, "margin_left_mm": letterhead.margin_left_mm, "margin_right_mm": letterhead.margin_right_mm}
+        for page_role, export_slot in (("first", "1"), ("other", "2")):
+            snapshot = DigiDocLetterheadSnapshot.objects.filter(document=document, page_role=page_role).first()
+            if not snapshot:
+                continue
+            with snapshot.image.open("rb") as source:
+                image_bytes = source.read(8 * 1024 * 1024 + 1)
+            if not image_bytes or len(image_bytes) > 8 * 1024 * 1024:
+                raise ValidationError("The saved letterhead snapshot is unavailable.")
+            letterhead_bytes[export_slot] = image_bytes
+            letterhead_meta[export_slot] = {
+                "scale_mode": snapshot.scale_mode, "margin_top_mm": snapshot.margin_top_mm,
+                "margin_bottom_mm": snapshot.margin_bottom_mm, "margin_left_mm": snapshot.margin_left_mm,
+                "margin_right_mm": snapshot.margin_right_mm,
+            }
+        first_export_slot = "none" if document.letterhead_first_slot == "none" else "1"
+        other_export_slot = "none" if document.letterhead_other_slot == "none" else "2"
+        if not letterhead_bytes:
+            raise ValidationError("The saved letterhead is unavailable.")
     worker_request = {
         "title": _clean_title(document.title), "content": content,
         "letterhead_enabled": document.letterhead_enabled,
         "letterhead_page_mode": document.letterhead_page_mode,
-        "letterhead_first_slot": document.letterhead_first_slot,
-        "letterhead_other_slot": document.letterhead_other_slot,
+        "letterhead_first_slot": first_export_slot,
+        "letterhead_other_slot": other_export_slot,
         "letterhead_meta": letterhead_meta,
         "letterhead_bytes": {slot: base64.b64encode(data).decode("ascii") for slot, data in letterhead_bytes.items()} if letterhead_bytes else None,
         "assets": image_payload,
@@ -864,7 +1109,7 @@ def _render_preview_images_isolated(pdf_data, *, first_page_only=False):
 @login_required
 def digidoc_pdf(request, document_id):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
     cutoff = timezone.now() - timedelta(minutes=1)
     recent = AuditLog.objects.filter(actor=request.user, action="digidoc.download", created_at__gte=cutoff).count()
     if recent >= 10:
@@ -903,7 +1148,7 @@ def digidoc_pdf(request, document_id):
 @login_required
 def digidoc_export(request, document_id, file_format):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
     exporters = {
         "docx": (export_docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
         "odt": (export_odt, "application/vnd.oasis.opendocument.text"),
@@ -961,7 +1206,7 @@ def digidoc_export(request, document_id, file_format):
 @login_required
 def digidoc_preview(request, document_id):
     organization = _scope(request)
-    doc = get_object_or_404(DigiDocDocument, pk=document_id, organization=organization)
+    doc = _owned_document(request, organization, document_id)
     try:
         pdf_data = _render_pdf_isolated(doc)
         pages = _render_preview_images_isolated(pdf_data)

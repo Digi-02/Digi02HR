@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from attendance.models import Organization, OrganizationMembership
-from attendance.branding import accent_vars, contrast_text, normalize_hex
+from attendance.branding import DEFAULT_BRAND_COLOR, accent_vars, contrast_text, normalize_hex
 
 
 def make_org(name='Acme'):
@@ -61,7 +61,7 @@ class BrandingTests(TestCase):
             'name': 'CompA', 'brand_color': '#FF0000', 'timezone': 'Africa/Lagos',
         })
         b.refresh_from_db()
-        self.assertEqual(b.brand_color, '#0A0A0A')
+        self.assertEqual(b.brand_color, DEFAULT_BRAND_COLOR)
         self.assertEqual(b.name, 'CompB')
         a.refresh_from_db()
         self.assertEqual(a.brand_color, '#FF0000')

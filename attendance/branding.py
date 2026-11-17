@@ -3,6 +3,11 @@ import re
 
 HEX_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
 
+# System default accent, taken from the Northstar demo workspace.  Companies
+# can replace this from Settings → Branding; existing organisations that had
+# never customised their shell are moved to it by migration 0046.
+DEFAULT_BRAND_COLOR = '#11306F'
+
 
 def normalize_hex(value, default='#3B5BFF'):
     if isinstance(value, str) and HEX_RE.match(value.strip()):

@@ -7,12 +7,23 @@ from django.urls import reverse
 
 from attendance.digidoc import _render_pdf_isolated, validate_document_json
 from attendance.digidoc_exports import _validate_rtf, plain_text
-from attendance.models import CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, Organization, OrganizationMembership
+from attendance.models import (
+    Category,
+    CompanyLetterhead,
+    DigiDocDocument,
+    DigiDocImageAsset,
+    DigiDocLetterheadSnapshot,
+    Employee,
+    Organization,
+    OrganizationMembership,
+    PersonalLetterhead,
+)
 from attendance.shell import build_navigation
 from PIL import Image
 from io import BytesIO
 import json
 import base64
+import uuid
 from pathlib import Path
 import re
 from zipfile import ZipFile
@@ -28,13 +39,56 @@ class DigiDocPhaseTwoTests(TestCase):
         self.client = Client()
         self.client.force_login(self.owner)
 
+    def _member(self, username, role="employee", *, active=True):
+        user = User.objects.create_user(username, password="test-pass-123")
+        OrganizationMembership.objects.create(
+            user=user, organization=self.organization, role=role, is_active=active
+        )
+        return user
+
+    def _employee_profile(self, user):
+        category = Category.objects.create(
+            organization=self.organization,
+            name=f"Staff {user.pk}",
+            code=f"S{user.pk}",
+        )
+
+    @staticmethod
+    def _status_and_close(response):
+        status = response.status_code
+        response.close()
+        return status
+        return Employee.objects.create(
+            organization=self.organization,
+            user=user,
+            category=category,
+            first_name="Linked",
+            last_name=user.username,
+            email=f"{user.username}@example.com",
+            phone="08000000000",
+            gender="MALE",
+        )
+
+    @staticmethod
+    def _delete_private_file(field_file):
+        if not field_file:
+            return
+        try:
+            field_file.delete(save=False)
+        except OSError:
+            # Windows can briefly keep response file handles open.
+            pass
+
     def tearDown(self):
         for letterhead in CompanyLetterhead.objects.all():
-            if letterhead.image:
-                letterhead.image.delete(save=False)
+            self._delete_private_file(letterhead.image)
+            self._delete_private_file(letterhead.image_second)
+        for snapshot in DigiDocLetterheadSnapshot.objects.all():
+            self._delete_private_file(snapshot.image)
+        for letterhead in PersonalLetterhead.objects.all():
+            self._delete_private_file(letterhead.image)
         for asset in DigiDocImageAsset.objects.all():
-            if asset.image:
-                asset.image.delete(save=False)
+            self._delete_private_file(asset.image)
         super().tearDown()
 
     def test_nav_registry_places_digidoc_in_people_for_hr_roles(self):
@@ -45,6 +99,60 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertEqual(item["url"], reverse("digidoc_list"))
         self.assertEqual(item["icon"], "bi-journal-pen")
         self.assertEqual(pages["digidoc"]["group"], "People")
+
+    def test_my_branding_navigation_is_grant_gated_and_hidden_for_hr(self):
+        for role in ("owner", "hr_admin"):
+            user = self.owner if role == "owner" else self._member("branding_hr", role)
+            sections, pages = build_navigation(user, self.organization)
+            self.assertNotIn("my_branding", pages)
+            self.assertNotIn("My Branding", [item["label"] for section in sections for item in section["items"]])
+
+        staff = self._member("branding_staff", "employee")
+        sections, pages = build_navigation(staff, self.organization)
+        self.assertNotIn("my_branding", pages)
+        membership = OrganizationMembership.objects.get(user=staff, organization=self.organization)
+        membership.personal_branding_enabled = True
+        membership.save(update_fields=["personal_branding_enabled"])
+        sections, pages = build_navigation(staff, self.organization)
+        self.assertIn("my_branding", pages)
+        self.assertIn("My Branding", [item["label"] for section in sections for item in section["items"]])
+
+    def test_personal_branding_requires_grant_and_keeps_letterheads_private(self):
+        staff_a = self._member("personal_brand_a", "employee")
+        staff_b = self._member("personal_brand_b", "employee")
+        client_a = Client()
+        client_a.force_login(staff_a)
+        self.assertEqual(client_a.get(reverse("personal_branding")).status_code, 403)
+        membership_a = OrganizationMembership.objects.get(user=staff_a, organization=self.organization)
+        membership_a.personal_branding_enabled = True
+        membership_a.save(update_fields=["personal_branding_enabled"])
+        self.assertEqual(client_a.get(reverse("personal_branding")).status_code, 200)
+        membership_b = OrganizationMembership.objects.get(user=staff_b, organization=self.organization)
+        membership_b.personal_branding_enabled = True
+        membership_b.save(update_fields=["personal_branding_enabled"])
+
+        image_buffer = BytesIO()
+        Image.new("RGB", (32, 48), "#2457b2").save(image_buffer, format="PNG")
+        letterhead = PersonalLetterhead.objects.create(
+            organization=self.organization, user=staff_b, name="Private letterhead",
+            image_format="png", image_width=32, image_height=48,
+        )
+        letterhead.image.save("private-personal.png", ContentFile(image_buffer.getvalue()), save=True)
+        self.assertEqual(client_a.get(reverse("personal_letterhead_image", args=[letterhead.pk])).status_code, 404)
+
+        client_b = Client()
+        client_b.force_login(staff_b)
+        image_response = client_b.get(reverse("personal_letterhead_image", args=[letterhead.pk]))
+        self.assertEqual(image_response.status_code, 200)
+        self.assertEqual(image_response["Cache-Control"], "private, no-store")
+        image_response.close()
+
+        hr_client = Client()
+        hr_client.force_login(self.owner)
+        self.assertEqual(hr_client.get(reverse("personal_branding_access")).status_code, 200)
+        preview = hr_client.get(reverse("personal_letterhead_admin_image", args=[letterhead.pk]))
+        self.assertEqual(preview.status_code, 200)
+        preview.close()
 
     def test_editor_uses_all_configured_navigation_presets_and_highlights(self):
         document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
@@ -71,34 +179,312 @@ class DigiDocPhaseTwoTests(TestCase):
         self.assertContains(response, 'data-label="DigiDoc"')
         self.assertContains(response, 'aria-current="page"')
 
-    def test_people_roles_without_documents_access_are_denied(self):
-        user = User.objects.create_user("digidoc_manager", password="test-pass-123")
-        OrganizationMembership.objects.create(user=user, organization=self.organization, role="manager")
+    def test_digidoc_roles_are_granted_by_active_membership_not_direct_reports(self):
+        for index, role in enumerate(("manager", "payroll_officer", "employee"), 1):
+            with self.subTest(role=role):
+                user = self._member(f"digidoc_{role}_{index}", role)
+                sections, pages = build_navigation(user, self.organization)
+                people = next(section for section in sections if section["key"] == "people")
+                self.assertIn("digidoc", [item["key"] for item in people["items"]])
+                self.assertIn("digidoc", pages)
+                client = Client()
+                client.force_login(user)
+                self.assertEqual(
+                    client.get(reverse("digidoc_list")).status_code, 200
+                )
+
+        viewer = self._member("digidoc_viewer", "viewer")
         client = Client()
-        client.force_login(user)
-        response = client.get(reverse("digidoc_list"))
-        self.assertEqual(response.status_code, 403)
-        sections, pages = build_navigation(user, self.organization)
+        client.force_login(viewer)
+        self.assertEqual(client.get(reverse("digidoc_list")).status_code, 403)
+        sections, pages = build_navigation(viewer, self.organization)
         self.assertNotIn("digidoc", pages)
 
-    def test_document_library_uses_preview_cards_and_working_filters(self):
+        staff = self._member("digidoc_disabled_staff", "employee")
+        self.organization.allow_staff_digidoc = False
+        self.organization.save(update_fields=["allow_staff_digidoc"])
+        self.assertEqual(self.client.get(reverse("digidoc_list")).status_code, 200)
+        staff_client = Client()
+        staff_client.force_login(staff)
+        self.assertEqual(staff_client.get(reverse("digidoc_list")).status_code, 403)
+        hr_admin = self._member("digidoc_disabled_hr", "hr_admin")
+        hr_client = Client()
+        hr_client.force_login(hr_admin)
+        self.assertEqual(hr_client.get(reverse("digidoc_list")).status_code, 200)
+
+    def test_document_library_is_limited_to_the_current_author(self):
         first = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, title="Quarterly report", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
-        other = User.objects.create_user("second_author", first_name="Second", last_name="Author", password="test-pass-123")
-        OrganizationMembership.objects.create(user=other, organization=self.organization, role="owner")
+        other = self._member("second_author", "owner")
         second = DigiDocDocument.objects.create(organization=self.organization, created_by=other, title="Policy draft", content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})
         response = self.client.get(reverse("digidoc_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Recent documents")
         self.assertContains(response, "Quarterly report")
-        self.assertContains(response, "Policy draft")
+        self.assertNotContains(response, "Policy draft")
         self.assertContains(response, reverse("digidoc_thumbnail", args=[first.pk]))
         self.assertContains(response, "dd-document-grid")
-        owned = self.client.get(reverse("digidoc_list"), {"owner": "me", "sort": "title"})
-        self.assertContains(owned, "Quarterly report")
-        self.assertNotContains(owned, "Policy draft")
-        by_owner = self.client.get(reverse("digidoc_list"), {"owner": str(other.pk)})
-        self.assertContains(by_owner, "Policy draft")
-        self.assertNotContains(by_owner, "Quarterly report")
+        self.assertNotContains(response, "Policy draft")
+
+        other_client = Client()
+        other_client.force_login(other)
+        own_library = other_client.get(reverse("digidoc_list"))
+        self.assertContains(own_library, "Policy draft")
+        self.assertNotContains(own_library, "Quarterly report")
+        self.assertContains(own_library, reverse("digidoc_thumbnail", args=[second.pk]))
+
+        searched = self.client.get(reverse("digidoc_list"), {"q": "Policy"})
+        self.assertNotContains(searched, "Policy draft")
+        ordered = self.client.get(reverse("digidoc_list"), {"sort": "title"})
+        self.assertContains(ordered, "Quarterly report")
+        self.assertNotContains(ordered, "Policy draft")
+
+    def test_owner_and_hr_admin_cannot_open_another_authors_document(self):
+        hr_a = self._member("hr_author_a", "hr_admin")
+        hr_b = self._member("hr_author_b", "hr_admin")
+        document_a = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=hr_a, title="HR A private",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        document_b = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=hr_b, title="HR B private",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        for user, hidden in ((self.owner, document_a), (hr_b, document_a), (hr_a, document_b)):
+            client = Client()
+            client.force_login(user)
+            with self.subTest(user=user.username, hidden=hidden.pk):
+                self.assertEqual(client.get(reverse("digidoc_editor", args=[hidden.pk])).status_code, 404)
+                self.assertEqual(client.get(reverse("digidoc_thumbnail", args=[hidden.pk])).status_code, 404)
+                self.assertEqual(client.get(reverse("digidoc_pdf", args=[hidden.pk])).status_code, 404)
+                self.assertEqual(client.get(reverse("digidoc_preview", args=[hidden.pk])).status_code, 404)
+                self.assertEqual(client.get(reverse("digidoc_export", args=[hidden.pk, "txt"])).status_code, 404)
+                self.assertEqual(client.post(reverse("digidoc_duplicate", args=[hidden.pk])).status_code, 404)
+                self.assertEqual(client.post(reverse("digidoc_delete", args=[hidden.pk])).status_code, 404)
+                self.assertNotContains(client.get(reverse("digidoc_list")), hidden.title)
+
+        own_client = Client()
+        own_client.force_login(hr_a)
+        self.assertEqual(own_client.get(reverse("digidoc_editor", args=[document_a.pk])).status_code, 200)
+        self.assertEqual(own_client.get(reverse("digidoc_editor", args=[document_b.pk])).status_code, 404)
+
+        owner_client = Client()
+        owner_client.force_login(self.owner)
+        self.assertEqual(owner_client.get(reverse("digidoc_editor", args=[document_a.pk])).status_code, 404)
+        self.assertEqual(owner_client.get(reverse("digidoc_editor", args=[document_b.pk])).status_code, 404)
+
+    def test_orphan_documents_are_read_only_for_hr_and_can_be_claimed(self):
+        orphan = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=None, title="Legacy orphan",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Old record"}]}]},
+        )
+        response = self.client.get(reverse("digidoc_list"))
+        self.assertContains(response, "Legacy orphan")
+        self.assertContains(response, "Take ownership")
+        editor = self.client.get(reverse("digidoc_editor", args=[orphan.pk]))
+        self.assertEqual(editor.status_code, 200)
+        self.assertContains(editor, "read-only")
+        payload = {"title": "Changed", "version": 1, "letterhead_enabled": False, "letterhead_page_mode": "every", "content": {"type": "doc", "content": [{"type": "paragraph", "content": []}]}}
+        self.assertEqual(self.client.post(reverse("digidoc_save", args=[orphan.pk]), data=json.dumps(payload), content_type="application/json").status_code, 403)
+        self.assertEqual(self.client.post(reverse("digidoc_delete", args=[orphan.pk])).status_code, 403)
+        self.assertEqual(self.client.post(reverse("digidoc_duplicate", args=[orphan.pk])).status_code, 403)
+
+        hr_admin = self._member("orphan_hr", "hr_admin")
+        hr_client = Client()
+        hr_client.force_login(hr_admin)
+        self.assertContains(hr_client.get(reverse("digidoc_list")), "Legacy orphan")
+        self.assertEqual(hr_client.get(reverse("digidoc_editor", args=[orphan.pk])).status_code, 200)
+        self.assertEqual(hr_client.post(reverse("digidoc_save", args=[orphan.pk]), data=json.dumps(payload), content_type="application/json").status_code, 403)
+
+        manager = self._member("orphan_manager", "manager")
+        manager_client = Client()
+        manager_client.force_login(manager)
+        self.assertNotContains(manager_client.get(reverse("digidoc_list")), "Legacy orphan")
+        self.assertEqual(manager_client.get(reverse("digidoc_editor", args=[orphan.pk])).status_code, 404)
+
+        claimed = self.client.post(reverse("digidoc_claim", args=[orphan.pk]))
+        self.assertRedirects(claimed, reverse("digidoc_editor", args=[orphan.pk]))
+        orphan.refresh_from_db()
+        self.assertEqual(orphan.created_by_id, self.owner.pk)
+        self.assertNotContains(hr_client.get(reverse("digidoc_list")), "Legacy orphan")
+        saved = self.client.post(reverse("digidoc_save", args=[orphan.pk]), data=json.dumps({**payload, "version": orphan.version}), content_type="application/json")
+        self.assertEqual(saved.status_code, 200, saved.content)
+
+    def test_deleting_an_author_preserves_the_document_as_an_orphan(self):
+        author = self._member("soon_deleted", "employee")
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=author, title="Author will go",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        author.delete()
+        document.refresh_from_db()
+        self.assertIsNone(document.created_by_id)
+        self.assertContains(self.client.get(reverse("digidoc_list")), "Author will go")
+
+    def test_inactive_membership_with_employee_profile_is_blocked_everywhere(self):
+        user = self._member("inactive_employee", "employee", active=False)
+        self._employee_profile(user)
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=user, title="Inactive author",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        letterhead = CompanyLetterhead.objects.create(
+            organization=self.organization, image_format="png",
+            image_width=10, image_height=10,
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (10, 10), "white").save(buffer, format="PNG")
+        letterhead.image.save("inactive.png", ContentFile(buffer.getvalue()), save=True)
+        asset_id = uuid.uuid4()
+
+        client = Client()
+        client.force_login(user)
+        self.assertEqual(client.get(reverse("digidoc_list")).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_editor", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_thumbnail", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_pdf", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_preview", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_export", args=[document.pk, "txt"])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_image", args=[asset_id])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_snapshot_image", args=[1])).status_code, 403)
+        self.assertEqual(client.post(reverse("digidoc_image_upload")).status_code, 403)
+        self.assertEqual(client.post(reverse("digidoc_create")).status_code, 403)
+        self.assertEqual(client.post(reverse("digidoc_save", args=[document.pk]), data="{}", content_type="application/json").status_code, 403)
+        self.assertEqual(client.get(reverse("company_letterhead_image")).status_code, 403)
+        self.assertEqual(client.get(reverse("company_letterhead_sample_pdf")).status_code, 403)
+        self.assertEqual(client.get(reverse("organization_branding")).status_code, 403)
+        self.assertEqual(client.get(reverse("personal_branding")).status_code, 403)
+        self.assertEqual(client.get(reverse("personal_branding_access")).status_code, 403)
+
+        OrganizationMembership.objects.filter(user=user, organization=self.organization).update(is_active=True)
+        self.assertEqual(client.get(reverse("digidoc_list")).status_code, 200)
+        self.assertEqual(self._status_and_close(client.get(reverse("company_letterhead_image"))), 200)
+
+    def test_superuser_without_membership_cannot_open_company_documents(self):
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Owner document",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
+        )
+        superuser = User.objects.create_superuser("platform_root", "root@example.com", "test-pass-123")
+        client = Client()
+        client.force_login(superuser)
+        self.assertEqual(client.get(reverse("digidoc_list")).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_editor", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_thumbnail", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_pdf", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_preview", args=[document.pk])).status_code, 403)
+        self.assertEqual(client.get(reverse("digidoc_export", args=[document.pk, "txt"])).status_code, 403)
+        self.assertEqual(client.post(reverse("digidoc_create")).status_code, 403)
+        self.assertEqual(client.get(reverse("company_letterhead_image")).status_code, 403)
+        self.assertEqual(client.get(reverse("company_letterhead_sample_pdf")).status_code, 403)
+        self.assertEqual(client.get(reverse("organization_branding")).status_code, 403)
+        self.assertEqual(client.get(reverse("personal_branding")).status_code, 403)
+        self.assertFalse(OrganizationMembership.objects.filter(user=superuser).exists())
+
+    def test_company_letterhead_endpoints_require_the_right_active_role(self):
+        letterhead = CompanyLetterhead.objects.create(
+            organization=self.organization, image_format="png",
+            image_width=10, image_height=10,
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (10, 10), "white").save(buffer, format="PNG")
+        letterhead.image.save("roles.png", ContentFile(buffer.getvalue()), save=True)
+        hr_admin = self._member("letterhead_hr", "hr_admin")
+        manager = self._member("letterhead_manager", "manager")
+        employee = self._member("letterhead_employee", "employee")
+        viewer = self._member("letterhead_viewer", "viewer")
+
+        self.assertEqual(self._status_and_close(self.client.get(reverse("company_letterhead_image"))), 200)
+        for user, expected in ((hr_admin, 200), (manager, 200), (employee, 200), (viewer, 403)):
+            client = Client()
+            client.force_login(user)
+            with self.subTest(user=user.username):
+                self.assertEqual(self._status_and_close(client.get(reverse("company_letterhead_image"))), expected)
+
+        self.organization.allow_staff_digidoc = False
+        self.organization.save(update_fields=["allow_staff_digidoc"])
+        self.assertEqual(self._status_and_close(self.client.get(reverse("company_letterhead_image"))), 200)
+        hr_client = Client()
+        hr_client.force_login(hr_admin)
+        self.assertEqual(self._status_and_close(hr_client.get(reverse("company_letterhead_image"))), 200)
+        for user in (manager, employee):
+            client = Client()
+            client.force_login(user)
+            self.assertEqual(self._status_and_close(client.get(reverse("company_letterhead_image"))), 403)
+
+        with patch("attendance.letterhead.render_sample_pdf_isolated", return_value=b"%PDF-1.4 sample"):
+            self.assertEqual(self.client.get(reverse("company_letterhead_sample_pdf")).status_code, 200)
+            self.assertEqual(hr_client.get(reverse("company_letterhead_sample_pdf")).status_code, 200)
+            for user in (manager, employee, viewer):
+                client = Client()
+                client.force_login(user)
+                with self.subTest(sample_user=user.username):
+                    self.assertEqual(client.get(reverse("company_letterhead_sample_pdf")).status_code, 403)
+
+    def test_existing_document_keeps_its_letterhead_after_replacement_and_deletion(self):
+        import pypdfium2 as pdfium
+
+        blue = BytesIO()
+        Image.new("RGB", (210, 297), "#385a9c").save(blue, format="PNG")
+        letterhead = CompanyLetterhead.objects.create(
+            organization=self.organization, image_format="png",
+            image_width=210, image_height=297, scale_mode="fill",
+            margin_top_mm=40, margin_bottom_mm=30, margin_left_mm=20, margin_right_mm=20,
+        )
+        letterhead.image.save("blue.png", ContentFile(blue.getvalue()), save=True)
+        document = DigiDocDocument.objects.create(
+            organization=self.organization, created_by=self.owner, title="Snapshot proof",
+            content_json={"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Keep my letterhead"}]}]},
+        )
+        payload = {
+            "title": "Snapshot proof", "version": 1, "letterhead_enabled": True,
+            "letterhead_page_mode": "every", "letterhead_first_slot": "1",
+            "letterhead_other_slot": "1", "content": document.content_json,
+        }
+        saved = self.client.post(reverse("digidoc_save", args=[document.pk]), data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(saved.status_code, 200, saved.content)
+        snapshot = DigiDocLetterheadSnapshot.objects.get(document=document, page_role="first")
+        self.assertTrue(snapshot.image.name.startswith("letterheads/"))
+
+        old_name = letterhead.image.name
+        red = BytesIO()
+        Image.new("RGB", (210, 297), "#b3261e").save(red, format="PNG")
+        letterhead.image.delete(save=False)
+        letterhead.image.save("red.png", ContentFile(red.getvalue()), save=True)
+        letterhead.image_format = "png"
+        letterhead.image_width, letterhead.image_height = 210, 297
+        letterhead.save(update_fields=["image", "image_format", "image_width", "image_height"])
+
+        def first_page_pixel():
+            response = self.client.get(reverse("digidoc_pdf", args=[document.pk]))
+            self.assertEqual(response.status_code, 200, response.content[:200])
+            rendered = pdfium.PdfDocument(response.content)
+            image = rendered[0].render(scale=0.5).to_pil().convert("RGB")
+            pixel = image.getpixel((2, 2))
+            rendered.close()
+            return pixel
+
+        replaced_pixel = first_page_pixel()
+        self.assertGreater(replaced_pixel[2], replaced_pixel[0], "The replaced letterhead must not overwrite the snapshot")
+
+        red_name = letterhead.image.name
+        storage = letterhead.image.storage
+        letterhead.delete()
+        storage.delete(red_name)
+        storage.delete(old_name)
+        editor_after_delete = self.client.get(reverse("digidoc_editor", args=[document.pk]))
+        self.assertEqual(editor_after_delete.status_code, 200)
+        self.assertContains(editor_after_delete, reverse("digidoc_snapshot_image", args=[snapshot.pk]))
+        deleted_pixel = first_page_pixel()
+        self.assertGreater(deleted_pixel[2], deleted_pixel[0], "The snapshot must keep exporting after the letterhead is deleted")
+        self.assertTrue(DigiDocLetterheadSnapshot.objects.filter(document=document).exists())
+
+    def test_digidoc_list_does_not_show_privacy_migration_notice(self):
+        for user in (self.owner, self._member("notice_hr", "hr_admin")):
+            client = Client()
+            client.force_login(user)
+            response = client.get(reverse("digidoc_list"))
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, "Documents are private now")
 
     def test_document_thumbnail_is_private_scoped_and_cached(self):
         document = DigiDocDocument.objects.create(organization=self.organization, created_by=self.owner, content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]})

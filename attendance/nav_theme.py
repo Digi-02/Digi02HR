@@ -7,6 +7,7 @@ CSS variables through :func:`resolve_nav_theme`.
 from __future__ import annotations
 
 from .branding import (
+    DEFAULT_BRAND_COLOR,
     HEX_RE,
     _luminance,
     contrast_ratio,
@@ -39,16 +40,19 @@ NAV_HIGHLIGHT_SOURCE_CHOICES = [
     ("custom", "Custom Colour"),
 ]
 
+# System default shell, matching the Northstar demo workspace.  This is used
+# for new organisations, "Restore default", and the migration that moves
+# existing never-customised organisations onto the current default.
 NAV_DEFAULTS = {
-    "nav_style": "clean",
-    "nav_bg_color": "#0A0A0A",
-    "nav_highlight_style": "rounded_pill",
-    "nav_highlight_source": "auto",
-    "nav_highlight_color": "#111111",
+    "nav_style": "custom",
+    "nav_bg_color": "#E2E8F3",
+    "nav_highlight_style": "minimal",
+    "nav_highlight_source": "custom",
+    "nav_highlight_color": "#103070",
     "nav_unhovered_highlight_color": "",
     "nav_text_color": "",
     "nav_muted_color": "",
-    "nav_hover_bg": "",
+    "nav_hover_bg": "#FFFFFF",
     "nav_hover_fg": "",
     "nav_active_icon_bg": "",
     "nav_active_icon_fg": "",
@@ -122,36 +126,36 @@ def _resolve_icon_pair(icon_bg, icon_fg, default_bg, default_fg):
 
 
 def _normalise_appearance(value):
-    value = (value or "clean").strip().lower()
+    value = (value or "custom").strip().lower()
     value = LEGACY_APPEARANCE.get(value, value)
-    return value if value in dict(NAV_APPEARANCE_CHOICES) else "clean"
+    return value if value in dict(NAV_APPEARANCE_CHOICES) else "custom"
 
 
 def _normalise_active_style(value):
-    value = (value or "rounded_pill").strip().lower()
+    value = (value or "minimal").strip().lower()
     value = LEGACY_ACTIVE_STYLE.get(value, value)
-    return value if value in dict(NAV_ACTIVE_STYLE_CHOICES) else "rounded_pill"
+    return value if value in dict(NAV_ACTIVE_STYLE_CHOICES) else "minimal"
 
 
 def _normalise_source(value):
-    value = (value or "auto").strip().lower()
-    return value if value in dict(NAV_HIGHLIGHT_SOURCE_CHOICES) else "auto"
+    value = (value or "custom").strip().lower()
+    return value if value in dict(NAV_HIGHLIGHT_SOURCE_CHOICES) else "custom"
 
 
 def resolve_nav_theme(
-    nav_style="clean",
-    nav_bg_color="#0A0A0A",
-    nav_highlight_style="rounded_pill",
-    nav_highlight_source="auto",
-    nav_highlight_color="#111111",
+    nav_style="custom",
+    nav_bg_color="#E2E8F3",
+    nav_highlight_style="minimal",
+    nav_highlight_source="custom",
+    nav_highlight_color="#103070",
     nav_unhovered_highlight_color="",
     nav_text_color="",
     nav_muted_color="",
-    nav_hover_bg="",
+    nav_hover_bg="#FFFFFF",
     nav_hover_fg="",
     nav_active_icon_bg="",
     nav_active_icon_fg="",
-    accent="#0A0A0A",
+    accent=DEFAULT_BRAND_COLOR,
 ):
     """Return the complete ``--nav-*`` token set for an organisation.
 
@@ -299,19 +303,41 @@ def resolve_nav_theme(
 def nav_inputs_from_organization(organization):
     """Read all theme inputs from a model instance."""
     return {
-        "nav_style": getattr(organization, "nav_style", "clean"),
-        "nav_bg_color": getattr(organization, "nav_bg_color", "#0A0A0A"),
-        "nav_highlight_style": getattr(organization, "nav_highlight_style", "rounded_pill"),
-        "nav_highlight_source": getattr(organization, "nav_highlight_source", "auto"),
-        "nav_highlight_color": getattr(organization, "nav_highlight_color", "#111111"),
-        "nav_unhovered_highlight_color": getattr(organization, "nav_unhovered_highlight_color", ""),
-        "nav_text_color": getattr(organization, "nav_text_color", ""),
-        "nav_muted_color": getattr(organization, "nav_muted_color", ""),
-        "nav_hover_bg": getattr(organization, "nav_hover_bg", ""),
-        "nav_hover_fg": getattr(organization, "nav_hover_fg", ""),
-        "nav_active_icon_bg": getattr(organization, "nav_active_icon_bg", ""),
-        "nav_active_icon_fg": getattr(organization, "nav_active_icon_fg", ""),
-        "accent": getattr(organization, "brand_color", "#0A0A0A") or "#0A0A0A",
+        "nav_style": getattr(organization, "nav_style", NAV_DEFAULTS["nav_style"]),
+        "nav_bg_color": getattr(organization, "nav_bg_color", NAV_DEFAULTS["nav_bg_color"]),
+        "nav_highlight_style": getattr(
+            organization, "nav_highlight_style", NAV_DEFAULTS["nav_highlight_style"]
+        ),
+        "nav_highlight_source": getattr(
+            organization, "nav_highlight_source", NAV_DEFAULTS["nav_highlight_source"]
+        ),
+        "nav_highlight_color": getattr(
+            organization, "nav_highlight_color", NAV_DEFAULTS["nav_highlight_color"]
+        ),
+        "nav_unhovered_highlight_color": getattr(
+            organization, "nav_unhovered_highlight_color",
+            NAV_DEFAULTS["nav_unhovered_highlight_color"],
+        ),
+        "nav_text_color": getattr(
+            organization, "nav_text_color", NAV_DEFAULTS["nav_text_color"]
+        ),
+        "nav_muted_color": getattr(
+            organization, "nav_muted_color", NAV_DEFAULTS["nav_muted_color"]
+        ),
+        "nav_hover_bg": getattr(
+            organization, "nav_hover_bg", NAV_DEFAULTS["nav_hover_bg"]
+        ),
+        "nav_hover_fg": getattr(
+            organization, "nav_hover_fg", NAV_DEFAULTS["nav_hover_fg"]
+        ),
+        "nav_active_icon_bg": getattr(
+            organization, "nav_active_icon_bg", NAV_DEFAULTS["nav_active_icon_bg"]
+        ),
+        "nav_active_icon_fg": getattr(
+            organization, "nav_active_icon_fg", NAV_DEFAULTS["nav_active_icon_fg"]
+        ),
+        "accent": getattr(organization, "brand_color", DEFAULT_BRAND_COLOR)
+        or DEFAULT_BRAND_COLOR,
     }
 
 

@@ -45,9 +45,10 @@ def make_employee_user(org, username):
 
 
 class ShellDefaultTests(TestCase):
-    def test_clean_shell_renders_for_default_organisation(self):
-        org, user = make_org_with_owner('Clean Shell Co', 'clean-shell-co', 'clean_shell')
-        self.assertEqual(org.nav_style, 'clean')
+    def test_default_shell_renders_for_new_organisation(self):
+        org, user = make_org_with_owner('Default Shell Co', 'default-shell-co', 'default_shell')
+        self.assertEqual(org.nav_style, 'custom')
+        self.assertEqual(org.nav_bg_color, '#E2E8F3')
         client = Client()
         client.force_login(user)
 
@@ -56,24 +57,27 @@ class ShellDefaultTests(TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.content.decode('utf-8')
         self.assertIn('class="app-sidebar"', html)
-        self.assertIn('data-nav-active="rounded_pill"', html)
-        self.assertIn('--nav-bg: #FFFFFF;', html)
-        self.assertIn('--nav-active-bg: #111111;', html)
-        self.assertIn('--nav-active-fg: #FFFFFF;', html)
-        self.assertIn('--nav-active-icon-bg: #FFFFFF;', html)
+        self.assertIn('data-nav-active="minimal"', html)
+        self.assertIn('--nav-bg: #E2E8F3;', html)
+        self.assertIn('--nav-active-bg: transparent;', html)
+        self.assertIn('--nav-active-fg: #0A0A0B;', html)
+        self.assertIn('--nav-active-indicator: #103070;', html)
+        self.assertIn('--nav-active-icon-bg: #E2E6EE;', html)
         self.assertIn('Favorites', html)
         self.assertNotIn('side-block--recent', html)
         self.assertIn('data-recent-list', html)
         self.assertIn('Dashboards', html)
         self.assertIn('data-page-key="overview"', html)
         self.assertIn('aria-current="page"', html)
-        self.assertIn('--nav-fg-muted: #6B6B6B;', html)
+        self.assertIn('--nav-fg-muted: #404040;', html)
         self.assertNotIn('ByeWind', html)
 
     def test_saved_classic_black_is_preserved(self):
         org, user = make_org_with_owner('Black Shell Co', 'black-shell-co', 'black_shell')
         org.nav_style = 'black'
-        org.save(update_fields=['nav_style'])
+        org.nav_highlight_style = 'rounded_pill'
+        org.nav_highlight_source = 'auto'
+        org.save(update_fields=['nav_style', 'nav_highlight_style', 'nav_highlight_source'])
         client = Client()
         client.force_login(user)
 

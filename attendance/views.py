@@ -52,6 +52,7 @@ from .models import (
     Organization,
     CompanyLetterhead,
     CompanyLetterheadUpload,
+    PersonalLetterhead,
     OrganizationMembership,
 )
 from .forms import (
@@ -1854,7 +1855,7 @@ def employee_account_create(request, pk):
                 OrganizationMembership.objects.get_or_create(
                     user=user,
                     organization=employee.organization,
-                    defaults={'role': 'employee', 'is_active': True},
+                    defaults={'role': 'employee', 'is_active': True, 'personal_branding_enabled': employee.organization.personal_branding_default},
                 )
                 write_audit_log(
                     request,
@@ -2846,7 +2847,7 @@ def employee_onboarding_setup(request, invitation):
                     OrganizationMembership.objects.get_or_create(
                         user=user,
                         organization=employee.organization,
-                        defaults={'role': 'employee', 'is_active': True},
+                    defaults={'role': 'employee', 'is_active': True, 'personal_branding_enabled': employee.organization.personal_branding_default},
                     )
                 employee.save(update_fields=[
                     'user',
@@ -5018,6 +5019,18 @@ def get_upcoming_internship_endings(days=None, organization=None, employee_ids=N
 
 # ==================== COMPANY BRANDING ====================
 
+def _active_membership_organization(request):
+    memberships = OrganizationMembership.objects.filter(
+        user=request.user, is_active=True, organization__is_active=True,
+    ).select_related('organization')
+    selected_id = request.session.get('active_organization_id')
+    membership = memberships.filter(organization_id=selected_id).first() if selected_id else None
+    membership = membership or memberships.order_by('organization__name').first()
+    employee_profile = getattr(request.user, 'employee_profile', None)
+    if employee_profile and (not employee_profile.is_active or not membership or employee_profile.organization_id != membership.organization_id):
+        return None
+    return membership.organization if membership else None
+
 @login_required
 def organization_branding(request):
     from .branding import accent_vars, dominant_color
@@ -5031,17 +5044,27 @@ def organization_branding(request):
         nav_inputs_from_organization,
         resolve_nav_theme,
     )
-    organization = get_active_organization(request)
+    organization = _active_membership_organization(request)
+    if not organization:
+        raise PermissionDenied
     membership = OrganizationMembership.objects.filter(
         user=request.user, organization=organization, is_active=True
     ).first()
     role = membership.role if membership else ''
-    if not (request.user.is_superuser or role in ('owner', 'hr_admin')):
+    if not organization or not organization.is_active or role not in ('owner', 'hr_admin'):
         raise PermissionDenied
     stored_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
 
     if request.method == 'POST' and request.POST.get('action', '').startswith('letterhead_'):
         return _handle_company_letterhead_post(request, organization)
+
+    if request.method == 'POST' and request.POST.get('action') == 'digidoc_access_settings':
+        organization.allow_staff_digidoc = request.POST.get('allow_staff_digidoc') == 'on'
+        organization.personal_branding_default = request.POST.get('personal_branding_default') == 'on'
+        organization.save(update_fields=['allow_staff_digidoc', 'personal_branding_default'])
+        write_audit_log(request, organization=organization, area='organization', action='digidoc.access_settings_updated', summary='Updated DigiDoc access settings.', target=organization, metadata={'staff_enabled': organization.allow_staff_digidoc, 'personal_default': organization.personal_branding_default})
+        messages.success(request, 'DigiDoc staff access settings saved.')
+        return redirect('organization_branding')
 
     if request.method == 'POST' and request.POST.get('action') == 'restore_default':
         for field, value in NAV_DEFAULTS.items():
@@ -5054,7 +5077,7 @@ def organization_branding(request):
             summary=f'Restored default navigation for {organization.name}',
             target=organization,
         )
-        messages.success(request, 'Navigation restored to the default Clean style.')
+        messages.success(request, 'Navigation restored to the default Northstar style.')
         return redirect('organization_branding')
 
     suggested = None
@@ -5091,6 +5114,7 @@ def organization_branding(request):
         suggested = None
     context = {
         'organization': organization,
+        'digidoc_access_memberships': OrganizationMembership.objects.filter(organization=organization, is_active=True).exclude(role='viewer').select_related('user').order_by('user__last_name', 'user__first_name'),
         'letterhead': stored_letterhead or CompanyLetterhead(),
         'has_letterhead': bool(stored_letterhead),
         'letterhead_margins': [
@@ -5273,9 +5297,15 @@ def _handle_company_letterhead_post(request, organization):
 @login_required
 def company_letterhead_image(request):
     """Serve only the active company's private, re-encoded letterhead image."""
-    organization = get_active_organization(request)
-    if not organization:
-        return HttpResponse(status=404)
+    organization = _active_membership_organization(request)
+    membership = OrganizationMembership.objects.filter(user=request.user, organization=organization, is_active=True).first() if organization else None
+    if not organization or not organization.is_active or not membership:
+        raise PermissionDenied
+    if membership.role not in {'owner', 'hr_admin'} and not (
+        organization.allow_staff_digidoc
+        and membership.role in {'manager', 'payroll_officer', 'employee'}
+    ):
+        raise PermissionDenied
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
     slot = request.GET.get('slot', '1')
     if slot not in {'1', '2'}:
@@ -5284,7 +5314,14 @@ def company_letterhead_image(request):
     if not asset or not getattr(asset, field):
         return HttpResponse(status=404)
     image_format = asset.image_second_format if slot == '2' else asset.image_format
-    response = FileResponse(getattr(asset, field).open('rb'), content_type=(
+    try:
+        with getattr(asset, field).open('rb') as image_file:
+            data = image_file.read(8 * 1024 * 1024 + 1)
+    except (OSError, ValueError):
+        return HttpResponse(status=404)
+    if not data or len(data) > 8 * 1024 * 1024:
+        return HttpResponse(status=404)
+    response = HttpResponse(data, content_type=(
         'image/png' if image_format == 'png' else 'image/jpeg'
     ))
     response['X-Content-Type-Options'] = 'nosniff'
@@ -5294,9 +5331,10 @@ def company_letterhead_image(request):
 
 @login_required
 def company_letterhead_sample_pdf(request):
-    organization = get_active_organization(request)
-    if not organization:
-        return HttpResponse(status=404)
+    organization = _active_membership_organization(request)
+    membership = OrganizationMembership.objects.filter(user=request.user, organization=organization, is_active=True).first() if organization else None
+    if not organization or not organization.is_active or not membership or membership.role not in {'owner', 'hr_admin'}:
+        raise PermissionDenied
     asset = CompanyLetterhead.objects.filter(organization=organization).first()
     if not asset:
         return HttpResponse(status=404)
@@ -5335,6 +5373,163 @@ def company_letterhead_sample_pdf(request):
         summary=f'Downloaded company letterhead sample PDF for {organization.name}',
         target=asset, metadata={'format': 'pdf', 'page_mode': mode},
     )
+    return response
+
+
+def _personal_branding_member(request, *, allow_hr=True):
+    organization = _active_membership_organization(request)
+    membership = OrganizationMembership.objects.filter(
+        user=request.user, organization=organization, is_active=True,
+    ).first() if organization else None
+    allowed_roles = {'owner', 'hr_admin', 'manager', 'payroll_officer', 'employee'}
+    if (not organization or not organization.is_active or not membership or membership.role not in allowed_roles):
+        raise PermissionDenied
+    if membership.role in {'manager', 'payroll_officer', 'employee'} and not organization.allow_staff_digidoc:
+        raise PermissionDenied
+    permitted = membership.role in {'owner', 'hr_admin'} if allow_hr else False
+    permitted = permitted or membership.personal_branding_enabled
+    if not permitted:
+        raise PermissionDenied
+    return organization, membership
+
+
+@login_required
+def personal_branding(request):
+    from django.core.files.base import ContentFile
+    from django.core.exceptions import ValidationError
+    from .letterhead import sanitize_letterhead
+
+    organization, membership = _personal_branding_member(request)
+    if request.method == 'POST':
+        action = request.POST.get('action', 'save_colours')
+        if action in {'upload', 'replace'}:
+            letterhead = None
+            if action == 'replace':
+                letterhead = get_object_or_404(PersonalLetterhead, pk=request.POST.get('letterhead_id'), organization=organization, user=request.user)
+            elif PersonalLetterhead.objects.filter(organization=organization, user=request.user).count() >= 5:
+                messages.error(request, 'You can store up to five personal letterheads.')
+                return redirect('personal_branding')
+            recent_uploads = AuditLog.objects.filter(actor=request.user, action='branding.personal_letterhead_uploaded', created_at__gte=timezone.now()-timedelta(hours=1)).count()
+            if recent_uploads >= 10:
+                messages.error(request, 'Upload limit reached for this hour.')
+                return redirect('personal_branding')
+            upload = request.FILES.get('letterhead_file')
+            try:
+                data, image_format, extension, width, height = sanitize_letterhead(upload)
+                usage = sum(item.image.size for item in PersonalLetterhead.objects.filter(organization=organization, user=request.user) if item.image)
+                if usage + len(data) > 50 * 1024 * 1024:
+                    raise ValidationError('Your personal branding storage limit is 50 MB.')
+                if letterhead is None:
+                    letterhead = PersonalLetterhead(organization=organization, user=request.user, name=(request.POST.get('name') or 'My letterhead')[:100])
+                elif request.POST.get('name'):
+                    letterhead.name = request.POST.get('name', '').strip()[:100] or letterhead.name
+                if letterhead.image:
+                    letterhead.image.delete(save=False)
+                letterhead.image_format, letterhead.image_width, letterhead.image_height = image_format, width, height
+                letterhead.scale_mode = request.POST.get('scale_mode', 'fit') if request.POST.get('scale_mode') in {'fit', 'fill'} else 'fit'
+                letterhead.image.save(f'{uuid.uuid4().hex}.{extension}', ContentFile(data), save=False)
+                letterhead.save()
+                AuditLog.objects.create(organization=organization, actor=request.user, area='organization', action='branding.personal_letterhead_uploaded', target_model='PersonalLetterhead', target_id=str(letterhead.pk), summary='Uploaded or replaced a personal letterhead.', metadata={'size': len(data), 'format': image_format})
+                messages.success(request, 'Personal letterhead saved.')
+            except ValidationError as exc:
+                messages.error(request, exc.messages[0])
+            return redirect('personal_branding')
+        if action == 'rename':
+            letterhead = get_object_or_404(PersonalLetterhead, pk=request.POST.get('letterhead_id'), organization=organization, user=request.user)
+            name = request.POST.get('name', '').strip()
+            if not name or len(name) > 100:
+                messages.error(request, 'Enter a name between 1 and 100 characters.')
+            else:
+                letterhead.name = name
+                letterhead.save(update_fields=['name', 'updated_at'])
+                write_audit_log(request, organization=organization, area='organization', action='branding.personal_letterhead_renamed', summary='Renamed a personal letterhead.', target=letterhead)
+                messages.success(request, 'Letterhead renamed.')
+            return redirect('personal_branding')
+        if action in {'delete', 'make_default'}:
+            letterhead = get_object_or_404(PersonalLetterhead, pk=request.POST.get('letterhead_id'), organization=organization, user=request.user)
+            if action == 'delete':
+                # Document snapshots remain private and retain their original artwork.
+                letterhead.image.delete(save=False)
+                letterhead.delete()
+                write_audit_log(request, organization=organization, area='organization', action='branding.personal_letterhead_deleted', summary='Deleted a personal letterhead.', target=letterhead)
+                messages.success(request, 'Personal letterhead deleted.')
+            else:
+                PersonalLetterhead.objects.filter(organization=organization, user=request.user).update(is_default=False)
+                letterhead.is_default = True
+                letterhead.save(update_fields=['is_default', 'updated_at'])
+                write_audit_log(request, organization=organization, area='organization', action='branding.personal_letterhead_default_changed', summary='Changed the default personal letterhead.', target=letterhead)
+                messages.success(request, 'Default letterhead updated.')
+            return redirect('personal_branding')
+        primary = request.POST.get('primary', '').strip().upper()
+        secondary = request.POST.get('secondary', '').strip().upper()
+        if not re.fullmatch(r'#[0-9A-F]{6}', primary) or not re.fullmatch(r'#[0-9A-F]{6}', secondary):
+            messages.error(request, 'Use valid #RRGGBB values for both colours.')
+        else:
+            membership.personal_brand_primary = primary
+            membership.personal_brand_secondary = secondary
+            membership.save(update_fields=['personal_brand_primary', 'personal_brand_secondary'])
+            write_audit_log(request, organization=organization, area='organization', action='branding.personal_colours_changed', summary='Changed personal DigiDoc colours.', target=membership, metadata={'primary': primary, 'secondary': secondary})
+            messages.success(request, 'Personal colours saved.')
+        return redirect('personal_branding')
+    return render(request, 'attendance/personal_branding.html', {
+        'organization': organization, 'membership': membership,
+        'letterheads': PersonalLetterhead.objects.filter(organization=organization, user=request.user),
+        'page_title': 'My Branding',
+    })
+
+
+@login_required
+def personal_branding_access(request):
+    organization = _active_membership_organization(request)
+    membership = OrganizationMembership.objects.filter(user=request.user, organization=organization, is_active=True).first() if organization else None
+    if not organization or not organization.is_active or not membership or membership.role not in {'owner', 'hr_admin'}:
+        raise PermissionDenied
+    if request.method == 'POST':
+        delete_id = request.POST.get('delete_letterhead')
+        if delete_id:
+            item = get_object_or_404(PersonalLetterhead, pk=delete_id, organization=organization)
+            if item.image:
+                item.image.delete(save=False)
+            write_audit_log(request, organization=organization, area='organization', action='branding.personal_letterhead_admin_deleted', summary='Removed a personal letterhead during HR oversight.', target=item, metadata={'subject_user_id': item.user_id})
+            item.delete()
+            messages.success(request, 'Personal letterhead removed.')
+            return redirect('personal_branding_access')
+        selected = {int(value) for value in request.POST.getlist('member_id') if value.isdigit()}
+        enable_all = request.POST.get('enable_all') == 'on'
+        memberships = OrganizationMembership.objects.filter(organization=organization, is_active=True, role__in={'manager', 'payroll_officer', 'employee'})
+        for target in memberships.select_related('user'):
+            enabled = enable_all or target.pk in selected
+            if target.personal_branding_enabled != enabled:
+                target.personal_branding_enabled = enabled
+                target.save(update_fields=['personal_branding_enabled'])
+                action = 'branding.personal_access_granted' if enabled else 'branding.personal_access_revoked'
+                write_audit_log(request, organization=organization, area='organization', action=action, target=target, summary=('Granted' if enabled else 'Revoked') + ' personal branding access.', metadata={'user_id': target.user_id})
+        messages.success(request, 'Personal branding permissions updated.')
+        return redirect('personal_branding_access')
+    members = OrganizationMembership.objects.filter(organization=organization, is_active=True).exclude(role='viewer').select_related('user').prefetch_related('user__personal_letterheads').order_by('user__last_name', 'user__first_name')
+    return render(request, 'attendance/personal_branding_access.html', {'organization': organization, 'members': members, 'page_title': 'Personal Branding Access'})
+
+
+@login_required
+def personal_letterhead_admin_image(request, letterhead_id):
+    organization = _active_membership_organization(request)
+    membership = OrganizationMembership.objects.filter(user=request.user, organization=organization, is_active=True).first() if organization else None
+    if not organization or not organization.is_active or not membership or membership.role not in {'owner', 'hr_admin'}:
+        raise PermissionDenied
+    item = get_object_or_404(PersonalLetterhead, pk=letterhead_id, organization=organization)
+    response = FileResponse(item.image.open('rb'), content_type='image/png' if item.image_format == 'png' else 'image/jpeg')
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@login_required
+def personal_letterhead_image(request, letterhead_id):
+    organization, _membership = _personal_branding_member(request)
+    item = get_object_or_404(PersonalLetterhead, pk=letterhead_id, organization=organization, user=request.user)
+    response = FileResponse(item.image.open('rb'), content_type='image/png' if item.image_format == 'png' else 'image/jpeg')
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
     return response
 
 

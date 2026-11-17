@@ -216,7 +216,7 @@
           </div>
           <span class="branding-head__badge">
             <span class="branding-head__dot"></span>
-            {% if organization.nav_style == 'clean' and not organization.nav_customized %}Default: Clean{% else %}Saved: {{ organization.get_nav_style_display }}{% endif %}
+            {% if not organization.nav_customized %}Default: Northstar{% else %}Saved: {{ organization.get_nav_style_display }}{% endif %}
           </span>
         </div>
 
@@ -253,7 +253,7 @@
               <div class="nav-custom-background mt-3">
                 <label class="form-label" for="{{ form.nav_bg_color.id_for_label }}">Custom navigation background</label>
                 <div class="brand-colour-row">
-                  <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_bg_color.id_for_label }}" value="{{ form.nav_bg_color.value|default:'#0A0A0A' }}" aria-label="Choose a custom navigation background colour">
+                  <input type="color" class="form-control form-control-color" data-color-picker-for="{{ form.nav_bg_color.id_for_label }}" value="{{ form.nav_bg_color.value|default:'#E2E8F3' }}" aria-label="Choose a custom navigation background colour">
                   {{ form.nav_bg_color }}
                 </div>
                 <small class="field-help">Choose any colour here; it is saved separately from your logo and brand colour. Custom appearance will be selected automatically.</small>
@@ -437,6 +437,7 @@
       <button class="btn btn-link ms-auto" type="submit" name="action" value="restore_default" formnovalidate id="restoreNav">Restore default</button>
     </div>
   </form>
+  <section class="card mt-4"><div class="card-body"><h2 class="h5">DigiDoc access</h2><p class="text-muted">Active owners, HR admins, managers, payroll officers and employees can use their own DigiDoc documents when enabled.</p><form method="post">{% csrf_token %}<input type="hidden" name="action" value="digidoc_access_settings"><div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="allowStaffDigiDoc" name="allow_staff_digidoc" {% if organization.allow_staff_digidoc %}checked{% endif %}><label class="form-check-label" for="allowStaffDigiDoc">Allow staff to use DigiDoc</label></div><div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="personalBrandingDefault" name="personal_branding_default" {% if organization.personal_branding_default %}checked{% endif %}><label class="form-check-label" for="personalBrandingDefault">Default personal branding access for newly added staff</label></div><button class="btn btn-primary" type="submit">Save access settings</button><a class="btn btn-outline-secondary ms-2" href="{% url 'personal_branding_access' %}">Manage staff grants</a></form></div></section>
 </div>
 
 <style>

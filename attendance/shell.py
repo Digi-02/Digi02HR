@@ -21,6 +21,7 @@ from .organization import (
     user_has_manager_access,
     user_has_payroll_access,
 )
+from .models import OrganizationMembership
 
 
 @dataclass(frozen=True)
@@ -132,7 +133,7 @@ NAV_SECTIONS = (
                 icon="bi-journal-pen",
                 url_name="digidoc_list",
                 match=("digidoc_list", "digidoc_editor"),
-                access=("hr",),
+                access=("digidoc",),
                 keywords="documents editor letters reports",
             ),
             NavItem(
@@ -351,6 +352,11 @@ NAV_SECTIONS = (
 
 
 def _access_flags(user, organization):
+    membership = OrganizationMembership.objects.filter(
+        user=user, organization=organization, is_active=True,
+    ).first() if organization and getattr(user, "is_authenticated", False) else None
+    employee_profile = getattr(user, "employee_profile", None)
+    active_staff_profile = not employee_profile or (employee_profile.is_active and organization and employee_profile.organization_id == organization.pk)
     return {
         "self_service": bool(
             getattr(user, "employee_profile", None)
@@ -362,6 +368,16 @@ def _access_flags(user, organization):
         "hr": user_has_hr_access(user, organization),
         "manager": user_has_manager_access(user, organization),
         "payroll": user_has_payroll_access(user, organization),
+        "digidoc": bool(
+            membership and active_staff_profile and organization.is_active
+            and membership.role in {"owner", "hr_admin", "manager", "payroll_officer", "employee"}
+            and (membership.role in {"owner", "hr_admin"} or organization.allow_staff_digidoc)
+        ),
+        "personal_branding": bool(
+            membership and active_staff_profile and organization.is_active and organization.allow_staff_digidoc
+            and membership.role in {"manager", "payroll_officer", "employee"}
+            and membership.personal_branding_enabled
+        ),
     }
 
 
@@ -410,6 +426,21 @@ def build_navigation(user, organization):
                     "items": visible_items,
                 }
             )
+    if flags["personal_branding"]:
+        try:
+            page_map["my_branding"] = {
+                "key": "my_branding", "label": "My Branding", "group": "My workspace",
+                "group_key": "workspace", "icon": "bi-palette2",
+                "url": reverse("personal_branding"), "keywords": "personal letterhead colours",
+                "external": False, "match": ("personal_branding",),
+            }
+            workspace = next((section for section in sections if section["key"] == "workspace"), None)
+            if workspace:
+                workspace["items"].append(page_map["my_branding"])
+            else:
+                sections.insert(0, {"key": "workspace", "label": "My workspace", "items": [page_map["my_branding"]]})
+        except NoReverseMatch:
+            pass
     return sections, page_map
 
 

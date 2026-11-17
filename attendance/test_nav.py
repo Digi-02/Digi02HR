@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from attendance.branding import contrast_ratio, nav_vars
+from attendance.branding import DEFAULT_BRAND_COLOR, contrast_ratio, nav_vars
 from attendance.forms import OrganizationBrandingForm
 from attendance.models import Organization, OrganizationMembership
 
@@ -42,6 +42,14 @@ class NavResolverTests(TestCase):
         self.assertEqual(v['nav_active_icon_fg'], '#111111')
         self.assertGreaterEqual(contrast_ratio(v['nav_fg_muted'], v['nav_bg']), 4.5)
         self.assertGreaterEqual(contrast_ratio(v['nav_active_fg'], v['nav_active_bg']), 4.5)
+
+    def test_system_default_resolves_to_the_northstar_shell(self):
+        v = nav_vars()
+        self.assertEqual(v['nav_bg'], '#E2E8F3')
+        self.assertEqual(v['nav_active_style'], 'minimal')
+        self.assertEqual(v['nav_active_indicator'], '#103070')
+        self.assertEqual(v['nav_fg'], '#0A0A0B')
+        self.assertGreaterEqual(contrast_ratio(v['nav_fg'], v['nav_bg']), 4.5)
 
     def test_legacy_values_are_resolved(self):
         dark = nav_vars(nav_style='black', nav_highlight_style='pill')
@@ -138,10 +146,15 @@ class NavValidationTests(TestCase):
         self.assertEqual(saved.nav_highlight_style, 'rounded_pill')
         self.assertTrue(saved.nav_customized)
 
-    def test_model_default_is_clean_and_rounded_pill(self):
-        org = Organization.objects.create(name='CleanCo', slug='cleanco')
-        self.assertEqual(org.nav_style, 'clean')
-        self.assertEqual(org.nav_highlight_style, 'rounded_pill')
+    def test_model_default_is_the_northstar_shell(self):
+        org = Organization.objects.create(name='DefaultCo', slug='defaultco')
+        self.assertEqual(org.brand_color, DEFAULT_BRAND_COLOR)
+        self.assertEqual(org.nav_style, 'custom')
+        self.assertEqual(org.nav_bg_color, '#E2E8F3')
+        self.assertEqual(org.nav_highlight_style, 'minimal')
+        self.assertEqual(org.nav_highlight_source, 'custom')
+        self.assertEqual(org.nav_highlight_color, '#103070')
+        self.assertEqual(org.nav_hover_bg, '#FFFFFF')
         self.assertFalse(org.nav_customized)
 
 
@@ -201,7 +214,7 @@ class NavIsolationTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['styles']['nav_bg'], '#FFF9C4')
         self.assertEqual(payload['styles']['nav_active_style'], 'outline')
-        self.assertEqual(payload['styles']['nav_highlight_source'], 'auto')
+        self.assertEqual(payload['styles']['nav_highlight_source'], 'custom')
         self.assertIn('text', payload['contrast'])
 
     def test_evergreen_appearance_is_selectable_and_previewable(self):
@@ -241,9 +254,12 @@ class NavIsolationTests(TestCase):
         response = c.post('/settings/branding/', {'action': 'restore_default'})
         self.assertEqual(response.status_code, 302)
         org.refresh_from_db()
-        self.assertEqual(org.nav_style, 'clean')
-        self.assertEqual(org.nav_highlight_style, 'rounded_pill')
-        self.assertEqual(org.nav_highlight_source, 'auto')
+        self.assertEqual(org.nav_style, 'custom')
+        self.assertEqual(org.nav_bg_color, '#E2E8F3')
+        self.assertEqual(org.nav_highlight_style, 'minimal')
+        self.assertEqual(org.nav_highlight_source, 'custom')
+        self.assertEqual(org.nav_highlight_color, '#103070')
+        self.assertEqual(org.nav_hover_bg, '#FFFFFF')
         self.assertFalse(org.nav_customized)
 
 
@@ -284,3 +300,50 @@ class NavMigrationTests(TestCase):
         self.assertEqual(custom.nav_highlight_style, 'minimal')
         self.assertEqual(custom.nav_bg_color, '#123456')
         self.assertTrue(custom.nav_customized)
+
+    def test_default_theme_migration_updates_unbranded_orgs_only(self):
+        migration = importlib.import_module(
+            'attendance.migrations.0046_alter_organization_brand_color_and_more'
+        )
+        unbranded = Organization.objects.create(
+            name='Unbranded', slug='unbranded',
+            brand_color='#0A0A0A', nav_style='clean', nav_bg_color='#0A0A0A',
+            nav_highlight_style='rounded_pill', nav_highlight_source='auto',
+            nav_highlight_color='#111111', nav_hover_bg='', nav_customized=False,
+        )
+        branded = Organization.objects.create(
+            name='Branded', slug='branded',
+            brand_color='#ABCDEF', nav_style='clean', nav_bg_color='#0A0A0A',
+            nav_highlight_style='rounded_pill', nav_highlight_source='auto',
+            nav_highlight_color='#111111', nav_hover_bg='', nav_customized=False,
+        )
+        custom = Organization.objects.create(
+            name='Custom Nav', slug='custom-nav',
+            brand_color='#0A0A0A', nav_style='dark', nav_bg_color='#0A0A0A',
+            nav_highlight_style='rounded_pill', nav_highlight_source='auto',
+            nav_highlight_color='#111111', nav_hover_bg='', nav_customized=True,
+        )
+
+        migration.migrate_default_theme(apps, None)
+
+        unbranded.refresh_from_db()
+        branded.refresh_from_db()
+        custom.refresh_from_db()
+        self.assertEqual(unbranded.brand_color, DEFAULT_BRAND_COLOR)
+        self.assertEqual(unbranded.nav_style, 'custom')
+        self.assertEqual(unbranded.nav_bg_color, '#E2E8F3')
+        self.assertEqual(unbranded.nav_highlight_style, 'minimal')
+        self.assertEqual(unbranded.nav_highlight_source, 'custom')
+        self.assertEqual(unbranded.nav_highlight_color, '#103070')
+        self.assertEqual(unbranded.nav_hover_bg, '#FFFFFF')
+
+        # A company that already chose its own accent keeps it.
+        self.assertEqual(branded.brand_color, '#ABCDEF')
+        self.assertEqual(branded.nav_style, 'custom')
+        self.assertFalse(branded.nav_customized)
+
+        # Saved navigation is company data and must never be overwritten.
+        self.assertEqual(custom.brand_color, '#0A0A0A')
+        self.assertEqual(custom.nav_style, 'dark')
+        self.assertEqual(custom.nav_highlight_style, 'rounded_pill')
+        self.assertEqual(custom.nav_highlight_source, 'auto')

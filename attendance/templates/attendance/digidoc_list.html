@@ -14,7 +14,6 @@
   <form class="dd-library-toolbar" method="get" role="search">
     <label class="dd-library-search"><span class="bi bi-search" aria-hidden="true"></span><input type="search" name="q" value="{{ query }}" placeholder="Search documents" aria-label="Search documents"><button type="submit">Search</button></label>
     <div class="dd-library-options">
-      <label class="dd-library-filter"><span class="bi bi-people" aria-hidden="true"></span><select name="owner" aria-label="Filter by owner"><option value="" {% if not owner %}selected{% endif %}>Owned by anyone</option><option value="me" {% if owner == 'me' %}selected{% endif %}>Owned by me</option>{% for owner_row in owners %}<option value="{{ owner_row.0 }}" {% if owner == owner_row.0|stringformat:'s' %}selected{% endif %}>{% if owner_row.1 or owner_row.2 %}{{ owner_row.1 }} {{ owner_row.2 }}{% else %}{{ owner_row.3 }}{% endif %}</option>{% endfor %}</select></label>
       <label class="dd-library-filter dd-library-sort"><span class="bi bi-sort-alpha-down" aria-hidden="true"></span><select name="sort" aria-label="Sort documents"><option value="recent" {% if sort == 'recent' %}selected{% endif %}>Last edited</option><option value="title" {% if sort == 'title' %}selected{% endif %}>Title A–Z</option></select></label>
     </div>
   </form>
@@ -31,9 +30,10 @@
         <a class="dd-document-title" href="{% url 'digidoc_editor' document.id %}" title="{{ document.title }}">{{ document.title }}</a>
         <div class="dd-document-meta">
           <span class="dd-document-type" aria-label="DigiDoc document"><span class="bi bi-file-earmark-word-fill" aria-hidden="true"></span></span>
-          <span class="dd-document-owner" title="Created by {{ document.created_by.get_full_name|default:document.created_by.username }}"><span class="bi bi-people-fill" aria-hidden="true"></span><span class="dd-sr-only">Created by {{ document.created_by.get_full_name|default:document.created_by.username }}</span></span>
+          {% if document.created_by_id %}<span class="dd-document-owner" title="Created by you"><span class="bi bi-person-fill" aria-hidden="true"></span><span class="dd-sr-only">Created by you</span></span>{% else %}<span class="dd-document-owner" title="Unowned legacy document · read only"><span class="bi bi-lock-fill" aria-hidden="true"></span><span class="dd-sr-only">Unowned legacy document, read only</span></span>{% endif %}
           <time datetime="{{ document.updated_at|date:'c' }}" title="Last edited {{ document.updated_at|date:'M j, Y, g:i A' }}">Edited {{ document.updated_at|date:"M j, Y" }}</time>
-          <details class="dd-document-menu">
+          {% if not document.created_by_id and request.user.is_authenticated %}<form method="post" action="{% url 'digidoc_claim' document.id %}">{% csrf_token %}<button class="dd-claim-document" type="submit">Take ownership</button></form>{% endif %}
+          {% if document.created_by_id %}<details class="dd-document-menu">
             <summary aria-label="Actions for {{ document.title }}" title="Document actions"><span aria-hidden="true">⋮</span></summary>
             <div class="dd-document-menu-popover" role="menu">
               <a role="menuitem" href="{% url 'digidoc_editor' document.id %}"><span class="bi bi-pencil-square" aria-hidden="true"></span> Open</a>
@@ -41,7 +41,7 @@
               <a role="menuitem" href="{% url 'digidoc_pdf' document.id %}"><span class="bi bi-file-earmark-pdf" aria-hidden="true"></span> Download PDF</a>
               <form class="dd-document-delete-form" method="post" action="{% url 'digidoc_delete' document.id %}">{% csrf_token %}<button class="dd-document-delete" role="menuitem" type="submit"><span class="bi bi-trash3" aria-hidden="true"></span> Delete</button></form>
             </div>
-          </details>
+          </details>{% else %}<a href="{% url 'digidoc_pdf' document.id %}" class="dd-orphan-download">Download read-only copy</a>{% endif %}
         </div>
       </div>
     </article>

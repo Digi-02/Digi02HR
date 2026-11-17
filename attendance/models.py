@@ -9,6 +9,9 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 import uuid
 
+from .branding import DEFAULT_BRAND_COLOR
+from .storage import PrivateLetterheadStorage
+
 
 def private_letterhead_path(instance, filename):
     """Ignore the client filename and store with a random, detected extension."""
@@ -120,7 +123,7 @@ class Organization(models.Model):
         help_text='Whether the logo artwork is light (needs a dark tile). Set automatically on upload.',
     )
     brand_color = models.CharField(
-        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default=DEFAULT_BRAND_COLOR, validators=[BRAND_COLOR_VALIDATOR]
     )
     DASHBOARD_APPEARANCE_CHOICES = [
         ('brand', 'DIGI HR brand'),
@@ -150,18 +153,18 @@ class Organization(models.Model):
         ('accent', 'Company Brand Colour'),
         ('custom', 'Custom Colour'),
     ]
-    nav_style = models.CharField(max_length=20, choices=NAV_STYLE_CHOICES, default='clean')
+    nav_style = models.CharField(max_length=20, choices=NAV_STYLE_CHOICES, default='custom')
     nav_bg_color = models.CharField(
-        max_length=7, default='#0A0A0A', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default='#E2E8F3', validators=[BRAND_COLOR_VALIDATOR]
     )
     nav_highlight_style = models.CharField(
-        max_length=20, choices=NAV_HIGHLIGHT_STYLE_CHOICES, default='rounded_pill'
+        max_length=20, choices=NAV_HIGHLIGHT_STYLE_CHOICES, default='minimal'
     )
     nav_highlight_source = models.CharField(
-        max_length=20, choices=NAV_HIGHLIGHT_SOURCE_CHOICES, default='auto'
+        max_length=20, choices=NAV_HIGHLIGHT_SOURCE_CHOICES, default='custom'
     )
     nav_highlight_color = models.CharField(
-        max_length=7, default='#111111', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, default='#103070', validators=[BRAND_COLOR_VALIDATOR]
     )
     nav_unhovered_highlight_color = models.CharField(
         max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
@@ -173,7 +176,7 @@ class Organization(models.Model):
         max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
     )
     nav_hover_bg = models.CharField(
-        max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
+        max_length=7, blank=True, default='#FFFFFF', validators=[BRAND_COLOR_VALIDATOR]
     )
     nav_hover_fg = models.CharField(
         max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR]
@@ -188,6 +191,14 @@ class Organization(models.Model):
     is_suspended = models.BooleanField(default=False)
     suspended_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    allow_staff_digidoc = models.BooleanField(
+        default=True,
+        help_text='Allow active company members to create and manage their own DigiDoc documents.',
+    )
+    personal_branding_default = models.BooleanField(
+        default=False,
+        help_text='Default personal branding permission for new employee memberships.',
+    )
     # Setup wizard tracking. setup_completed=True means the company has finished
     # its initial setup and will not be redirected into the wizard.
     setup_completed = models.BooleanField(default=False)
@@ -251,9 +262,9 @@ class DigiDocDocument(models.Model):
     content_json = models.JSONField(default=dict, blank=True)
     letterhead_enabled = models.BooleanField(default=False)
     letterhead_page_mode = models.CharField(max_length=8, choices=PAGE_MODE_CHOICES, default='every')
-    letterhead_first_slot = models.CharField(max_length=4, default='1')
-    letterhead_other_slot = models.CharField(max_length=4, default='1')
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='digidoc_documents')
+    letterhead_first_slot = models.CharField(max_length=48, default='1')
+    letterhead_other_slot = models.CharField(max_length=48, default='1')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='digidoc_documents')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
     version = models.PositiveIntegerField(default=1)
@@ -280,6 +291,55 @@ class DigiDocImageAsset(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 
+class DigiDocLetterheadSnapshot(models.Model):
+    """Immutable private letterhead artwork/layout captured for a saved document."""
+
+    PAGE_CHOICES = [('first', 'First page'), ('other', 'Other pages')]
+    document = models.ForeignKey(DigiDocDocument, on_delete=models.CASCADE, related_name='letterhead_snapshots')
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_letterhead_snapshots')
+    page_role = models.CharField(max_length=8, choices=PAGE_CHOICES)
+    source_kind = models.CharField(max_length=12, choices=[('company', 'Company'), ('personal', 'Personal')], default='company')
+    source_id = models.CharField(max_length=40, blank=True)
+    source_slot = models.CharField(max_length=48, default='1')
+    image = models.FileField(upload_to=private_letterhead_path, storage=PrivateLetterheadStorage())
+    image_format = models.CharField(max_length=4, choices=[('png', 'PNG'), ('jpeg', 'JPEG')])
+    image_width = models.PositiveIntegerField()
+    image_height = models.PositiveIntegerField()
+    scale_mode = models.CharField(max_length=4, choices=CompanyLetterhead.FIT_CHOICES, default='fit')
+    margin_top_mm = models.PositiveSmallIntegerField(default=40)
+    margin_bottom_mm = models.PositiveSmallIntegerField(default=30)
+    margin_left_mm = models.PositiveSmallIntegerField(default=20)
+    margin_right_mm = models.PositiveSmallIntegerField(default=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('document', 'page_role')
+
+
+class PersonalLetterhead(models.Model):
+    """Private letterhead owned by one member within one organization."""
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='personal_letterheads')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='personal_letterheads')
+    name = models.CharField(max_length=100, default='My letterhead')
+    image = models.FileField(upload_to=private_letterhead_path, storage=PrivateLetterheadStorage())
+    image_format = models.CharField(max_length=4, choices=[('png', 'PNG'), ('jpeg', 'JPEG')])
+    image_width = models.PositiveIntegerField()
+    image_height = models.PositiveIntegerField()
+    scale_mode = models.CharField(max_length=4, choices=CompanyLetterhead.FIT_CHOICES, default='fit')
+    margin_top_mm = models.PositiveSmallIntegerField(default=40)
+    margin_bottom_mm = models.PositiveSmallIntegerField(default=30)
+    margin_left_mm = models.PositiveSmallIntegerField(default=20)
+    margin_right_mm = models.PositiveSmallIntegerField(default=20)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', 'created_at']
+        indexes = [models.Index(fields=['organization', 'user'])]
+
+
 class OrganizationMembership(models.Model):
     """Connects login users to the organizations they can manage."""
 
@@ -296,6 +356,9 @@ class OrganizationMembership(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='memberships')
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='hr_admin')
     is_active = models.BooleanField(default=True)
+    personal_branding_enabled = models.BooleanField(default=False)
+    personal_brand_primary = models.CharField(max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR])
+    personal_brand_secondary = models.CharField(max_length=7, blank=True, default='', validators=[BRAND_COLOR_VALIDATOR])
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

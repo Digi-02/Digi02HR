@@ -17,11 +17,12 @@ from PIL import Image as PILImage
 
 from .models import Organization, AttendanceSettings, OrganizationMembership
 from .models import BRAND_COLOR_VALIDATOR
-from .branding import normalize_hex, dominant_color
+from .branding import DEFAULT_BRAND_COLOR, normalize_hex, dominant_color
 from .forms import NAV_ACTIVE_STYLE_FORM_CHOICES, NAV_LEGACY_ACTIVE, NAV_LEGACY_APPEARANCE, NAV_STYLE_FORM_CHOICES
 from .nav_theme import (
     NAV_ACTIVE_STYLE_CHOICES,
     NAV_APPEARANCE_CHOICES,
+    NAV_DEFAULTS,
     NAV_HIGHLIGHT_SOURCE_CHOICES,
     nav_inputs_from_mapping,
     nav_inputs_from_organization,
@@ -119,7 +120,7 @@ class BrandingForm(forms.Form):
     logo = forms.ImageField(required=False,
         widget=forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}))
     brand_color = forms.CharField(max_length=7, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A'}))
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': DEFAULT_BRAND_COLOR}))
 
     def clean_logo(self):
         file = self.cleaned_data.get('logo')
@@ -135,7 +136,7 @@ class BrandingForm(forms.Form):
     def clean_brand_color(self):
         value = (self.cleaned_data.get('brand_color') or '').strip()
         if not value:
-            return '#0A0A0A'
+            return DEFAULT_BRAND_COLOR
         BRAND_COLOR_VALIDATOR(value)
         return normalize_hex(value)
 
@@ -146,33 +147,33 @@ class DashboardForm(forms.Form):
     nav_style = forms.ChoiceField(choices=NAV_STYLE_FORM_CHOICES, required=False,
         widget=forms.RadioSelect)
     nav_bg_color = forms.CharField(max_length=7, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#0A0A0A'}))
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': NAV_DEFAULTS['nav_bg_color']}))
     nav_highlight_style = forms.ChoiceField(choices=NAV_ACTIVE_STYLE_FORM_CHOICES,
         required=False, widget=forms.RadioSelect)
     nav_highlight_source = forms.ChoiceField(choices=NAV_HIGHLIGHT_SOURCE_CHOICES,
         required=False, widget=forms.RadioSelect)
     nav_highlight_color = forms.CharField(max_length=7, required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '#111111'}))
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': NAV_DEFAULTS['nav_highlight_color']}))
 
     def clean_nav_style(self):
-        value = self.cleaned_data.get('nav_style') or 'clean'
+        value = self.cleaned_data.get('nav_style') or NAV_DEFAULTS['nav_style']
         return NAV_LEGACY_APPEARANCE.get(value, value)
 
     def clean_nav_highlight_style(self):
-        value = self.cleaned_data.get('nav_highlight_style') or 'rounded_pill'
+        value = self.cleaned_data.get('nav_highlight_style') or NAV_DEFAULTS['nav_highlight_style']
         return NAV_LEGACY_ACTIVE.get(value, value)
 
     def clean_nav_bg_color(self):
         value = (self.cleaned_data.get('nav_bg_color') or '').strip()
         if not value:
-            return '#0A0A0A'
+            return NAV_DEFAULTS['nav_bg_color']
         BRAND_COLOR_VALIDATOR(value)
         return normalize_hex(value)
 
     def clean_nav_highlight_color(self):
         value = (self.cleaned_data.get('nav_highlight_color') or '').strip()
         if not value:
-            return '#111111'
+            return NAV_DEFAULTS['nav_highlight_color']
         BRAND_COLOR_VALIDATOR(value)
         return normalize_hex(value)
 

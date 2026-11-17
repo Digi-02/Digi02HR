@@ -8,6 +8,13 @@
   const letterheadFirst = document.getElementById('dd-letterhead-first');
   const letterheadOther = document.getElementById('dd-letterhead-other');
   const initial = JSON.parse(document.getElementById('dd-initial').textContent);
+  if (root.dataset.readonly === '1') {
+    document.getElementById('dd-title').readOnly = true;
+    document.getElementById('dd-sheet').contentEditable = 'false';
+    root.querySelectorAll('.dd-ribbon button,.dd-ribbon select,.dd-ribbon input,.dd-quick-access button,.dd-save-now').forEach(control => { control.disabled = true; });
+    const statusNode = document.getElementById('dd-status');
+    if (statusNode) statusNode.textContent = 'Read only · unowned document';
+  }
   const allowedTags = {P:'paragraph', H1:'heading', H2:'heading', H3:'heading', UL:'bulletList', OL:'orderedList', LI:'listItem', TABLE:'table', TBODY:'table', TR:'tableRow', TD:'tableCell', TH:'tableCell', BR:'hardBreak', HR:'horizontalRule', IMG:'image'};
   function makeImageFrame(assetId, alt, src, attrs={}) {
     const width=Math.min(100,Math.max(10,Number(attrs.width_percent)||100));
