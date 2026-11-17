@@ -296,7 +296,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
 <body>
 <header class="nav" id="topnav">
   <div class="wrap nav-inner">
-    <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}" alt="DIGI HR logo"></a>
+    <a class="brand" href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'Digi hr peach logo.png' %}?v=20261106" alt="DIGI HR logo"></a>
     <div class="nav-cta">
       <a class="nav-feature-link" href="#features">Key features</a>
       <a class="btn btn-nav btn-coral" href="/login/">Login</a>
@@ -330,13 +330,13 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
       <span class="ring ring-outer" aria-hidden="true"></span>
       <span class="ring ring-mid" aria-hidden="true"></span>
       <span class="ring ring-inner" aria-hidden="true"></span>
-      <div class="portrait"><img src="{% static 'female in circle background.png' %}" alt="Smiling HR professional holding a tablet"></div>
+      <div class="portrait"><img src="{% static 'female in circle background.png' %}?v=20261106" alt="Smiling HR professional holding a tablet"></div>
     </div>
   </div>
 </section>
 <section class="about" id="about" aria-labelledby="about-h">
   <div class="wrap about-inner">
-    <div class="about-photo"><img src="{% static 'second page image.png' %}" alt="Team celebrating with a high five in the office"></div>
+    <div class="about-photo"><img src="{% static 'second page image.png' %}?v=20261106" alt="Team celebrating with a high five in the office"></div>
     <div class="about-copy">
       <p class="about-eyebrow">About us</p>
       <h2 id="about-h">People management made simple.</h2>
@@ -378,7 +378,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
       <article class="tst-card" role="group" aria-roledescription="slide" aria-label="{{ forloop.counter }} of {{ testimonials|length }}" data-real-index="{{ forloop.counter0 }}">
         {% if t.placeholder %}<p class="tst-placeholder">Placeholder, not approved</p>{% endif %}
         <div class="tst-top">
-          <span class="tst-logo-box{% if t.logo_variant %} tst-logo-box--{{ t.logo_variant }}{% endif %}"><img class="tst-logo" src="{% static t.logo %}" alt="{{ t.company }} logo" width="{{ t.logo_width }}" height="{{ t.logo_height }}" loading="lazy" decoding="async"></span>
+          <span class="tst-logo-box{% if t.logo_variant %} tst-logo-box--{{ t.logo_variant }}{% endif %}"><img class="tst-logo" src="{% static t.logo %}?v=20261106" alt="{{ t.company }} logo" width="{{ t.logo_width }}" height="{{ t.logo_height }}" loading="lazy" decoding="async"></span>
           <svg class="tst-quote-icon" viewBox="0 0 48 40" aria-hidden="true" focusable="false"><path fill="currentColor" d="M0 24.5C0 11 8.5 2 20 0v8c-6 1.5-10 5.5-10.5 11H16v16H0V24.5zm28 0C28 11 36.5 2 48 0v8c-6 1.5-10 5.5-10.5 11H44v16H28V24.5z"/></svg>
         </div>
         <blockquote class="tst-quote"><p>{{ t.quote }}</p></blockquote>
@@ -459,7 +459,7 @@ body{font-family:'Raleway',Arial,sans-serif;background:#fff;color:var(--ink);-we
       </div>
     </div>
     <div class="footer-brand">
-      <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'brand/digi-hr-logo.png' %}" alt="DIGI HR" width="733" height="161" loading="lazy" decoding="async"></a>
+      <a href="/welcome/" aria-label="DIGI HR home"><img src="{% static 'brand/digi-hr-logo.png' %}?v=20261106" alt="DIGI HR" width="733" height="161" loading="lazy" decoding="async"></a>
     </div>
   </div>
 </footer>

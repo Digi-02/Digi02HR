@@ -660,9 +660,9 @@ class OnboardingInvitationTests(TestCase):
         records_second_page = self.client.get(reverse('attendance_reports'), {'attendance_page': 2})
         days_second_page = self.client.get(reverse('attendance_reports'), {'days_page': 2})
 
-        self.assertContains(first_page, 'Showing 1-25 of 30')
-        self.assertContains(records_second_page, 'Showing 26-30 of 30')
-        self.assertContains(days_second_page, 'Showing 11-13 of 13')
+        self.assertContains(first_page, 'Showing 1–25 of 30')
+        self.assertContains(records_second_page, 'Showing 26–30 of 30')
+        self.assertContains(days_second_page, 'Showing 11–13 of 13')
 
     def test_manual_attendance_employee_selector_is_searchable(self):
         self.client.login(username='hr', password='pass12345')

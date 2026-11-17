@@ -122,11 +122,9 @@ class CompanyCreateTests(TestCase):
         self.assertIsNotNone(m)
         uidb64, token = m.group(1), m.group(2)
         anon = Client()
-        set_url = f'/reset/{uidb64}/{token}/'
+        set_url = f'/set-password/{uidb64}/{token}/'
         resp = anon.get(set_url)
-        self.assertEqual(resp.status_code, 302)
-        set_url = resp['Location']
-        self.assertEqual(anon.get(set_url).status_code, 200)
+        self.assertEqual(resp.status_code, 200)
         resp = anon.post(set_url, {'new_password1': 'StrongPass999', 'new_password2': 'StrongPass999'})
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(anon.login(username=owner.username, password='StrongPass999'))
