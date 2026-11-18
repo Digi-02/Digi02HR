@@ -131,3 +131,30 @@
   .dd-move-form select{font-size:13px}
 }
 
+
+/* Align the library action buttons and the folder-creation row. */
+.dd-library-actions{justify-content:flex-end;gap:8px}
+.dd-library-actions>form{display:flex;margin:0}
+.dd-library-upload,
+.dd-library-new,
+.dd-folder-actions-summary,
+.dd-folder-create-field,
+.dd-folder-create-btn{height:40px;border-radius:8px}
+.dd-library-new{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;line-height:1}
+.dd-library-new span{font-size:17px;line-height:1}
+.dd-library-upload{padding:0 14px}
+.dd-file-upload input[type=file]{display:none!important}
+.dd-section-head{align-items:center;gap:10px 16px;margin:24px 0 12px}
+.dd-folder-create{flex-wrap:nowrap}
+.dd-folder-create-field{min-width:230px;padding:0 12px}
+.dd-folder-create-field input{width:186px}
+.dd-folder-create-btn{padding:0 16px;font-weight:600}
+.dd-folder-create-btn:hover{background:#f1f3f4;border-color:#c4c8cc}
+@media(max-width:700px){
+  .dd-library-actions{justify-content:flex-start}
+  .dd-section-head{align-items:stretch}
+  .dd-folder-create{width:100%;flex-wrap:wrap}
+  .dd-folder-create-field{flex:1 1 180px;min-width:0}
+  .dd-folder-create-field input{width:100%}
+  .dd-folder-create-btn{flex:0 0 auto}
+}

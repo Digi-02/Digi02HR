@@ -47,7 +47,7 @@
         {% if folder %}<input type="hidden" name="folder" value="{{ folder.pk }}">{% endif %}
         <label class="dd-library-upload">
           <span class="bi bi-paperclip" aria-hidden="true"></span> Add files
-          <input type="file" name="files" multiple aria-label="Add files">
+          <input type="file" name="files" multiple aria-label="Add files" hidden>
         </label>
       </form>
       <form method="post" action="{% url 'digidoc_create' %}">
