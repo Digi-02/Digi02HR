@@ -1919,17 +1919,27 @@ def employee_detail(request, pk):
     return render(request, 'attendance/employee_detail.html', context)
 
 
+EMPLOYEE_DOCUMENT_BADGES = {
+    'contract': ('bi-file-earmark-text-fill', 'is-doc', 'Employment contract'),
+    'id': ('bi-person-vcard-fill', 'is-id', 'Identification document'),
+    'certificate': ('bi-patch-check-fill', 'is-cert', 'Certificate or qualification'),
+    'passport': ('bi-journal-bookmark-fill', 'is-id', 'Passport'),
+    'work_permit': ('bi-globe2', 'is-doc', 'Work permit or visa'),
+    'medical': ('bi-heart-pulse-fill', 'is-cert', 'Medical document'),
+    'payroll': ('bi-cash-coin', 'is-sheet', 'Payroll document'),
+    'other': ('bi-file-earmark-fill', 'is-file', 'Document'),
+}
+
+
 @login_required
 @hr_required
 def employee_documents(request):
     organization = get_active_organization(request)
-    documents = EmployeeDocument.objects.filter(
-        employee__organization=organization,
-    ).select_related('employee', 'employee__department', 'employee__category')
+    base_documents = EmployeeDocument.objects.filter(employee__organization=organization)
+    documents = base_documents.select_related('employee', 'employee__department', 'employee__category')
 
     search_query = request.GET.get('q', '').strip()
     staff_query = request.GET.get('staff_q', '').strip()
-    selected_employee_id = request.GET.get('employee', '').strip()
     document_type = request.GET.get('document_type', '').strip()
     expiring = request.GET.get('expiring', '').strip()
     today = timezone.localdate()
@@ -1951,19 +1961,33 @@ def employee_documents(request):
     elif expiring == 'none':
         documents = documents.filter(expiry_date__isnull=True)
 
-    # One folder per staff member. Counts respect the active document filters
-    # so a folder always shows how many documents it will reveal when opened.
-    document_counts = {
-        row['employee_id']: row['total']
-        for row in documents.values('employee_id').annotate(total=Count('id'))
-    }
+    # One folder per staff member. Counts are the staff member's total files,
+    # so a folder always previews exactly what its page will open.
+    document_counts = {}
+    document_types = {}
+    for row in base_documents.values('employee_id', 'document_type').annotate(total=Count('id')):
+        employee_id = row['employee_id']
+        document_counts[employee_id] = document_counts.get(employee_id, 0) + row['total']
+        document_types.setdefault(employee_id, set()).add(row['document_type'])
+
+    def decorate_folder(folder):
+        present = document_types.get(folder.pk, set())
+        badges = []
+        for value, _label in EmployeeDocument.DOCUMENT_TYPE_CHOICES:
+            if value in present and len(badges) < 3:
+                icon, tone, badge_label = EMPLOYEE_DOCUMENT_BADGES[value]
+                badges.append({'icon': icon, 'tone': tone, 'label': badge_label})
+        folder.badges = badges
+        folder.document_count = document_counts.get(folder.pk, 0)
+        return folder
+
     staff_folders = list(
         Employee.objects.filter(organization=organization)
         .select_related('department', 'category')
         .order_by('first_name', 'last_name', 'employee_id')
     )
     for folder in staff_folders:
-        folder.document_count = document_counts.get(folder.pk, 0)
+        decorate_folder(folder)
     folder_total_documents = sum(document_counts.values())
     if staff_query:
         needle = staff_query.casefold()
@@ -1978,21 +2002,6 @@ def employee_documents(request):
                 ])
             ).casefold()
         ]
-
-    selected_employee = None
-    if selected_employee_id.isdigit():
-        selected_employee = next(
-            (folder for folder in staff_folders if folder.pk == int(selected_employee_id)),
-            None,
-        )
-        if selected_employee is None:
-            selected_employee = Employee.objects.filter(
-                organization=organization, pk=selected_employee_id
-            ).select_related('department', 'category').first()
-            if selected_employee is not None:
-                selected_employee.document_count = document_counts.get(selected_employee.pk, 0)
-    if selected_employee is not None:
-        documents = documents.filter(employee=selected_employee)
 
     documents = documents.order_by('-uploaded_at', 'employee__first_name', 'title')
     documents_page, documents_pagination_query = paginate_queryset(
@@ -2009,8 +2018,8 @@ def employee_documents(request):
         'documents_pagination_query': documents_pagination_query,
         'search_query': search_query,
         'staff_query': staff_query,
-        'selected_employee': selected_employee,
         'staff_folders': staff_folders,
+        'all_staff_badges': [{'icon': 'bi-people-fill', 'tone': 'is-people', 'label': 'All staff'}],
         'folder_total_documents': folder_total_documents,
         'today': today,
         'selected_document_type': document_type,
@@ -2026,6 +2035,73 @@ def employee_documents(request):
         'page_title': 'Employee Documents',
     }
     return render(request, 'attendance/employee_documents.html', context)
+
+
+@login_required
+@hr_required
+def employee_document_folder(request, employee_pk):
+    organization = get_active_organization(request)
+    employee = get_object_or_404(
+        Employee.objects.select_related('department', 'category'),
+        organization=organization,
+        pk=employee_pk,
+    )
+    all_documents = EmployeeDocument.objects.filter(employee=employee)
+
+    search_query = request.GET.get('q', '').strip()
+    document_type = request.GET.get('document_type', '').strip()
+    expiring = request.GET.get('expiring', '').strip()
+    today = timezone.localdate()
+
+    documents = all_documents.select_related('employee', 'employee__department', 'employee__category')
+    if search_query:
+        documents = documents.filter(Q(title__icontains=search_query) | Q(notes__icontains=search_query))
+    if document_type:
+        documents = documents.filter(document_type=document_type)
+    if expiring == 'expired':
+        documents = documents.filter(expiry_date__lt=today)
+    elif expiring == 'soon':
+        documents = documents.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))
+    elif expiring == 'none':
+        documents = documents.filter(expiry_date__isnull=True)
+
+    present_types = set(all_documents.values_list('document_type', flat=True))
+    badges = []
+    for value, _label in EmployeeDocument.DOCUMENT_TYPE_CHOICES:
+        if value in present_types and len(badges) < 3:
+            icon, tone, badge_label = EMPLOYEE_DOCUMENT_BADGES[value]
+            badges.append({'icon': icon, 'tone': tone, 'label': badge_label})
+
+    documents = documents.order_by('-uploaded_at', 'title')
+    documents_page, documents_pagination_query = paginate_queryset(
+        request,
+        documents,
+        per_page=25,
+        page_param='documents_page',
+    )
+
+    context = {
+        'organization': organization,
+        'employee': employee,
+        'folder': employee,
+        'folder_badges': badges,
+        'documents': documents_page,
+        'documents_page_obj': documents_page,
+        'documents_pagination_query': documents_pagination_query,
+        'search_query': search_query,
+        'today': today,
+        'selected_document_type': document_type,
+        'selected_expiring': expiring,
+        'document_type_choices': EmployeeDocument.DOCUMENT_TYPE_CHOICES,
+        'total_documents': all_documents.count(),
+        'expired_count': all_documents.filter(expiry_date__lt=today).count(),
+        'expiring_soon_count': all_documents.filter(
+            expiry_date__gte=today,
+            expiry_date__lte=today + timedelta(days=30),
+        ).count(),
+        'page_title': f'{employee.full_name} documents',
+    }
+    return render(request, 'attendance/employee_document_folder.html', context)
 
 
 @login_required

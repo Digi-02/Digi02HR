@@ -1,7 +1,9 @@
 {% extends 'attendance/base.html' %}
+{% load static %}
 
 {% block title %}Employee Documents | HR Management{% endblock %}
 {% block page_title %}Employee Documents{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/folder-tiles.css' %}">{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
@@ -50,7 +52,6 @@
         <div class="card-body">
             <form method="get" class="document-filter-grid">
                 {% if staff_query %}<input type="hidden" name="staff_q" value="{{ staff_query }}">{% endif %}
-                {% if selected_employee %}<input type="hidden" name="employee" value="{{ selected_employee.pk }}">{% endif %}
                 <div class="search-control">
                     <div class="input-group">
                         <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
@@ -99,43 +100,20 @@
                 </form>
             </div>
 
-            <div class="staff-folder-grid">
-                <a class="staff-folder staff-folder-all {% if not selected_employee %}is-active{% endif %}"
-                   href="{% querystring employee=None documents_page=None %}"
-                   aria-current="{% if not selected_employee %}true{% else %}false{% endif %}">
-                    <span class="staff-folder-icon staff-folder-icon-all" aria-hidden="true">
-                        <svg viewBox="0 0 64 52" focusable="false">
-                            <path class="folder-back" d="M4 13a7 7 0 0 1 7-7h13.6l6.4 7.5H53a7 7 0 0 1 7 7V39a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                            <path class="folder-front" d="M4 20h56v19a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                        </svg>
-                        <span class="staff-folder-initials"><i class="bi bi-people-fill"></i></span>
-                    </span>
-                    <span class="staff-folder-body">
-                        <span class="staff-folder-name">All staff</span>
-                        <span class="staff-folder-meta">All staff register</span>
-                    </span>
-                    <span class="staff-folder-count" aria-label="{{ folder_total_documents }} documents">{{ folder_total_documents }}</span>
+            <div class="folder-tiles">
+                <a class="folder-tile is-active" href="{% url 'employee_documents' %}">
+                    {% include 'attendance/partials/folder_art.html' with badges=all_staff_badges %}
+                    <span class="folder-tile-name">All staff</span>
+                    <span class="folder-tile-meta">{{ folder_total_documents }} file{{ folder_total_documents|pluralize }}</span>
                 </a>
 
                 {% for folder in staff_folders %}
-                <a class="staff-folder {% if selected_employee and selected_employee.pk == folder.pk %}is-active{% endif %} {% if not folder.document_count %}is-empty{% endif %}"
-                   href="{% querystring employee=folder.pk documents_page=None %}#folder-contents"
-                   aria-current="{% if selected_employee and selected_employee.pk == folder.pk %}true{% else %}false{% endif %}"
+                <a class="folder-tile {% if not folder.document_count %}is-empty{% endif %}"
+                   href="{% url 'employee_document_folder' folder.pk %}"
                    title="{{ folder.display_name }} · {{ folder.document_count }} document{{ folder.document_count|pluralize }}">
-                    <span class="staff-folder-icon" aria-hidden="true">
-                        <svg viewBox="0 0 64 52" focusable="false">
-                            <path class="folder-back" d="M4 13a7 7 0 0 1 7-7h13.6l6.4 7.5H53a7 7 0 0 1 7 7V39a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                            <path class="folder-front" d="M4 20h56v19a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                        </svg>
-                        <span class="staff-folder-initials">{{ folder.first_name|slice:":1"|upper }}{{ folder.last_name|slice:":1"|upper }}</span>
-                    </span>
-                    <span class="staff-folder-body">
-                        <span class="staff-folder-name">{{ folder.first_name }} {{ folder.last_name }}</span>
-                        <span class="staff-folder-meta">
-                            {{ folder.employee_id }}{% if folder.department %} · {{ folder.department.name }}{% endif %}
-                        </span>
-                    </span>
-                    <span class="staff-folder-count" aria-label="{{ folder.document_count }} documents">{{ folder.document_count }}</span>
+                    {% include 'attendance/partials/folder_art.html' with badges=folder.badges %}
+                    <span class="folder-tile-name">{{ folder.first_name }} {{ folder.last_name }}</span>
+                    <span class="folder-tile-meta">{{ folder.document_count }} file{{ folder.document_count|pluralize }} · {{ folder.employee_id }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -154,33 +132,15 @@
         </div>
     </div>
 
-    <div class="card border-0" id="folder-contents">
-        {% if selected_employee %}
-        <div class="folder-open-bar">
-            <span class="staff-folder-icon staff-folder-icon-sm" aria-hidden="true">
-                <svg viewBox="0 0 64 52" focusable="false">
-                    <path class="folder-back" d="M4 13a7 7 0 0 1 7-7h13.6l6.4 7.5H53a7 7 0 0 1 7 7V39a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                    <path class="folder-front" d="M4 20h56v19a7 7 0 0 1-7 7H11a7 7 0 0 1-7-7Z"/>
-                </svg>
-                <span class="staff-folder-initials">{{ selected_employee.first_name|slice:":1"|upper }}{{ selected_employee.last_name|slice:":1"|upper }}</span>
-            </span>
-            <div class="flex-grow-1">
-                <div class="fw-semibold">{{ selected_employee.display_name }}</div>
-                <small class="text-muted">
-                    {{ selected_employee.employee_id }}{% if selected_employee.department %} · {{ selected_employee.department.name }}{% endif %}
-                    · {{ documents_page_obj.paginator.count }} document{{ documents_page_obj.paginator.count|pluralize }}
-                </small>
-            </div>
-            <div class="responsive-actions">
-                <a href="{% url 'employee_document_upload_for_employee' selected_employee.pk %}" class="btn btn-sm btn-primary">
-                    <i class="bi bi-cloud-arrow-up me-1"></i> Upload to folder
-                </a>
-                <a href="{% querystring employee=None documents_page=None %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-1"></i> All staff
-                </a>
-            </div>
+    <div class="recent-uploads-head">
+        <div>
+            <h6 class="mb-1"><i class="bi bi-clock-history me-2"></i>Recent uploads</h6>
+            <small class="text-muted">Latest documents across all staff. Open a staff folder above for one person's files.</small>
         </div>
-        {% endif %}
+        <span class="recent-uploads-count">{{ documents_page_obj.paginator.count }} shown</span>
+    </div>
+
+    <div class="card border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -203,8 +163,8 @@
                                 {% if document.notes %}<small class="text-muted d-block">{{ document.notes }}</small>{% endif %}
                             </td>
                             <td>
-                                <div class="fw-semibold">{{ document.employee.display_name }}</div>
-                                <small class="text-muted">{{ document.employee.employee_id }}</small>
+                                <a class="fw-semibold text-reset text-decoration-none" href="{% url 'employee_document_folder' document.employee.pk %}">{{ document.employee.display_name }}</a>
+                                <small class="text-muted d-block">{{ document.employee.employee_id }}</small>
                             </td>
                             <td>{{ document.get_document_type_display }}</td>
                             <td>{% if document.issue_date %}{{ document.issue_date|date:"M j, Y" }}{% else %}-{% endif %}</td>
@@ -228,16 +188,7 @@
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="bi bi-folder2 fs-1 d-block mb-3"></i>
-                                {% if selected_employee %}
-                                    This folder is empty for the current filters.
-                                    <div class="mt-3">
-                                        <a href="{% url 'employee_document_upload_for_employee' selected_employee.pk %}" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-cloud-arrow-up me-1"></i> Upload a document for {{ selected_employee.first_name }}
-                                        </a>
-                                    </div>
-                                {% else %}
-                                    No documents match this view.
-                                {% endif %}
+                                No documents match this view.
                             </td>
                         </tr>
                         {% endfor %}
@@ -282,141 +233,6 @@
         width: min(320px, 100%);
     }
 
-    .staff-folder-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
-        gap: 0.75rem;
-    }
-
-    .staff-folder {
-        display: flex;
-        align-items: center;
-        gap: 0.8rem;
-        padding: 0.7rem 0.85rem;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: var(--white);
-        color: var(--body);
-        text-decoration: none;
-        transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-    }
-
-    .staff-folder:hover,
-    .staff-folder:focus-visible {
-        border-color: var(--border-strong);
-        box-shadow: 0 10px 24px -18px rgba(17, 17, 17, 0.65);
-        transform: translateY(-1px);
-        color: var(--body);
-        outline: none;
-    }
-
-    .staff-folder.is-active {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent), 0 12px 26px -20px rgba(17, 17, 17, 0.8);
-        background: var(--accent-tint, #F5F5F5);
-    }
-
-    .staff-folder.is-empty {
-        opacity: 0.68;
-    }
-
-    .staff-folder.is-empty:hover {
-        opacity: 1;
-    }
-
-    .staff-folder-icon {
-        position: relative;
-        flex: 0 0 auto;
-        width: 46px;
-        height: 40px;
-        display: inline-flex;
-        align-items: flex-end;
-        justify-content: center;
-        filter: drop-shadow(0 3px 4px rgba(17, 17, 17, 0.14));
-    }
-
-    .staff-folder-icon svg {
-        width: 100%;
-        height: 100%;
-        display: block;
-    }
-
-    .staff-folder-icon .folder-back {
-        fill: var(--accent);
-        opacity: 0.62;
-    }
-
-    .staff-folder-icon .folder-front {
-        fill: var(--accent);
-        opacity: 0.95;
-    }
-
-    .staff-folder-icon-all .folder-back {
-        opacity: 0.45;
-    }
-
-    .staff-folder-initials {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 7px;
-        text-align: center;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        color: var(--accent-contrast, #FFFFFF);
-        line-height: 1;
-        pointer-events: none;
-    }
-
-    .staff-folder-initials .bi {
-        font-size: 0.85rem;
-    }
-
-    .staff-folder-body {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        flex: 1 1 auto;
-        line-height: 1.25;
-    }
-
-    .staff-folder-name {
-        font-size: 0.88rem;
-        font-weight: 600;
-        color: var(--black);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .staff-folder-meta {
-        font-size: 0.74rem;
-        color: var(--muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .staff-folder-count {
-        flex: 0 0 auto;
-        min-width: 30px;
-        padding: 0.18rem 0.5rem;
-        border-radius: 999px;
-        background: var(--surface-muted);
-        border: 1px solid var(--border);
-        color: var(--body);
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-align: center;
-    }
-
-    .staff-folder.is-active .staff-folder-count {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: var(--accent-contrast, #FFFFFF);
-    }
-
     .staff-folders-empty {
         display: flex;
         flex-wrap: wrap;
@@ -434,24 +250,19 @@
         font-size: 1.1rem;
     }
 
-    .folder-open-bar {
+    .recent-uploads-head {
         display: flex;
-        align-items: center;
-        gap: 0.85rem;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
         flex-wrap: wrap;
-        padding: 0.9rem 1.15rem;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface-muted);
-        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        margin: 0 0 0.85rem;
     }
 
-    #folder-contents {
-        scroll-margin-top: calc(var(--topbar-height, 64px) + 16px);
-    }
-
-    .staff-folder-icon-sm {
-        width: 38px;
-        height: 33px;
+    .recent-uploads-count {
+        color: var(--muted);
+        font-size: 0.8rem;
+        white-space: nowrap;
     }
 
     @media (max-width: 1199.98px) {
@@ -463,10 +274,6 @@
     @media (max-width: 767.98px) {
         .document-register-grid,
         .document-filter-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .staff-folder-grid {
             grid-template-columns: 1fr;
         }
 

@@ -397,18 +397,47 @@ class EmployeeDocumentFolderTests(TestCase):
             {self.alice.pk: 1, self.bob.pk: 1},
         )
         self.assertContains(response, 'Staff Folders')
-        self.assertContains(response, f'?employee={self.alice.pk}#folder-contents')
+        self.assertContains(response, 'Recent uploads')
+        self.assertContains(response, reverse('employee_document_folder', args=[self.alice.pk]))
+        # The register below stays a recent-uploads list across all staff.
+        self.assertContains(response, 'Alice Certificate')
+        self.assertContains(response, 'Bob ID')
 
     def test_opening_a_staff_folder_only_shows_that_staff_documents(self):
         response = self.client.get(
-            reverse('employee_documents'), {'employee': self.alice.pk}
+            reverse('employee_document_folder', args=[self.alice.pk])
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['selected_employee'], self.alice)
+        self.assertEqual(response.context['employee'], self.alice)
         self.assertEqual(list(response.context['documents']), [self.alice_document])
-        self.assertContains(response, 'Upload to folder')
+        self.assertContains(response, 'Upload to this folder')
+        self.assertContains(response, 'Alice Certificate')
         self.assertNotContains(response, 'Bob ID')
+
+    def test_staff_folder_page_is_scoped_to_the_active_organization(self):
+        other_organization = Organization.objects.create(
+            name='Other Folder HR', slug='other-folder-hr', setup_completed=True
+        )
+        other_category = Category.objects.create(
+            organization=other_organization,
+            name='Staff',
+            code='STAFF',
+        )
+        outsider = Employee.objects.create(
+            organization=other_organization,
+            category=other_category,
+            first_name='Out',
+            last_name='Sider',
+            email='outsider@example.com',
+            phone='08030000003',
+        )
+
+        response = self.client.get(
+            reverse('employee_document_folder', args=[outsider.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_staff_folder_search_matches_name_and_employee_id(self):
         by_name = self.client.get(reverse('employee_documents'), {'staff_q': 'Bello'})
@@ -419,11 +448,13 @@ class EmployeeDocumentFolderTests(TestCase):
         self.assertEqual([folder.pk for folder in by_name.context['staff_folders']], [self.bob.pk])
         self.assertEqual([folder.pk for folder in by_id.context['staff_folders']], [self.bob.pk])
 
-    def test_document_filters_are_reflected_in_folder_counts(self):
+    def test_document_filters_only_affect_the_register_not_folder_counts(self):
         response = self.client.get(reverse('employee_documents'), {'document_type': 'id'})
 
         counts = {folder.pk: folder.document_count for folder in response.context['staff_folders']}
-        self.assertEqual(counts, {self.alice.pk: 0, self.bob.pk: 1})
+        self.assertEqual(counts, {self.alice.pk: 1, self.bob.pk: 1})
+        self.assertContains(response, 'Bob ID')
+        self.assertNotContains(response, 'Alice Certificate')
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')

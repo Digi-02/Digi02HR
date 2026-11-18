@@ -1,0 +1,11 @@
+<span class="folder-tile-graphic" aria-hidden="true">
+  <span class="folder-tile-papers"><span></span><span></span></span>
+  <span class="folder-tile-back"></span>
+  <span class="folder-tile-front"></span>
+  {% if badges %}
+  <span class="folder-tile-badges">
+    {% for badge in badges %}<span class="folder-badge {{ badge.tone }}" title="{{ badge.label }}"><i class="bi {{ badge.icon }}"></i></span>{% endfor %}
+  </span>
+  {% endif %}
+  {% if plus %}<span class="folder-tile-plus"><i class="bi bi-plus-lg"></i></span>{% endif %}
+</span>

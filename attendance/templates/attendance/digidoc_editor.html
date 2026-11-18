@@ -16,9 +16,9 @@
 <div class="dd-app-shell">
   <button class="dd-backdrop" id="dd-backdrop" aria-label="Close navigation"></button>
   {% include 'attendance/partials/_sidebar.html' %}
-  <button id="dd-collapse-toggle" class="dd-collapse-toggle" type="button" aria-label="Collapse navigation" title="Collapse navigation">â‡¤</button>
+  <button id="dd-collapse-toggle" class="dd-collapse-toggle" type="button" aria-label="Collapse navigation" title="Collapse navigation"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg></button>
   <main class="dd-main">
-    <header class="dd-mobile-head"><button id="dd-nav-toggle" aria-label="Open navigation">â˜°</button><a href="{% url 'digidoc_list' %}">DigiDoc</a></header>
+    <header class="dd-mobile-head"><button id="dd-nav-toggle" aria-label="Open navigation"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><a href="{% url 'digidoc_list' %}">DigiDoc</a></header>
     <div class="dd-editor" id="digidoc" data-readonly="{% if readonly_orphan %}1{% else %}0{% endif %}" data-save-url="{% url 'digidoc_save' document.id %}" data-pdf-url="{% url 'digidoc_pdf' document.id %}" data-version="{{ document.version }}">
       {% if readonly_orphan %}<aside class="dd-orphan-notice">This legacy document has no author and is read-only. An owner or HR admin can claim it from the document list.</aside>{% endif %}
       <header class="dd-topbar">

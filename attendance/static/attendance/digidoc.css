@@ -11,7 +11,7 @@
 .dd-app[data-nav-active="left_bar"] .app-nav__link.is-active,.dd-app[data-nav-active="left"] .app-nav__link.is-active { box-shadow:inset 3px 0 var(--nav-active-indicator); }.dd-app[data-nav-active="outline"] .app-nav__link.is-active { background:transparent; border-color:var(--nav-active-border); box-shadow:none; }.dd-app[data-nav-active="minimal"] .app-nav__link.is-active { background:transparent; box-shadow:inset 3px 0 var(--nav-active-indicator); }
 .dd-app[data-nav-active="rounded_pill"] .app-nav__link.is-active { border-radius:999px; }.dd-app[data-nav-active="soft_pill"] .app-nav__link.is-active { border-radius:8px; }
 .dd-backdrop { display:none; }
-.dd-collapse-toggle { position:fixed; z-index:1110; left:216px; top:16px; width:26px; height:26px; border:1px solid var(--nav-border); border-radius:50%; color:var(--nav-fg); background:var(--nav-bg); cursor:pointer; }.dd-collapsed .dd-app .app-sidebar { width:76px; }.dd-collapsed .dd-main { margin-left:76px; }.dd-collapsed .app-sidebar__workspace,.dd-collapsed .app-nav__heading,.dd-collapsed .app-nav__label,.dd-collapsed .app-user__meta { display:none; }.dd-collapsed .app-nav__link { justify-content:center; }.dd-collapsed .dd-collapse-toggle { left:62px; }
+.dd-collapse-toggle { position:fixed; z-index:1110; left:216px; top:16px; width:26px; height:26px; border:1px solid var(--nav-border); border-radius:50%; color:var(--nav-fg); background:var(--nav-bg); cursor:pointer; }.dd-collapsed.dd-app .app-sidebar { width:76px; }.dd-collapsed .dd-main { margin-left:76px; }.dd-collapsed .app-sidebar__workspace,.dd-collapsed .app-nav__heading,.dd-collapsed .app-nav__label,.dd-collapsed .app-user__meta { display:none; }.dd-collapsed .app-nav__link { justify-content:center; }.dd-collapsed .dd-collapse-toggle { left:62px; }
 .dd-editor { display:flex; flex-direction:column; min-height:calc(100vh - 36px); gap:12px; }
 .dd-topbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .dd-button,.dd-download summary { border:1px solid #d4d8de; background:white; color:#263244; border-radius:6px; padding:7px 10px; text-decoration:none; cursor:pointer; }
@@ -145,3 +145,88 @@ button, input[type="button"], input[type="submit"], input[type="reset"], .btn, .
 .dd-sheet ul[data-checklist="true"] > li:before { content:""; position:absolute; left:2px; top:.25em; width:13px; height:13px; box-sizing:border-box; border:1.5px solid #687080; border-radius:2px; background:#fff; }
 
 .dd-page .dd-page-break-marker { box-sizing:border-box; display:flex; min-height:24px!important; height:24px; align-items:center; justify-content:center; margin:14px 0!important; border-top:1px dashed #99a2af; color:#768091; font:11px/1 Arial,sans-serif; }
+
+/* ---- Desktop app chrome: branded full navigation, dark rail when collapsed ---- */
+@media (min-width: 1001px) {
+  .dd-app .app-sidebar__scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .dd-app .app-sidebar__scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .dd-app .brand-initials--rail { display: none; }
+  .dd-collapsed .dd-main { margin-left: calc(12px + 76px + 16px); }
+  .dd-collapsed .dd-collapse-toggle {
+    left: calc(12px + 76px - 13px);
+    top: 22px;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: #24252A; color: #FFFFFF;
+  }
+  .dd-collapsed.dd-app .app-sidebar {
+    width: 76px;
+    top: 12px; bottom: 12px; left: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 26px;
+    overflow: hidden;
+    background: rgba(23, 24, 27, 0.94);
+    background: color-mix(in srgb, #17181B 93%, transparent);
+    color: #ECEDEF;
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 0 26px 60px -30px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --nav-fg: #F4F5F7;
+    --nav-fg-muted: #A2A5AC;
+    --nav-hover-bg: rgba(255, 255, 255, 0.09);
+    --nav-hover-fg: #FFFFFF;
+    --nav-icon-fg: #A9ACB2;
+    --nav-active-bg: rgba(255, 255, 255, 0.14);
+    --nav-active-fg: #FFFFFF;
+    --nav-active-indicator: #FFFFFF;
+    --nav-active-border: transparent;
+  }
+  .dd-collapsed.dd-app .app-sidebar__brand { min-height: 70px; padding: 0; justify-content: center; }
+  .dd-collapsed.dd-app .app-brand { flex: 0 0 auto; justify-content: center; }
+  .dd-collapsed.dd-app .brand-logo-full { display: none; }
+  .dd-collapsed.dd-app .brand-initials {
+    display: inline-flex; width: 44px; height: 44px;
+    border-radius: 14px; background: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF; font-size: 13px; font-weight: 600;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+  .dd-collapsed.dd-app .app-sidebar__workspace,
+  .dd-collapsed.dd-app .app-nav__heading,
+  .dd-collapsed.dd-app .app-nav__label,
+  .dd-collapsed.dd-app .app-user__meta { display: none; }
+  .dd-collapsed.dd-app .app-sidebar__scroll { padding: 4px 0 10px; }
+  .dd-collapsed.dd-app .app-nav__section { margin-bottom: 14px; }
+  .dd-collapsed.dd-app .app-nav__link {
+    justify-content: center;
+    width: 48px; height: 48px; min-height: 48px;
+    padding: 0; margin: 4px auto; border-radius: 14px;
+    background: transparent; color: var(--nav-icon-fg);
+  }
+  .dd-collapsed.dd-app .app-nav__link:hover { background: var(--nav-hover-bg); color: #FFFFFF; }
+  .dd-collapsed.dd-app .app-nav__link.is-active {
+    background: var(--nav-active-bg); color: #FFFFFF;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  .dd-collapsed.dd-app .app-nav__icon { width: auto; height: auto; color: inherit; }
+  .dd-collapsed.dd-app .app-nav__icon svg { width: 21px; height: 21px; }
+  .dd-collapsed.dd-app .app-sidebar__footer {
+    margin: 0 14px; padding: 12px 0 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    display: flex; justify-content: center;
+  }
+  .dd-collapsed.dd-app .app-user { padding: 0; border: 0; }
+  .dd-collapsed.dd-app .app-user__avatar {
+    width: 42px; height: 42px; border-radius: 14px;
+    background: rgba(255, 255, 255, 0.12); color: #FFFFFF; font-size: 11px;
+  }
+}
+
+.dd-collapse-toggle { display: flex; align-items: center; justify-content: center; padding: 0; }
+.dd-collapse-toggle svg,
+.dd-mobile-head button svg {
+  display: block; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.dd-collapse-toggle svg { width: 14px; height: 14px; }
+.dd-mobile-head button svg { width: 22px; height: 22px; }
+.dd-mobile-head button { display: inline-flex; align-items: center; justify-content: center; padding: 4px; }
+.dd-collapsed .dd-collapse-toggle svg { transform: rotate(180deg); }
