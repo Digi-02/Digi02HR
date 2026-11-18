@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import math
+import mimetypes
 import re
 import secrets
 import unicodedata
@@ -19,6 +20,7 @@ from urllib.parse import quote
 from datetime import timedelta
 from io import BytesIO
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.cache import cache
@@ -26,8 +28,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, Q, Sum
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -45,7 +47,7 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Image as PdfImage, ListFlowable, ListItem, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .digidoc_exports import docx as export_docx, odt as export_odt, plain_text as export_text, rtf_text as export_rtf
-from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocImageAsset, DigiDocWritingSettings, OrganizationMembership, PersonalLetterhead, default_digidoc_autocorrect_rules
+from .models import AuditLog, CompanyLetterhead, DigiDocDocument, DigiDocFile, DigiDocFolder, DigiDocImageAsset, DigiDocWritingSettings, OrganizationMembership, PersonalLetterhead, default_digidoc_autocorrect_rules
 from .organization import DIGIDOC_ROLES, HR_ROLES
 from .shell import shell_context
 
@@ -56,6 +58,38 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_DEPTH = 20
 MAX_NODES = 10000
 MAX_TITLE = 200
+MAX_FOLDERS_PER_USER = 100
+MAX_FILES_PER_USER = 300
+MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_FILES_PER_UPLOAD = 10
+MAX_FILE_STORAGE_BYTES = 500 * 1024 * 1024
+MAX_FOLDER_NAME = 60
+BLOCKED_FILE_EXTENSIONS = {
+    "app", "bat", "bin", "cmd", "com", "cpl", "dll", "exe", "gadget", "hta",
+    "jar", "js", "jse", "lnk", "msi", "msp", "ps1", "scr", "sh", "vb", "vbe",
+    "vbs", "wsf", "wsh",
+}
+FILE_BADGES = {
+    "pdf": ("bi-file-earmark-pdf-fill", "is-pdf", "PDF"),
+    "doc": ("bi-file-earmark-word-fill", "is-doc", "Word document"),
+    "sheet": ("bi-file-earmark-excel-fill", "is-sheet", "Spreadsheet"),
+    "slides": ("bi-file-earmark-ppt-fill", "is-slides", "Presentation"),
+    "image": ("bi-file-earmark-image-fill", "is-image", "Image"),
+    "zip": ("bi-file-earmark-zip-fill", "is-zip", "Archive"),
+    "text": ("bi-file-earmark-text-fill", "is-text", "Text file"),
+    "file": ("bi-file-earmark-fill", "is-file", "File"),
+}
+FILE_BADGE_GROUPS = {
+    "pdf": "pdf",
+    "doc": "doc", "docx": "doc", "odt": "doc", "rtf": "doc", "pages": "doc",
+    "xls": "sheet", "xlsx": "sheet", "csv": "sheet", "ods": "sheet", "numbers": "sheet",
+    "ppt": "slides", "pptx": "slides", "odp": "slides", "key": "slides",
+    "png": "image", "jpg": "image", "jpeg": "image", "gif": "image", "webp": "image",
+    "bmp": "image", "tif": "image", "tiff": "image", "svg": "image", "heic": "image",
+    "zip": "zip", "rar": "zip", "7z": "zip", "tar": "zip", "gz": "zip",
+    "txt": "text", "md": "text", "json": "text", "log": "text", "xml": "text",
+}
+DOCUMENT_BADGE = {"icon": "bi-file-earmark-word-fill", "tone": "is-doc", "label": "DigiDoc document"}
 MAX_PAGES = 50
 MAX_MARKS = 12
 MAX_FLOATING_IMAGES = 20
@@ -101,6 +135,12 @@ def _scope(request):
     if membership.role not in HR_ROLES and not organization.allow_staff_digidoc:
         raise PermissionDenied("DigiDoc is disabled for staff in this company.")
     return organization
+
+
+def _hr_member(request, organization):
+    return request.user.organization_memberships.filter(
+        organization=organization, is_active=True, role__in=HR_ROLES,
+    ).exists()
 
 
 def _owned_document(request, organization, document_id):
@@ -161,6 +201,63 @@ def _clean_title(value):
     value = unicodedata.normalize("NFKC", str(value or ""))
     value = "".join(ch for ch in value if unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})
     return " ".join(value.split())[:MAX_TITLE] or "Untitled document"
+
+
+def _clean_folder_name(value):
+    value = unicodedata.normalize("NFKC", str(value or "")).strip()
+    value = "".join(ch for ch in value if unicodedata.category(ch) not in {"Cc", "Cf", "Cs"})
+    return " ".join(value.split())[:MAX_FOLDER_NAME]
+
+
+def _owned_folder(request, organization, folder_id):
+    return get_object_or_404(
+        DigiDocFolder, pk=folder_id, organization=organization, created_by=request.user,
+    )
+
+
+def _file_badge(filename):
+    value = str(filename or "")
+    extension = value.rsplit(".", 1)[-1].lower() if "." in value else ""
+    icon, tone, label = FILE_BADGES[FILE_BADGE_GROUPS.get(extension, "file")]
+    return {"icon": icon, "tone": tone, "label": label}
+
+
+def _folder_badges(folders):
+    """Attach item counts and up to three file-type badges to each folder."""
+    folders = list(folders)
+    folder_ids = [folder.pk for folder in folders]
+    badges = {}
+    document_counts, file_counts = {}, {}
+    if folder_ids:
+        for folder_id, title in DigiDocDocument.objects.filter(folder_id__in=folder_ids).values_list("folder_id", "title"):
+            group = badges.setdefault(folder_id, [])
+            if DOCUMENT_BADGE not in group and len(group) < 3:
+                group.append(DOCUMENT_BADGE)
+        for folder_id, name in DigiDocFile.objects.filter(folder_id__in=folder_ids).values_list("folder_id", "original_name"):
+            group = badges.setdefault(folder_id, [])
+            badge = _file_badge(name)
+            if badge not in group and len(group) < 3:
+                group.append(badge)
+        document_counts = {
+            row["folder_id"]: row["total"]
+            for row in DigiDocDocument.objects.filter(folder_id__in=folder_ids).values("folder_id").annotate(total=Count("id"))
+        }
+        file_counts = {
+            row["folder_id"]: row["total"]
+            for row in DigiDocFile.objects.filter(folder_id__in=folder_ids).values("folder_id").annotate(total=Count("id"))
+        }
+    for folder in folders:
+        folder.document_count = document_counts.get(folder.pk, 0)
+        folder.file_count = file_counts.get(folder.pk, 0)
+        folder.item_count = folder.document_count + folder.file_count
+        folder.badges = badges.get(folder.pk, [])
+    return folders
+
+
+def _folder_redirect(folder=None):
+    if folder is not None:
+        return redirect("digidoc_folder", folder_id=folder.pk)
+    return redirect("digidoc_list")
 
 
 def _safe_url(value):
@@ -502,41 +599,246 @@ def digidoc_list(request):
     query = _clean_title(request.GET.get("q", "")) if request.GET.get("q") else ""
     # The document body can be very large. Deferring it keeps MySQL's ORDER BY
     # from sorting entire JSON payloads and exhausting sort_buffer_size.
-    list_projection = (
-        "id", "title", "updated_at", "created_by",
-        "created_by__first_name", "created_by__last_name", "created_by__username",
-    )
-    documents = (
-        DigiDocDocument.objects.filter(organization=organization)
-        .filter(created_by=request.user)
-        .select_related("created_by")
-        .only(*list_projection)
-    )
-    can_claim = request.user.organization_memberships.filter(organization=organization, is_active=True, role__in=HR_ROLES).exists()
-    if can_claim:
-        documents = (
-            DigiDocDocument.objects.filter(organization=organization)
-            .filter(Q(created_by=request.user) | Q(created_by__isnull=True))
-            .select_related("created_by")
-            .only(*list_projection)
-        )
+    documents = DigiDocDocument.objects.filter(
+        organization=organization,
+    ).select_related("created_by", "folder").defer("content_json")
+    if _hr_member(request, organization):
+        documents = DigiDocDocument.objects.filter(organization=organization).filter(
+            Q(created_by=request.user) | Q(created_by__isnull=True),
+        ).select_related("created_by", "folder").defer("content_json")
+    else:
+        documents = documents.filter(created_by=request.user)
+    files = DigiDocFile.objects.filter(
+        organization=organization, created_by=request.user,
+    ).select_related("folder")
     if query:
         documents = documents.filter(title__icontains=query)
-    owner = ""
+        files = files.filter(original_name__icontains=query)
+    else:
+        documents = documents.filter(folder__isnull=True)
+        files = files.filter(folder__isnull=True)
     sort = request.GET.get("sort", "recent")
     if sort == "title":
         documents = documents.order_by("title", "-updated_at")
     else:
         sort = "recent"
         documents = documents.order_by("-updated_at")
+    files = files.order_by("-created_at", "original_name")
     page = Paginator(documents, 24).get_page(request.GET.get("page"))
-    owners = ()
-    notice = False
-    if can_claim:
-        notice = not request.session.get(f"digidoc_privacy_notice_{organization.pk}")
-        request.session[f"digidoc_privacy_notice_{organization.pk}"] = True
+    folders = list(DigiDocFolder.objects.filter(organization=organization, created_by=request.user))
+    if query:
+        folders = [folder for folder in folders if query.casefold() in folder.name.casefold()]
+    _folder_badges(folders)
+    all_folders = list(DigiDocFolder.objects.filter(organization=organization, created_by=request.user))
+    file_list = list(files[:120])
+    for record in file_list:
+        record.badge = _file_badge(record.original_name)
     return render(request, "attendance/digidoc_list.html", _doc_context(request, organization,
-        documents=page.object_list, document_page=page, query=query, owner=owner, sort=sort, owners=owners, can_claim=can_claim, privacy_notice=notice))
+        documents=page.object_list, document_page=page, query=query, owner="me",
+        sort=sort, owners=(), folders=folders, all_folders=all_folders, files=file_list,
+        folder=None, can_claim=_hr_member(request, organization)))
+
+
+@login_required
+def digidoc_folder(request, folder_id):
+    organization = _scope(request)
+    folder = _owned_folder(request, organization, folder_id)
+    query = _clean_title(request.GET.get("q", "")) if request.GET.get("q") else ""
+    documents = DigiDocDocument.objects.filter(
+        organization=organization, created_by=request.user, folder=folder,
+    ).select_related("created_by", "folder").defer("content_json")
+    files = DigiDocFile.objects.filter(
+        organization=organization, created_by=request.user, folder=folder,
+    ).select_related("folder")
+    if query:
+        documents = documents.filter(title__icontains=query)
+        files = files.filter(original_name__icontains=query)
+    sort = request.GET.get("sort", "recent")
+    if sort == "title":
+        documents = documents.order_by("title", "-updated_at")
+    else:
+        sort = "recent"
+        documents = documents.order_by("-updated_at")
+    files = files.order_by("-created_at", "original_name")
+    page = Paginator(documents, 24).get_page(request.GET.get("page"))
+    all_folders = list(DigiDocFolder.objects.filter(organization=organization, created_by=request.user))
+    _folder_badges([folder])
+    folder_document_count = documents.count()
+    folder_file_count = files.count()
+    file_list = list(files[:120])
+    for record in file_list:
+        record.badge = _file_badge(record.original_name)
+    return render(request, "attendance/digidoc_list.html", _doc_context(request, organization,
+        documents=page.object_list, document_page=page, query=query, owner="me",
+        sort=sort, owners=(), folders=[], all_folders=all_folders, files=file_list,
+        folder=folder, folder_document_count=folder_document_count, folder_file_count=folder_file_count))
+
+
+@login_required
+@require_POST
+def digidoc_folder_create(request):
+    organization = _scope(request)
+    name = _clean_folder_name(request.POST.get("name"))
+    if not name:
+        messages.error(request, "Enter a folder name.")
+        return redirect("digidoc_list")
+    existing = DigiDocFolder.objects.filter(organization=organization, created_by=request.user)
+    if existing.count() >= MAX_FOLDERS_PER_USER:
+        messages.error(request, f"You have reached the {MAX_FOLDERS_PER_USER} folder limit.")
+        return redirect("digidoc_list")
+    if existing.filter(name__iexact=name).exists():
+        messages.error(request, f'A folder called "{name}" already exists.')
+        return redirect("digidoc_list")
+    folder = DigiDocFolder.objects.create(organization=organization, created_by=request.user, name=name)
+    AuditLog.objects.create(
+        organization=organization, actor=request.user, area="organization",
+        action="digidoc.folder_created", target_model="DigiDocFolder",
+        target_id=str(folder.pk), summary="Created a DigiDoc folder.",
+    )
+    return redirect("digidoc_folder", folder_id=folder.pk)
+
+
+@login_required
+@require_POST
+def digidoc_folder_rename(request, folder_id):
+    organization = _scope(request)
+    folder = _owned_folder(request, organization, folder_id)
+    name = _clean_folder_name(request.POST.get("name"))
+    if not name:
+        messages.error(request, "Enter a folder name.")
+    elif DigiDocFolder.objects.filter(
+        organization=organization, created_by=request.user, name__iexact=name,
+    ).exclude(pk=folder.pk).exists():
+        messages.error(request, f'A folder called "{name}" already exists.')
+    else:
+        folder.name = name
+        folder.save(update_fields=["name", "updated_at"])
+        messages.success(request, "Folder renamed.")
+    return redirect("digidoc_folder", folder_id=folder.pk)
+
+
+@login_required
+@require_POST
+def digidoc_folder_delete(request, folder_id):
+    organization = _scope(request)
+    folder = _owned_folder(request, organization, folder_id)
+    folder.delete()
+    messages.success(request, "Folder removed. Its documents and files are back in All documents.")
+    return redirect("digidoc_list")
+
+
+@login_required
+@require_POST
+def digidoc_document_move(request, document_id):
+    organization = _scope(request)
+    document = _owned_document(request, organization, document_id)
+    folder = None
+    folder_id = request.POST.get("folder", "").strip()
+    if folder_id:
+        folder = _owned_folder(request, organization, folder_id)
+    if document.created_by_id is None:
+        raise PermissionDenied("Claim this document before moving it.")
+    document.folder = folder
+    document.save(update_fields=["folder"])
+    messages.success(request, f'Moved "{document.title}" to {folder.name}.' if folder else f'Moved "{document.title}" out of its folder.')
+    return _folder_redirect(folder)
+
+
+@login_required
+@require_POST
+def digidoc_file_upload(request):
+    organization = _scope(request)
+    folder = None
+    folder_id = request.POST.get("folder", "").strip()
+    if folder_id:
+        folder = _owned_folder(request, organization, folder_id)
+    uploads = request.FILES.getlist("files")
+    if not uploads:
+        messages.error(request, "Choose at least one file to upload.")
+        return _folder_redirect(folder)
+    if len(uploads) > MAX_FILES_PER_UPLOAD:
+        messages.error(request, f"Upload up to {MAX_FILES_PER_UPLOAD} files at a time.")
+        return _folder_redirect(folder)
+    existing = DigiDocFile.objects.filter(organization=organization, created_by=request.user)
+    if existing.count() + len(uploads) > MAX_FILES_PER_USER:
+        messages.error(request, f"You have reached the {MAX_FILES_PER_USER} file limit.")
+        return _folder_redirect(folder)
+    used = existing.aggregate(total=Sum("size"))["total"] or 0
+    saved = 0
+    for upload in uploads:
+        display_name = os.path.basename(upload.name or "")[:255] or "file"
+        if upload.size <= 0:
+            messages.error(request, f'"{display_name}" is empty.')
+            continue
+        if upload.size > MAX_FILE_BYTES:
+            messages.error(request, f'"{display_name}" is larger than 20 MB.')
+            continue
+        extension = display_name.rsplit(".", 1)[-1].lower() if "." in display_name else ""
+        if extension in BLOCKED_FILE_EXTENSIONS:
+            messages.error(request, f'"{display_name}" is not an allowed file type.')
+            continue
+        if used + upload.size > MAX_FILE_STORAGE_BYTES:
+            messages.error(request, "Your DigiDoc storage limit has been reached.")
+            break
+        content_type = (mimetypes.guess_type(display_name)[0] or upload.content_type or "application/octet-stream")[:150]
+        record = DigiDocFile(
+            organization=organization, folder=folder, created_by=request.user,
+            original_name=display_name, content_type=content_type, size=upload.size,
+        )
+        record.file.save(display_name, upload, save=False)
+        record.save()
+        used += upload.size
+        saved += 1
+    if saved:
+        messages.success(request, f"Added {saved} file{'s' if saved != 1 else ''}" + (f" to {folder.name}." if folder else "."))
+        AuditLog.objects.create(
+            organization=organization, actor=request.user, area="organization",
+            action="digidoc.files_uploaded", target_model="DigiDocFile",
+            target_id=str(folder.pk) if folder else "", summary=f"Uploaded {saved} file(s) to DigiDoc.",
+        )
+    return _folder_redirect(folder)
+
+
+@login_required
+def digidoc_file_download(request, file_id):
+    organization = _scope(request)
+    record = get_object_or_404(DigiDocFile, pk=file_id, organization=organization, created_by=request.user)
+    try:
+        handle = record.file.open("rb")
+    except OSError:
+        from django.http import Http404
+        raise Http404
+    response = FileResponse(handle, as_attachment=True, filename=record.original_name, content_type=record.content_type or "application/octet-stream")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
+@require_POST
+def digidoc_file_delete(request, file_id):
+    organization = _scope(request)
+    record = get_object_or_404(DigiDocFile, pk=file_id, organization=organization, created_by=request.user)
+    folder = record.folder
+    record.file.delete(save=False)
+    record.delete()
+    messages.success(request, "File deleted.")
+    return _folder_redirect(folder)
+
+
+@login_required
+@require_POST
+def digidoc_file_move(request, file_id):
+    organization = _scope(request)
+    record = get_object_or_404(DigiDocFile, pk=file_id, organization=organization, created_by=request.user)
+    folder = None
+    folder_id = request.POST.get("folder", "").strip()
+    if folder_id:
+        folder = _owned_folder(request, organization, folder_id)
+    record.folder = folder
+    record.save(update_fields=["folder"])
+    messages.success(request, f'Moved "{record.original_name}" to {folder.name}.' if folder else f'Moved "{record.original_name}" out of its folder.')
+    return _folder_redirect(folder)
 
 
 @login_required
@@ -600,11 +902,16 @@ def digidoc_personal_letterhead_image(request, document_id):
 @require_POST
 def digidoc_create(request):
     organization = _scope(request)
+    folder = None
+    folder_id = request.POST.get("folder", "").strip()
+    if folder_id:
+        folder = _owned_folder(request, organization, folder_id)
     company_letterhead = CompanyLetterhead.objects.filter(organization=organization).first()
     letterhead = company_letterhead
     doc = DigiDocDocument.objects.create(
         organization=organization,
         created_by=request.user,
+        folder=folder,
         title="Untitled document",
         content_json={"type": "doc", "content": [{"type": "paragraph", "content": []}]},
         letterhead_enabled=bool(letterhead and letterhead.image),
@@ -856,7 +1163,7 @@ def digidoc_duplicate(request, document_id):
     original = _owned_document(request, organization, document_id)
     if original.created_by_id is None:
         raise PermissionDenied
-    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode, letterhead_first_slot=original.letterhead_first_slot, letterhead_other_slot=original.letterhead_other_slot, letterhead_source=original.letterhead_source, letterhead_snapshot=original.letterhead_snapshot, personal_letterhead_snapshot=original.personal_letterhead_snapshot, personal_letterhead_id=original.personal_letterhead_id)
+    doc = DigiDocDocument.objects.create(organization=organization, created_by=request.user, folder=original.folder, title=_clean_title("Copy of " + original.title), content_json=original.content_json, letterhead_enabled=original.letterhead_enabled, letterhead_page_mode=original.letterhead_page_mode, letterhead_first_slot=original.letterhead_first_slot, letterhead_other_slot=original.letterhead_other_slot, letterhead_source=original.letterhead_source, letterhead_snapshot=original.letterhead_snapshot, personal_letterhead_snapshot=original.personal_letterhead_snapshot, personal_letterhead_id=original.personal_letterhead_id)
     return redirect("digidoc_editor", document_id=doc.pk)
 
 

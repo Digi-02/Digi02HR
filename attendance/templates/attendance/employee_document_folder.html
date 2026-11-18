@@ -1,0 +1,248 @@
+﻿{% extends 'attendance/base.html' %}
+{% load static %}
+
+{% block title %}{{ employee.display_name }} Documents | HR Management{% endblock %}
+{% block page_title %}Employee Documents{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/folder-tiles.css' %}">{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <nav class="folder-breadcrumb mb-3" aria-label="Breadcrumb">
+        <a href="{% url 'employee_documents' %}"><i class="bi bi-arrow-left me-1"></i>All staff folders</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{{ employee.display_name }}</span>
+    </nav>
+
+    <div class="card border-0 folder-hero mb-4">
+        <div class="card-body p-4">
+            <div class="folder-hero-layout">
+                <div class="folder-hero-art">
+                    {% include 'attendance/partials/folder_art.html' with badges=folder_badges %}
+                </div>
+                <div class="folder-hero-copy">
+                    <p class="text-uppercase small fw-semibold text-muted mb-1">Staff folder</p>
+                    <h4 class="mb-2">{{ employee.display_name }}</h4>
+                    <p class="text-muted mb-3">
+                        {{ employee.employee_id }}
+                        {% if employee.department %} ┬╖ {{ employee.department.name }}{% endif %}
+                        {% if employee.category %} ┬╖ {{ employee.category.name }}{% endif %}
+                        {% if employee.position %} ┬╖ {{ employee.position }}{% endif %}
+                    </p>
+                    <div class="folder-hero-stats">
+                        <span><strong>{{ total_documents }}</strong> document{{ total_documents|pluralize }}</span>
+                        <span class="{% if expired_count %}text-danger{% endif %}"><strong>{{ expired_count }}</strong> expired</span>
+                        <span class="{% if expiring_soon_count %}text-warning{% endif %}"><strong>{{ expiring_soon_count }}</strong> expiring soon</span>
+                    </div>
+                    <div class="responsive-actions mt-3">
+                        <a href="{% url 'employee_document_upload_for_employee' employee.pk %}" class="btn btn-primary">
+                            <i class="bi bi-cloud-arrow-up me-1"></i> Upload to this folder
+                        </a>
+                        <a href="{% url 'employee_detail' employee.pk %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-person me-1"></i> View profile
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 toolbar-card mb-4">
+        <div class="card-body">
+            <form method="get" class="folder-filter-grid">
+                <div class="search-control">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" name="q" value="{{ search_query }}" class="form-control" placeholder="Search this folder">
+                    </div>
+                </div>
+                <select name="document_type" class="form-select">
+                    <option value="">All Document Types</option>
+                    {% for value, label in document_type_choices %}
+                    <option value="{{ value }}" {% if selected_document_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="expiring" class="form-select">
+                    <option value="">All Expiry States</option>
+                    <option value="expired" {% if selected_expiring == "expired" %}selected{% endif %}>Expired</option>
+                    <option value="soon" {% if selected_expiring == "soon" %}selected{% endif %}>Expiring Soon</option>
+                    <option value="none" {% if selected_expiring == "none" %}selected{% endif %}>No Expiry Date</option>
+                </select>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i> Filter</button>
+                <a href="{% url 'employee_document_folder' employee.pk %}" class="btn btn-outline-secondary">Reset</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="folder-files-head">
+        <div>
+            <h6 class="mb-1"><i class="bi bi-folder2-open me-2"></i>Files in this folder</h6>
+            <small class="text-muted">Only documents filed under {{ employee.display_name }} are listed here.</small>
+        </div>
+        <span class="folder-files-count">{{ documents_page_obj.paginator.count }} shown</span>
+    </div>
+
+    <div class="card border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Document</th>
+                            <th>Type</th>
+                            <th>Issue Date</th>
+                            <th>Expiry Date</th>
+                            <th>Uploaded</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for document in documents %}
+                        <tr>
+                            <td>
+                                <a class="fw-semibold text-reset text-decoration-none" href="{% url 'employee_document_download' document.pk %}" target="_blank" rel="noopener">{{ document.title }}</a>
+                                {% if document.notes %}<small class="text-muted d-block">{{ document.notes }}</small>{% endif %}
+                            </td>
+                            <td>{{ document.get_document_type_display }}</td>
+                            <td>{% if document.issue_date %}{{ document.issue_date|date:"M j, Y" }}{% else %}-{% endif %}</td>
+                            <td>
+                                {% if document.expiry_date %}
+                                    <span class="{% if document.expiry_date < today %}text-danger{% endif %}">{{ document.expiry_date|date:"M j, Y" }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ document.uploaded_at|date:"M j, Y" }}</td>
+                            <td class="text-end">
+                                <div class="table-actions">
+                                    <a href="{% url 'employee_document_download' document.pk %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Open</a>
+                                    <a href="{% url 'employee_document_edit' document.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                    <a href="{% url 'employee_document_delete' document.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-folder2 fs-1 d-block mb-3"></i>
+                                {% if search_query or selected_document_type or selected_expiring %}
+                                    No documents in this folder match the current filters.
+                                {% else %}
+                                    This staff folder is empty.
+                                    <div class="mt-3">
+                                        <a href="{% url 'employee_document_upload_for_employee' employee.pk %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-cloud-arrow-up me-1"></i> Upload a document for {{ employee.first_name }}
+                                        </a>
+                                    </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include 'attendance/partials/pagination.html' with page_obj=documents_page_obj page_param='documents_page' pagination_query=documents_pagination_query %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .folder-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 0.88rem;
+    }
+
+    .folder-breadcrumb a {
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .folder-breadcrumb a:hover {
+        color: var(--accent);
+    }
+
+    .folder-hero-layout {
+        display: flex;
+        align-items: center;
+        gap: 1.75rem;
+        flex-wrap: wrap;
+    }
+
+    .folder-hero-art {
+        flex: 0 0 190px;
+        max-width: 190px;
+    }
+
+    .folder-hero-copy {
+        flex: 1 1 320px;
+        min-width: 0;
+    }
+
+    .folder-hero-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        font-size: 0.88rem;
+    }
+
+    .folder-hero-stats span {
+        padding: 0.3rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface-muted);
+    }
+
+    .folder-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr) auto auto;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .folder-files-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin: 0 0 0.85rem;
+    }
+
+    .folder-files-count {
+        color: var(--muted);
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .table-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.45rem;
+    }
+
+    @media (max-width: 1199.98px) {
+        .folder-filter-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .folder-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .folder-hero-art {
+            flex-basis: 150px;
+            max-width: 150px;
+        }
+
+        .table-actions {
+            align-items: stretch;
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}

@@ -1,59 +1,184 @@
-{% extends 'attendance/base.html' %}
+﻿{% extends 'attendance/base.html' %}
 {% load static %}
-{% block title %}DigiDoc | HR Management{% endblock %}
+{% block title %}{% if folder %}{{ folder.name }} | DigiDoc{% else %}DigiDoc | HR Management{% endif %}{% endblock %}
 {% block page_title %}DigiDoc{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/digidoc-library.css' %}?v=20261114">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/digidoc-library.css' %}"><link rel="stylesheet" href="{% static 'attendance/folder-tiles.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'attendance/digidoc-library.js' %}" defer></script>{% endblock %}
 {% block content %}
 <main class="dd-library" aria-labelledby="dd-library-title">
   <header class="dd-library-header">
-    <div><p class="dd-library-eyebrow">DIGIDOC</p><h1 id="dd-library-title">Recent documents</h1><p class="dd-library-subtitle">Pick up where you left off or create a new document.</p></div>
-    <form method="post" action="{% url 'digidoc_create' %}">{% csrf_token %}<button class="dd-library-new" type="submit"><span aria-hidden="true">＋</span> New document</button></form>
+    <div class="dd-library-heading">
+      {% if folder %}
+      <nav class="dd-breadcrumb" aria-label="Breadcrumb">
+        <a href="{% url 'digidoc_list' %}"><span class="bi bi-arrow-left" aria-hidden="true"></span> All documents</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{{ folder.name }}</span>
+      </nav>
+      <h1 id="dd-library-title">{{ folder.name }}</h1>
+      <p class="dd-library-subtitle">
+        {{ folder_document_count }} document{{ folder_document_count|pluralize }} ┬╖ {{ folder_file_count }} file{{ folder_file_count|pluralize }}
+      </p>
+      {% else %}
+      <p class="dd-library-eyebrow">DIGIDOC</p>
+      <h1 id="dd-library-title">All documents</h1>
+      <p class="dd-library-subtitle">Folders, documents and files in one place.</p>
+      {% endif %}
+    </div>
+    <div class="dd-library-actions">
+      {% if folder %}
+      <details class="dd-folder-actions">
+        <summary class="dd-folder-actions-summary" aria-label="Folder actions" title="Folder actions"><span aria-hidden="true">Γï«</span></summary>
+        <div class="dd-folder-actions-popover">
+          <form method="post" action="{% url 'digidoc_folder_rename' folder.pk %}">
+            {% csrf_token %}
+            <label for="dd-folder-rename">Rename folder</label>
+            <input id="dd-folder-rename" type="text" name="name" value="{{ folder.name }}" maxlength="60" required>
+            <button type="submit" class="dd-folder-actions-confirm">Rename</button>
+          </form>
+          <form class="dd-folder-delete-form" method="post" action="{% url 'digidoc_folder_delete' folder.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="dd-folder-delete"><span class="bi bi-trash3" aria-hidden="true"></span> Delete folder</button>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+      <form class="dd-file-upload" method="post" enctype="multipart/form-data" action="{% url 'digidoc_file_upload' %}">
+        {% csrf_token %}
+        {% if folder %}<input type="hidden" name="folder" value="{{ folder.pk }}">{% endif %}
+        <label class="dd-library-upload">
+          <span class="bi bi-paperclip" aria-hidden="true"></span> Add files
+          <input type="file" name="files" multiple aria-label="Add files" hidden>
+        </label>
+      </form>
+      <form method="post" action="{% url 'digidoc_create' %}">
+        {% csrf_token %}
+        {% if folder %}<input type="hidden" name="folder" value="{{ folder.pk }}">{% endif %}
+        <button class="dd-library-new" type="submit"><span aria-hidden="true">∩╝ï</span> New document</button>
+      </form>
+    </div>
   </header>
 
-  {% if privacy_notice %}<aside class="alert alert-info" role="status">DigiDoc documents are now private to their authors. Owner and HR Admin can see unclaimed documents when an author is no longer available.</aside>{% endif %}
-
   <form class="dd-library-toolbar" method="get" role="search">
-    <label class="dd-library-search"><span class="bi bi-search" aria-hidden="true"></span><input type="search" name="q" value="{{ query }}" placeholder="Search documents" aria-label="Search documents"><button type="submit">Search</button></label>
+    <label class="dd-library-search"><span class="bi bi-search" aria-hidden="true"></span><input type="search" name="q" value="{{ query }}" placeholder="Search {% if folder %}this folder{% else %}folders, documents and files{% endif %}" aria-label="Search documents and files"><button type="submit">Search</button></label>
     <div class="dd-library-options">
-      <label class="dd-library-filter dd-library-sort"><span class="bi bi-sort-alpha-down" aria-hidden="true"></span><select name="sort" aria-label="Sort documents"><option value="recent" {% if sort == 'recent' %}selected{% endif %}>Last edited</option><option value="title" {% if sort == 'title' %}selected{% endif %}>Title A–Z</option></select></label>
+      <label class="dd-library-filter dd-library-sort"><span class="bi bi-sort-alpha-down" aria-hidden="true"></span><select name="sort" aria-label="Sort documents"><option value="recent" {% if sort == 'recent' %}selected{% endif %}>Last edited</option><option value="title" {% if sort == 'title' %}selected{% endif %}>Title AΓÇôZ</option></select></label>
     </div>
   </form>
 
-  {% if documents %}
-  <section class="dd-document-grid" aria-label="Recent documents">
-    {% for document in documents %}
-    <article class="dd-document-card">
-      <a class="dd-document-preview" href="{% url 'digidoc_editor' document.id %}" aria-label="Open {{ document.title }}">
-        <img src="{% url 'digidoc_thumbnail' document.id %}" alt="First page preview of {{ document.title }}" loading="lazy" decoding="async">
-        <span class="dd-document-preview-placeholder" hidden><span class="bi bi-file-earmark-text" aria-hidden="true"></span><span>Preview unavailable</span></span>
-      </a>
-      <div class="dd-document-details">
-        <a class="dd-document-title" href="{% url 'digidoc_editor' document.id %}" title="{{ document.title }}">{{ document.title }}</a>
-        <div class="dd-document-meta">
-          <span class="dd-document-type" aria-label="DigiDoc document"><span class="bi bi-file-earmark-word-fill" aria-hidden="true"></span></span>
-          <span class="dd-document-owner" title="{% if document.created_by %}Created by {{ document.created_by.get_full_name|default:document.created_by.username }}{% else %}Author unavailable{% endif %}"><span class="bi bi-person-fill" aria-hidden="true"></span><span class="dd-sr-only">{% if document.created_by %}Created by {{ document.created_by.get_full_name|default:document.created_by.username }}{% else %}Author unavailable{% endif %}</span></span>
-          <time datetime="{{ document.updated_at|date:'c' }}" title="Last edited {{ document.updated_at|date:'M j, Y, g:i A' }}">Edited {{ document.updated_at|date:"M j, Y" }}</time>
-          <details class="dd-document-menu">
-            <summary aria-label="Actions for {{ document.title }}" title="Document actions"><span aria-hidden="true">⋮</span></summary>
-            <div class="dd-document-menu-popover" role="menu">
-              <a role="menuitem" href="{% url 'digidoc_editor' document.id %}"><span class="bi bi-pencil-square" aria-hidden="true"></span> Open</a>
-              <form method="post" action="{% url 'digidoc_duplicate' document.id %}">{% csrf_token %}<button role="menuitem" type="submit"><span class="bi bi-copy" aria-hidden="true"></span> Make a copy</button></form>
-              <a role="menuitem" href="{% url 'digidoc_pdf' document.id %}"><span class="bi bi-file-earmark-pdf" aria-hidden="true"></span> Download PDF</a>
-              {% if not document.created_by and can_claim %}<form method="post" action="{% url 'digidoc_claim' document.id %}">{% csrf_token %}<button role="menuitem" type="submit">Take ownership</button></form>{% endif %}
-              {% if document.created_by %}
-              <form class="dd-document-delete-form" method="post" action="{% url 'digidoc_delete' document.id %}">{% csrf_token %}<button class="dd-document-delete" role="menuitem" type="submit"><span class="bi bi-trash3" aria-hidden="true"></span> Delete</button></form>
-              {% endif %}
-            </div>
-          </details>
+  {% if not folder %}
+  <section class="dd-folders" aria-labelledby="dd-folders-title">
+    <div class="dd-section-head">
+      <h2 id="dd-folders-title">Folders</h2>
+      <form class="dd-folder-create" method="post" action="{% url 'digidoc_folder_create' %}">
+        {% csrf_token %}
+        <div class="dd-folder-create-field">
+          <span class="bi bi-folder-plus" aria-hidden="true"></span>
+          <input type="text" name="name" maxlength="60" placeholder="New folder name" aria-label="New folder name" required>
         </div>
-      </div>
-    </article>
-    {% endfor %}
+        <button type="submit" class="dd-folder-create-btn">Create folder</button>
+      </form>
+    </div>
+    {% if folders %}
+    <div class="folder-tiles">
+      {% for tile_folder in folders %}
+      <a class="folder-tile" href="{% url 'digidoc_folder' tile_folder.pk %}">
+        {% include 'attendance/partials/folder_art.html' with badges=tile_folder.badges %}
+        <span class="folder-tile-name">{{ tile_folder.name }}</span>
+        <span class="folder-tile-meta">{{ tile_folder.item_count }} file{{ tile_folder.item_count|pluralize }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="dd-section-empty">
+      {% if query %}No folder matches ΓÇ£{{ query }}ΓÇ¥.{% else %}No folders yet ΓÇö create one to group related documents and uploads.{% endif %}
+    </p>
+    {% endif %}
   </section>
-  {% if document_page.has_other_pages %}<nav class="dd-library-pagination" aria-label="Document pages"><span>Page {{ document_page.number }} of {{ document_page.paginator.num_pages }}</span><div>{% if document_page.has_previous %}<a href="?q={{ query|urlencode }}&owner={{ owner|urlencode }}&sort={{ sort }}&page={{ document_page.previous_page_number }}" aria-label="Previous page">‹</a>{% endif %}{% if document_page.has_next %}<a href="?q={{ query|urlencode }}&owner={{ owner|urlencode }}&sort={{ sort }}&page={{ document_page.next_page_number }}" aria-label="Next page">›</a>{% endif %}</div></nav>{% endif %}
-  {% else %}
-  <section class="dd-library-empty"><span class="bi bi-file-earmark-plus" aria-hidden="true"></span><h2>{% if query %}No matching documents{% else %}Your documents will appear here{% endif %}</h2><p>{% if query %}Try another search or clear the filters.{% else %}Create a document to get started. Your first-page previews will appear here automatically.{% endif %}</p>{% if query or owner %}<a href="{% url 'digidoc_list' %}">Clear filters</a>{% endif %}</section>
+  {% endif %}
+
+  {% if documents %}
+  <section class="dd-documents" aria-label="{% if folder %}{{ folder.name }} documents{% else %}Recent documents{% endif %}">
+    {% if not folder %}<div class="dd-section-head"><h2>Documents</h2></div>{% endif %}
+    <div class="dd-document-grid">
+      {% for document in documents %}
+      <article class="dd-document-card">
+        <a class="dd-document-preview" href="{% url 'digidoc_editor' document.id %}" aria-label="Open {{ document.title }}">
+          <img src="{% url 'digidoc_thumbnail' document.id %}" alt="First page preview of {{ document.title }}" loading="lazy" decoding="async">
+          <span class="dd-document-preview-placeholder" hidden><span class="bi bi-file-earmark-text" aria-hidden="true"></span><span>Preview unavailable</span></span>
+        </a>
+        <div class="dd-document-details">
+          <a class="dd-document-title" href="{% url 'digidoc_editor' document.id %}" title="{{ document.title }}">{{ document.title }}</a>
+          <div class="dd-document-meta">
+            <span class="dd-document-type" aria-label="DigiDoc document"><span class="bi bi-file-earmark-word-fill" aria-hidden="true"></span></span>
+            {% if document.created_by_id %}<span class="dd-document-owner" title="Created by you"><span class="bi bi-person-fill" aria-hidden="true"></span><span class="dd-sr-only">Created by you</span></span>{% else %}<span class="dd-document-owner" title="Unowned legacy document ┬╖ read only"><span class="bi bi-lock-fill" aria-hidden="true"></span><span class="dd-sr-only">Unowned legacy document, read only</span></span>{% endif %}
+            <time datetime="{{ document.updated_at|date:'c' }}" title="Last edited {{ document.updated_at|date:'M j, Y, g:i A' }}">Edited {{ document.updated_at|date:"M j, Y" }}</time>
+            {% if document.folder %}<a class="dd-document-folder" href="{% url 'digidoc_folder' document.folder.pk %}" title="In folder {{ document.folder.name }}"><span class="bi bi-folder-fill" aria-hidden="true"></span><span class="dd-document-folder-name">{{ document.folder.name }}</span></a>{% endif %}
+            {% if not document.created_by_id and request.user.is_authenticated %}<form method="post" action="{% url 'digidoc_claim' document.id %}">{% csrf_token %}<button class="dd-claim-document" type="submit">Take ownership</button></form>{% endif %}
+            {% if document.created_by_id %}<details class="dd-document-menu">
+              <summary aria-label="Actions for {{ document.title }}" title="Document actions"><span aria-hidden="true">Γï«</span></summary>
+              <div class="dd-document-menu-popover" role="menu">
+                <a role="menuitem" href="{% url 'digidoc_editor' document.id %}"><span class="bi bi-pencil-square" aria-hidden="true"></span> Open</a>
+                <form method="post" action="{% url 'digidoc_duplicate' document.id %}">{% csrf_token %}<button role="menuitem" type="submit"><span class="bi bi-copy" aria-hidden="true"></span> Make a copy</button></form>
+                <a role="menuitem" href="{% url 'digidoc_pdf' document.id %}"><span class="bi bi-file-earmark-pdf" aria-hidden="true"></span> Download PDF</a>
+                <form class="dd-move-form" method="post" action="{% url 'digidoc_document_move' document.id %}">
+                  {% csrf_token %}
+                  <label for="dd-move-doc-{{ document.id }}">Move to folder</label>
+                  <select id="dd-move-doc-{{ document.id }}" name="folder">
+                    <option value="">No folder</option>
+                    {% for tile_folder in all_folders %}<option value="{{ tile_folder.pk }}" {% if document.folder_id == tile_folder.pk %}selected{% endif %}>{{ tile_folder.name }}</option>{% endfor %}
+                  </select>
+                  <button type="submit" role="menuitem"><span class="bi bi-folder-symlink" aria-hidden="true"></span> Move</button>
+                </form>
+                <form class="dd-document-delete-form" method="post" action="{% url 'digidoc_delete' document.id %}">{% csrf_token %}<button class="dd-document-delete" role="menuitem" type="submit"><span class="bi bi-trash3" aria-hidden="true"></span> Delete</button></form>
+              </div>
+            </details>{% else %}<a href="{% url 'digidoc_pdf' document.id %}" class="dd-orphan-download">Download read-only copy</a>{% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% if document_page.has_other_pages %}<nav class="dd-library-pagination" aria-label="Document pages"><span>Page {{ document_page.number }} of {{ document_page.paginator.num_pages }}</span><div>{% if document_page.has_previous %}<a href="?q={{ query|urlencode }}&sort={{ sort }}&page={{ document_page.previous_page_number }}" aria-label="Previous page">ΓÇ╣</a>{% endif %}{% if document_page.has_next %}<a href="?q={{ query|urlencode }}&sort={{ sort }}&page={{ document_page.next_page_number }}" aria-label="Next page">ΓÇ║</a>{% endif %}</div></nav>{% endif %}
+  </section>
+  {% elif not folder and not folders and not files %}
+  <section class="dd-library-empty"><span class="bi bi-file-earmark-plus" aria-hidden="true"></span><h2>{% if query %}No matching items{% else %}Your documents will appear here{% endif %}</h2><p>{% if query %}Try another search or clear the filters.{% else %}Create a document or add files to get started. Your folders and first-page previews will appear here automatically.{% endif %}</p>{% if query %}<a href="{% url 'digidoc_list' %}">Clear filters</a>{% endif %}</section>
+  {% endif %}
+
+  {% if files %}
+  <section class="dd-files" aria-labelledby="dd-files-title">
+    <div class="dd-section-head"><h2 id="dd-files-title">Files</h2><span class="dd-section-count">{{ files|length }} file{{ files|length|pluralize }}</span></div>
+    <div class="dd-file-list">
+      {% for file in files %}
+      <article class="dd-file-row">
+        <span class="dd-file-icon {{ file.badge.tone }}" aria-hidden="true"><i class="bi {{ file.badge.icon }}"></i></span>
+        <a class="dd-file-name" href="{% url 'digidoc_file_download' file.id %}">{{ file.original_name }}</a>
+        <span class="dd-file-size">{{ file.size|filesizeformat }}</span>
+        <time class="dd-file-date" datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, Y" }}</time>
+        {% if file.folder and not folder %}<a class="dd-file-folder" href="{% url 'digidoc_folder' file.folder.pk %}" title="In folder {{ file.folder.name }}"><span class="bi bi-folder-fill" aria-hidden="true"></span>{{ file.folder.name }}</a>{% endif %}
+        <details class="dd-document-menu">
+          <summary aria-label="Actions for {{ file.original_name }}" title="File actions"><span aria-hidden="true">Γï«</span></summary>
+          <div class="dd-document-menu-popover" role="menu">
+            <a role="menuitem" href="{% url 'digidoc_file_download' file.id %}"><span class="bi bi-download" aria-hidden="true"></span> Download</a>
+            <form class="dd-move-form" method="post" action="{% url 'digidoc_file_move' file.id %}">
+              {% csrf_token %}
+              <label for="dd-move-file-{{ file.id }}">Move to folder</label>
+              <select id="dd-move-file-{{ file.id }}" name="folder">
+                <option value="">No folder</option>
+                {% for tile_folder in all_folders %}<option value="{{ tile_folder.pk }}" {% if file.folder_id == tile_folder.pk %}selected{% endif %}>{{ tile_folder.name }}</option>{% endfor %}
+              </select>
+              <button type="submit" role="menuitem"><span class="bi bi-folder-symlink" aria-hidden="true"></span> Move</button>
+            </form>
+            <form class="dd-file-delete-form" method="post" action="{% url 'digidoc_file_delete' file.id %}">
+              {% csrf_token %}
+              <button class="dd-document-delete" role="menuitem" type="submit"><span class="bi bi-trash3" aria-hidden="true"></span> Delete</button>
+            </form>
+          </div>
+        </details>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% elif folder and not documents %}
+  <p class="dd-section-empty dd-documents-empty">This folder is empty. Add files or create a document to get started.</p>
   {% endif %}
 </main>
 {% endblock %}

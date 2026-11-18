@@ -29,6 +29,14 @@ def private_digidoc_image_path(instance, filename):
     return f"digidoc_assets/{instance.organization_id}/{uuid.uuid4().hex}.{extension}"
 
 
+def digidoc_file_path(instance, filename):
+    """Store uploads under an opaque name; the original name lives in the DB."""
+    extension = ''
+    if '.' in filename:
+        extension = '.' + filename.rsplit('.', 1)[-1].lower()[:12]
+    return f"digidoc/{instance.organization_id}/files/{uuid.uuid4().hex}{extension}"
+
+
 def local_date_range_filter(field_name, target_date):
     current_tz = timezone.get_current_timezone()
     start_at = timezone.make_aware(datetime.combine(target_date, time.min), current_tz)
@@ -248,6 +256,52 @@ class CompanyLetterheadUpload(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 
+class DigiDocFolder(models.Model):
+    """User-created folder that groups DigiDoc documents and uploaded files."""
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_folders')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='digidoc_folders',
+    )
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', 'created_at']
+        indexes = [models.Index(fields=['organization', 'created_by'])]
+
+    def __str__(self):
+        return self.name
+
+
+class DigiDocFile(models.Model):
+    """Arbitrary private file uploaded into a DigiDoc folder (or the library root)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_files')
+    folder = models.ForeignKey(
+        DigiDocFolder, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='files',
+    )
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='digidoc_files',
+    )
+    file = models.FileField(upload_to=digidoc_file_path, storage=PrivateLetterheadStorage())
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=150, blank=True)
+    size = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at', 'original_name']
+
+    def __str__(self):
+        return self.original_name
+
+
 class DigiDocDocument(models.Model):
     """A company-scoped DigiDoc document stored as validated editor JSON."""
 
@@ -255,6 +309,10 @@ class DigiDocDocument(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='digidoc_documents')
+    folder = models.ForeignKey(
+        DigiDocFolder, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='documents',
+    )
     title = models.CharField(max_length=200, default='Untitled document')
     content_json = models.JSONField(default=dict, blank=True)
     letterhead_enabled = models.BooleanField(default=False)

@@ -1,7 +1,9 @@
-{% extends 'attendance/base.html' %}
+﻿{% extends 'attendance/base.html' %}
+{% load static %}
 
 {% block title %}Employee Documents | HR Management{% endblock %}
 {% block page_title %}Employee Documents{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'attendance/folder-tiles.css' %}">{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
@@ -49,6 +51,7 @@
     <div class="card border-0 toolbar-card mb-4">
         <div class="card-body">
             <form method="get" class="document-filter-grid">
+                {% if staff_query %}<input type="hidden" name="staff_q" value="{{ staff_query }}">{% endif %}
                 <div class="search-control">
                     <div class="input-group">
                         <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
@@ -73,6 +76,70 @@
         </div>
     </div>
 
+    <div class="card border-0 staff-folders-card mb-4">
+        <div class="card-body">
+            <div class="staff-folders-head">
+                <div>
+                    <h6 class="mb-1"><i class="bi bi-folder2-open me-2"></i>Staff Folders</h6>
+                    <small class="text-muted">
+                        {{ staff_folders|length }} folder{{ staff_folders|length|pluralize }} ┬╖ open a staff folder to see only that person's documents.
+                    </small>
+                </div>
+                <form method="get" class="staff-folder-search" role="search">
+                    {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+                    {% if selected_document_type %}<input type="hidden" name="document_type" value="{{ selected_document_type }}">{% endif %}
+                    {% if selected_expiring %}<input type="hidden" name="expiring" value="{{ selected_expiring }}">{% endif %}
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white"><i class="bi bi-person-badge"></i></span>
+                        <input type="text" name="staff_q" value="{{ staff_query }}" class="form-control" placeholder="Find a staff folder" aria-label="Find a staff folder">
+                        {% if staff_query %}
+                        <a href="{% querystring staff_q=None %}" class="btn btn-outline-secondary" title="Clear staff search" aria-label="Clear staff search"><i class="bi bi-x-lg"></i></a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-outline-primary">Search</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="folder-tiles">
+                <a class="folder-tile is-active" href="{% url 'employee_documents' %}">
+                    {% include 'attendance/partials/folder_art.html' with badges=all_staff_badges %}
+                    <span class="folder-tile-name">All staff</span>
+                    <span class="folder-tile-meta">{{ folder_total_documents }} file{{ folder_total_documents|pluralize }}</span>
+                </a>
+
+                {% for folder in staff_folders %}
+                <a class="folder-tile {% if not folder.document_count %}is-empty{% endif %}"
+                   href="{% url 'employee_document_folder' folder.pk %}"
+                   title="{{ folder.display_name }} ┬╖ {{ folder.document_count }} document{{ folder.document_count|pluralize }}">
+                    {% include 'attendance/partials/folder_art.html' with badges=folder.badges %}
+                    <span class="folder-tile-name">{{ folder.first_name }} {{ folder.last_name }}</span>
+                    <span class="folder-tile-meta">{{ folder.document_count }} file{{ folder.document_count|pluralize }} ┬╖ {{ folder.employee_id }}</span>
+                </a>
+                {% endfor %}
+            </div>
+
+            {% if not staff_folders %}
+            <div class="staff-folders-empty">
+                <i class="bi bi-folder2"></i>
+                {% if staff_query %}
+                    No staff folder matches ΓÇ£{{ staff_query }}ΓÇ¥.
+                    <a href="{% querystring staff_q=None %}">Show all staff</a>
+                {% else %}
+                    No staff members have been added yet.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="recent-uploads-head">
+        <div>
+            <h6 class="mb-1"><i class="bi bi-clock-history me-2"></i>Recent uploads</h6>
+            <small class="text-muted">Latest documents across all staff. Open a staff folder above for one person's files.</small>
+        </div>
+        <span class="recent-uploads-count">{{ documents_page_obj.paginator.count }} shown</span>
+    </div>
+
     <div class="card border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -92,12 +159,12 @@
                         {% for document in documents %}
                         <tr>
                             <td>
-                                <div class="fw-semibold">{{ document.title }}</div>
-                                {% if document.notes %}<small class="text-muted">{{ document.notes }}</small>{% endif %}
+                                <a class="fw-semibold text-reset text-decoration-none" href="{% url 'employee_document_download' document.pk %}" target="_blank" rel="noopener">{{ document.title }}</a>
+                                {% if document.notes %}<small class="text-muted d-block">{{ document.notes }}</small>{% endif %}
                             </td>
                             <td>
-                                <div class="fw-semibold">{{ document.employee.display_name }}</div>
-                                <small class="text-muted">{{ document.employee.employee_id }}</small>
+                                <a class="fw-semibold text-reset text-decoration-none" href="{% url 'employee_document_folder' document.employee.pk %}">{{ document.employee.display_name }}</a>
+                                <small class="text-muted d-block">{{ document.employee.employee_id }}</small>
                             </td>
                             <td>{{ document.get_document_type_display }}</td>
                             <td>{% if document.issue_date %}{{ document.issue_date|date:"M j, Y" }}{% else %}-{% endif %}</td>
@@ -120,7 +187,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <i class="bi bi-folder2 fs-1 d-block mb-3"></i>
                                 No documents match this view.
                             </td>
                         </tr>
@@ -153,6 +220,51 @@
         gap: 0.45rem;
     }
 
+    .staff-folders-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.15rem;
+    }
+
+    .staff-folder-search {
+        width: min(320px, 100%);
+    }
+
+    .staff-folders-empty {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1.25rem;
+        margin-top: 0.9rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: 12px;
+        color: var(--muted);
+        font-size: 0.88rem;
+    }
+
+    .staff-folders-empty .bi {
+        font-size: 1.1rem;
+    }
+
+    .recent-uploads-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin: 0 0 0.85rem;
+    }
+
+    .recent-uploads-count {
+        color: var(--muted);
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
     @media (max-width: 1199.98px) {
         .document-filter-grid {
             grid-template-columns: 1fr 1fr;
@@ -163,6 +275,10 @@
         .document-register-grid,
         .document-filter-grid {
             grid-template-columns: 1fr;
+        }
+
+        .staff-folder-search {
+            width: 100%;
         }
 
         .table-actions {
