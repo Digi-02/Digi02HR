@@ -347,104 +347,43 @@ a.app-user:hover { background: var(--nav-hover-bg); color: var(--nav-hover-fg); 
     .app-sidebar__scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 }
 
-/* Desktop rail: a floating dark icon bar, deliberately distinct from the expanded sidebar. */
+/* Desktop rail: icons only, labels become tooltips. */
 @media (min-width: 1024px) {
-    body.rail .app-sidebar {
-        width: 76px;
-        top: 12px; bottom: 12px; left: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 26px;
-        background: rgba(23, 24, 27, 0.94);
-        background: color-mix(in srgb, #17181B 93%, transparent);
-        color: #ECEDEF;
-        -webkit-backdrop-filter: blur(20px) saturate(1.2);
-        backdrop-filter: blur(20px) saturate(1.2);
-        box-shadow: 0 26px 60px -30px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        overflow: hidden;
-        --nav-fg: #F4F5F7;
-        --nav-fg-muted: #A2A5AC;
-        --nav-hover-bg: rgba(255, 255, 255, 0.09);
-        --nav-hover-fg: #FFFFFF;
-        --nav-hover-icon-bg: rgba(255, 255, 255, 0.16);
-        --nav-icon-bg: transparent;
-        --nav-icon-fg: #A9ACB2;
-        --nav-active-bg: rgba(255, 255, 255, 0.14);
-        --nav-active-fg: #FFFFFF;
-        --nav-active-icon-bg: transparent;
-        --nav-active-icon-fg: #FFFFFF;
-        --nav-active-indicator: #FFFFFF;
-        --nav-border: rgba(255, 255, 255, 0.08);
-        --nav-focus-ring: #FFFFFF;
-        --nav-active-border: transparent;
-    }
-    body.rail .shell-main { margin-left: calc(12px + 76px + 16px); }
+    body.rail .app-sidebar { width: var(--sidebar-rail-width); }
+    body.rail .shell-main { margin-left: var(--sidebar-rail-width); }
     body.rail .app-brand__text,
     body.rail .app-sidebar__workspace,
     body.rail .app-nav__heading,
     body.rail .app-nav__label,
     body.rail .app-nav__ext,
     body.rail .app-user__meta { display: none; }
-    body.rail .app-sidebar__brand { height: 70px; padding: 0; justify-content: center; }
+    body.rail .app-sidebar__brand { justify-content: center; padding: 0; }
     body.rail .app-brand { flex: 0 0 auto; justify-content: center; }
     body.rail .brand-logo-full { display: none; }
-    body.rail .brand-initials {
-        display: inline-flex; width: 44px; height: 44px;
-        border-radius: 14px; background: rgba(255, 255, 255, 0.1);
-        color: #FFFFFF; font-size: 13px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-    }
+    body.rail .brand-initials--rail { display: inline-flex; }
     body.rail .app-sidebar__close { display: none !important; }
-    body.rail .app-sidebar__scroll {
-        padding: 4px 0 10px;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-    }
-    body.rail .app-sidebar__scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
-    body.rail .app-nav__section { margin-bottom: 14px; }
+    body.rail .app-sidebar__scroll { padding: 16px 14px 20px; }
+    body.rail .app-nav__section { margin-bottom: 16px; }
     body.rail .app-nav__link {
         justify-content: center; width: 48px; height: 48px; min-height: 48px;
-        padding: 0; margin: 4px auto; border-radius: 14px;
-        color: var(--nav-icon-fg); background: transparent;
+        padding: 5px; margin: 2px auto;
     }
-    body.rail .app-nav__icon {
-        width: auto; height: auto; border-radius: 0;
-        background: transparent; color: inherit;
+    body.rail .app-nav__link::after {
+        content: attr(data-label);
+        position: absolute; left: calc(100% + 10px); top: 50%;
+        transform: translateY(-50%);
+        background: #111111; color: #FFFFFF;
+        padding: 6px 9px; border-radius: 7px;
+        font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap;
+        opacity: 0; visibility: hidden; pointer-events: none;
+        transition: opacity .12s ease, visibility .12s ease;
+        z-index: 1200; box-shadow: 0 4px 14px rgba(0,0,0,.12);
     }
-    body.rail .app-nav__icon svg { width: 21px; height: 21px; }
-    body.rail .app-nav__link:hover,
-    body.rail .app-nav__link:focus-visible {
-        background: var(--nav-hover-bg); color: #FFFFFF;
-    }
-    body.rail .app-nav__link:hover .app-nav__icon,
-    body.rail .app-nav__link:focus-visible .app-nav__icon {
-        background: transparent; color: #FFFFFF;
-    }
-    body.rail .app-nav__link.is-active {
-        background: var(--nav-active-bg);
-        color: #FFFFFF;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    }
-    body.rail .app-nav__link.is-active .app-nav__icon {
-        background: transparent; color: #FFFFFF;
-    }
-    body.rail .app-nav__link.is-active::before { display: none !important; }
-    body.rail .app-nav__link.is-active:hover,
-    body.rail .app-nav__link.is-active:focus-visible {
-        background: rgba(255, 255, 255, 0.2); color: #FFFFFF;
-    }
-    body.rail .app-sidebar__footer {
-        padding: 12px 0 14px; margin: 0 14px;
-        border-top: 0;
-        display: flex; justify-content: center;
-    }
-    body.rail .app-user { padding: 0; border-radius: 14px; }
-    body.rail .app-user:hover { background: transparent; }
-    body.rail .app-user__avatar {
-        width: 42px; height: 42px; border-radius: 14px;
-        background: rgba(255, 255, 255, 0.12); color: #FFFFFF;
-        font-size: 11px;
-    }
-    body.rail .app-user:hover .app-user__avatar { background: rgba(255, 255, 255, 0.2); }
+    body.rail .app-nav__link:hover::after,
+    body.rail .app-nav__link:focus-visible::after { opacity: 1; visibility: visible; }
+    body.rail .app-sidebar__footer { padding: 10px 0; display: flex; justify-content: center; border-top: 0; }
+    body.rail .app-user { padding: 4px; }
+    body.rail .app-user__avatar { width: 38px; height: 38px; }
 }
 .sidebar-overlay {
     display: none; position: fixed; inset: 0;
@@ -1317,14 +1256,6 @@ body.nav-open .sidebar-overlay { display: block; }
                 } else {
                     sidebar.setAttribute('aria-hidden', body.classList.contains('nav-open') ? 'false' : 'true');
                 }
-                var railActive = isDesktop() && body.classList.contains('rail');
-                sidebar.querySelectorAll('.app-nav__link[data-label]').forEach(function (link) {
-                    if (railActive) {
-                        link.setAttribute('title', link.getAttribute('data-label') || '');
-                    } else {
-                        link.removeAttribute('title');
-                    }
-                });
             }
         }
 
