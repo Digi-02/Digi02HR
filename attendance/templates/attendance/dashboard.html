@@ -52,7 +52,7 @@
   </section>
 
   {% if is_hr_dashboard or is_manager_dashboard %}
-  <section class="overview-section-grid" aria-label="Team overview and approvals">
+  <section class="overview-section-grid overview-section-grid--balanced" aria-label="Team overview and approvals">
     <div>
       <section class="overview-panel" aria-labelledby="manager-approvals-title">
         <div class="overview-panel__head"><div><h2 id="manager-approvals-title">Pending leave approvals <span class="overview-pill">{{ manager_pending_leave_requests|length }}</span></h2><p>Requests from employees in your dashboard scope.</p></div><a href="{% if is_hr_dashboard %}{% url 'leave_requests' %}{% else %}{% url 'manager_leave_requests' %}{% endif %}">Review all <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>

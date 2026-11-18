@@ -176,14 +176,14 @@ def icon_name(name):
 
 @register.simple_tag(takes_context=True)
 def nav_icon(context, name):
+    """Render the same Material Symbols glyph in every shell.
+
+    The DigiDoc editor used to special-case this to inline SVGs because its
+    CSP did not allow the Google-hosted icon font. The font is now bundled
+    locally (digidoc-fonts.css), so the editor can use the exact same icon
+    markup as the main app.
+    """
     key = str(name or "")
-    match = getattr(context.get("request"), "resolver_match", None)
-    if getattr(match, "url_name", None) == "digidoc_editor":
-        rendered = "".join('<path d="%s"/>' % path for path in icon_paths(key))
-        return mark_safe(
-            '<span class="app-nav__icon" aria-hidden="true">'
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">%s</svg></span>' % rendered
-        )
     glyph = icon_name(key)
     return mark_safe(
         '<span class="app-nav__icon" aria-hidden="true">'

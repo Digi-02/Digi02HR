@@ -1,9 +1,13 @@
-<!-- attendance/templates/attendance/employee_list.html -->
 {% extends 'attendance/base.html' %}
+{% load static %}
 
 {% block title %}Employees | HR Management{% endblock %}
 
 {% block page_title %}Employees{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'attendance/employee-cards.css' %}?v=20261118d">
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-0">
@@ -74,118 +78,99 @@
             </div>
         </div>
     </div>
-    
-    <!-- Employee Table -->
-    <div class="card">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Employee</th>
-                            <th>Department</th>
-                            <th>Position</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Today</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for employee in employees %}
-                        <tr>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    {% if employee.profile_photo %}
-                                        <img src="{% url 'organization_profile_photo' employee.pk %}" alt="{{ employee.full_name }}" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
-                                    {% else %}
-                                        <div class="bg-light p-2 rounded me-3 border">
-                                            <i class="bi bi-person"></i>
-                                        </div>
-                                    {% endif %}
-                                    <div>
-                                        <strong>{{ employee.full_name }}</strong>
-                                        <br>
-                                        <small class="text-muted">ID: {{ employee.employee_id }}</small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>{{ employee.department }}</td>
-                            <td>{{ employee.position }}</td>
-                            <td>
-                                <i class="bi bi-envelope me-1 text-muted"></i>
-                                {{ employee.email }}
-                            </td>
-                            <td>
-                                {% if employee.is_active %}
-                                    <span class="badge badge-present">
-                                        <i class="bi bi-check-circle me-1"></i> Active
-                                    </span>
-                                {% else %}
-                                    <span class="badge badge-neutral">
-                                        <i class="bi bi-dash-circle me-1"></i> Inactive
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if not employee.is_active %}
-                                    <span class="badge badge-neutral"><i class="bi bi-person-slash me-1"></i>Excluded</span>
-                                {% elif employee.is_checked_in_today %}
-                                    <span class="badge badge-present">
-                                        <i class="bi bi-clock me-1"></i> Checked in
-                                    </span>
-                                {% else %}
-                                    <span class="badge badge-neutral">
-                                        <i class="bi bi-dash me-1"></i> Not present
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <a href="{% url 'employee_detail' employee.pk %}" 
-                                       class="btn btn-sm btn-outline-primary" 
-                                       title="View Details">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <a href="{% url 'employee_edit' employee.pk %}" 
-                                       class="btn btn-sm btn-outline-secondary"
-                                       title="Edit">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a href="{% url 'employee_delete' employee.pk %}" 
-                                       class="btn btn-sm btn-outline-danger"
-                                       title="Delete">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                    {% if not employee.is_active %}
-                                    <form method="post" action="{% url 'employee_reactivate' employee.pk %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Reactivate {{ employee.full_name }}">
-                                            <i class="bi bi-person-check me-1" aria-hidden="true"></i>Reactivate
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7">
-                                <div class="empty-state">
-                                    <i class="bi bi-people"></i>
-                                    <p><strong>No employees found.</strong></p>
-                                    <p>Try a different search, or add your first employee.</p>
-                                    <a href="{% url 'employee_create' %}" class="btn btn-primary mt-2">
-                                        <i class="bi bi-person-plus me-1"></i> Add employee
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+
+    <!-- Employee cards -->
+    <div class="people-grid">
+        {% for employee in employees %}
+        <article class="person-card{% if not employee.is_active %} is-inactive{% endif %}">
+            <a class="person-card__hit" href="{% url 'employee_detail' employee.pk %}"
+               aria-label="Open {{ employee.full_name }}'s profile"></a>
+
+            <div class="person-card__top">
+                {% if employee.profile_photo %}
+                    <img class="person-card__avatar" src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}">
+                {% else %}
+                    <span class="person-card__avatar person-card__avatar--initials" aria-hidden="true">{{ employee.first_name|slice:":1" }}{{ employee.last_name|slice:":1" }}</span>
+                {% endif %}
+                <div class="person-card__identity">
+                    <h3>{{ employee.display_name }}</h3>
+                    <p>{{ employee.position|default:"No job title" }}</p>
+                </div>
+                <span class="person-card__state{% if employee.is_active %} is-active{% else %} is-inactive{% endif %}">
+                    <i class="bi {% if employee.is_active %}bi-check-circle-fill{% else %}bi-dash-circle-fill{% endif %}" aria-hidden="true"></i>
+                    {% if employee.is_active %}Active{% else %}Inactive{% endif %}
+                </span>
+            </div>
+
+            <dl class="person-card__facts">
+                <div>
+                    <dt><i class="bi bi-building" aria-hidden="true"></i> Department</dt>
+                    <dd>{{ employee.department|default:"Unassigned" }}</dd>
+                </div>
+                <div>
+                    <dt><i class="bi bi-person-vcard" aria-hidden="true"></i> Employee ID</dt>
+                    <dd>{{ employee.employee_id }}</dd>
+                </div>
+                <div>
+                    <dt><i class="bi bi-envelope" aria-hidden="true"></i> Email</dt>
+                    <dd>{{ employee.email }}</dd>
+                </div>
+            </dl>
+
+            <div class="person-card__tags">
+                <span class="person-card__tag">{{ employee.category.name }}</span>
+                {% if employee.department %}<span class="person-card__tag">{{ employee.department.name }}</span>{% endif %}
+                {% if not employee.is_active %}
+                    <span class="person-card__tag person-card__tag--muted">Excluded from attendance</span>
+                {% elif employee.is_checked_in_today %}
+                    <span class="person-card__tag person-card__tag--success"><i class="bi bi-clock" aria-hidden="true"></i> Checked in today</span>
+                {% else %}
+                    <span class="person-card__tag person-card__tag--muted">Not present today</span>
+                {% endif %}
+            </div>
+
+            <div class="person-card__footer">
+                <span class="person-card__meta">
+                    {% if employee.hire_date %}Joined {{ employee.hire_date|date:"M Y" }}{% elif employee.phone %}{{ employee.phone }}{% endif %}
+                </span>
+                <div class="person-card__tools">
+                    <a class="person-card__icon" href="{% url 'employee_edit' employee.pk %}"
+                       title="Edit {{ employee.full_name }}" aria-label="Edit {{ employee.full_name }}">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </a>
+                    <a class="person-card__icon person-card__icon--danger" href="{% url 'employee_delete' employee.pk %}"
+                       title="Delete {{ employee.full_name }}" aria-label="Delete {{ employee.full_name }}">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </a>
+                    {% if not employee.is_active %}
+                    <form method="post" action="{% url 'employee_reactivate' employee.pk %}" class="person-card__reactivate">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Reactivate {{ employee.full_name }}">
+                            <i class="bi bi-person-check me-1" aria-hidden="true"></i>Reactivate
+                        </button>
+                    </form>
+                    {% endif %}
+                    <a class="btn btn-primary btn-sm person-card__cta" href="{% url 'employee_detail' employee.pk %}">
+                        View profile <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        </article>
+        {% empty %}
+        <div class="person-card person-card--empty">
+            <div class="empty-state">
+                <i class="bi bi-people"></i>
+                <p><strong>No employees found.</strong></p>
+                <p>Try a different search, or add your first employee.</p>
+                <a href="{% url 'employee_create' %}" class="btn btn-primary mt-2">
+                    <i class="bi bi-person-plus me-1"></i> Add employee
+                </a>
             </div>
         </div>
+        {% endfor %}
+    </div>
+
+    <div class="people-pagination">
         {% include 'attendance/partials/pagination.html' with page_obj=employees_page_obj page_param='employees_page' pagination_query=employees_pagination_query %}
     </div>
 </div>
