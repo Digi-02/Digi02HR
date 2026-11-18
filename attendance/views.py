@@ -1928,6 +1928,8 @@ def employee_documents(request):
     ).select_related('employee', 'employee__department', 'employee__category')
 
     search_query = request.GET.get('q', '').strip()
+    staff_query = request.GET.get('staff_q', '').strip()
+    selected_employee_id = request.GET.get('employee', '').strip()
     document_type = request.GET.get('document_type', '').strip()
     expiring = request.GET.get('expiring', '').strip()
     today = timezone.localdate()
@@ -1948,6 +1950,50 @@ def employee_documents(request):
         documents = documents.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))
     elif expiring == 'none':
         documents = documents.filter(expiry_date__isnull=True)
+
+    # One folder per staff member. Counts respect the active document filters
+    # so a folder always shows how many documents it will reveal when opened.
+    document_counts = {
+        row['employee_id']: row['total']
+        for row in documents.values('employee_id').annotate(total=Count('id'))
+    }
+    staff_folders = list(
+        Employee.objects.filter(organization=organization)
+        .select_related('department', 'category')
+        .order_by('first_name', 'last_name', 'employee_id')
+    )
+    for folder in staff_folders:
+        folder.document_count = document_counts.get(folder.pk, 0)
+    folder_total_documents = sum(document_counts.values())
+    if staff_query:
+        needle = staff_query.casefold()
+        staff_folders = [
+            folder for folder in staff_folders
+            if needle in ' '.join(
+                filter(None, [
+                    folder.first_name,
+                    folder.last_name,
+                    folder.employee_id,
+                    folder.department.name if folder.department else '',
+                ])
+            ).casefold()
+        ]
+
+    selected_employee = None
+    if selected_employee_id.isdigit():
+        selected_employee = next(
+            (folder for folder in staff_folders if folder.pk == int(selected_employee_id)),
+            None,
+        )
+        if selected_employee is None:
+            selected_employee = Employee.objects.filter(
+                organization=organization, pk=selected_employee_id
+            ).select_related('department', 'category').first()
+            if selected_employee is not None:
+                selected_employee.document_count = document_counts.get(selected_employee.pk, 0)
+    if selected_employee is not None:
+        documents = documents.filter(employee=selected_employee)
+
     documents = documents.order_by('-uploaded_at', 'employee__first_name', 'title')
     documents_page, documents_pagination_query = paginate_queryset(
         request,
@@ -1962,6 +2008,11 @@ def employee_documents(request):
         'documents_page_obj': documents_page,
         'documents_pagination_query': documents_pagination_query,
         'search_query': search_query,
+        'staff_query': staff_query,
+        'selected_employee': selected_employee,
+        'staff_folders': staff_folders,
+        'folder_total_documents': folder_total_documents,
+        'today': today,
         'selected_document_type': document_type,
         'selected_expiring': expiring,
         'document_type_choices': EmployeeDocument.DOCUMENT_TYPE_CHOICES,

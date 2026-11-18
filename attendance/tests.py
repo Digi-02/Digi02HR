@@ -337,6 +337,95 @@ class EmployeeSelfServiceTests(TestCase):
         self.assertEqual(forbidden_response.status_code, 404)
 
 
+class EmployeeDocumentFolderTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(
+            name='Folder HR', slug='folder-hr', setup_completed=True
+        )
+        self.category = Category.objects.create(
+            organization=self.organization,
+            name='Staff',
+            code='STAFF',
+        )
+        self.hr_user = User.objects.create_user(username='folder-hr', password='pass12345')
+        OrganizationMembership.objects.create(
+            user=self.hr_user,
+            organization=self.organization,
+            role='hr_admin',
+            is_active=True,
+        )
+        self.alice = Employee.objects.create(
+            organization=self.organization,
+            category=self.category,
+            first_name='Alice',
+            last_name='Adeyemi',
+            email='alice.adeyemi@example.com',
+            phone='08030000001',
+            gender='FEMALE',
+        )
+        self.bob = Employee.objects.create(
+            organization=self.organization,
+            category=self.category,
+            first_name='Bob',
+            last_name='Bello',
+            email='bob.bello@example.com',
+            phone='08030000002',
+            gender='MALE',
+        )
+        self.alice_document = EmployeeDocument.objects.create(
+            employee=self.alice,
+            document_type='certificate',
+            title='Alice Certificate',
+            file='employee_documents/alice.pdf',
+        )
+        self.bob_document = EmployeeDocument.objects.create(
+            employee=self.bob,
+            document_type='id',
+            title='Bob ID',
+            file='employee_documents/bob.pdf',
+        )
+        self.client.login(username='folder-hr', password='pass12345')
+
+    def test_every_staff_member_has_a_folder_with_document_count(self):
+        response = self.client.get(reverse('employee_documents'))
+
+        self.assertEqual(response.status_code, 200)
+        folders = response.context['staff_folders']
+        self.assertEqual({folder.pk for folder in folders}, {self.alice.pk, self.bob.pk})
+        self.assertEqual(
+            {folder.pk: folder.document_count for folder in folders},
+            {self.alice.pk: 1, self.bob.pk: 1},
+        )
+        self.assertContains(response, 'Staff Folders')
+        self.assertContains(response, f'?employee={self.alice.pk}#folder-contents')
+
+    def test_opening_a_staff_folder_only_shows_that_staff_documents(self):
+        response = self.client.get(
+            reverse('employee_documents'), {'employee': self.alice.pk}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['selected_employee'], self.alice)
+        self.assertEqual(list(response.context['documents']), [self.alice_document])
+        self.assertContains(response, 'Upload to folder')
+        self.assertNotContains(response, 'Bob ID')
+
+    def test_staff_folder_search_matches_name_and_employee_id(self):
+        by_name = self.client.get(reverse('employee_documents'), {'staff_q': 'Bello'})
+        by_id = self.client.get(
+            reverse('employee_documents'), {'staff_q': self.bob.employee_id}
+        )
+
+        self.assertEqual([folder.pk for folder in by_name.context['staff_folders']], [self.bob.pk])
+        self.assertEqual([folder.pk for folder in by_id.context['staff_folders']], [self.bob.pk])
+
+    def test_document_filters_are_reflected_in_folder_counts(self):
+        response = self.client.get(reverse('employee_documents'), {'document_type': 'id'})
+
+        counts = {folder.pk: folder.document_count for folder in response.context['staff_folders']}
+        self.assertEqual(counts, {self.alice.pk: 0, self.bob.pk: 1})
+
+
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class OnboardingInvitationTests(TestCase):
     def setUp(self):
